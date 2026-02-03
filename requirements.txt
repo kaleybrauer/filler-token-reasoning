@@ -1,8 +1,9 @@
-torch
-transformers
-accelerate
-datasets
-numpy
-tqdm
-pyyaml
+torch>=2.2.0
+transformers>=4.45.0
+datasets>=2.19.0
+accelerate>=0.33.0
+peft>=0.12.0
+bitsandbytes>=0.43.0; platform_system=="Linux"
+tqdm>=4.66.0
+numpy>=1.26.0,<2
 

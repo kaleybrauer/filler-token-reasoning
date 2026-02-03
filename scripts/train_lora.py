@@ -78,12 +78,10 @@ def main() -> None:
             bnb_4bit_compute_dtype=torch.bfloat16,
         )
 
-    is_linux = platform.system() == "Linux"
-
     model = AutoModelForCausalLM.from_pretrained(
         args.model,
-        device_map="auto" if is_linux else {"": "cpu"},  # <- force CPU on Mac
-        dtype=torch.bfloat16 if is_linux else torch.float32,  # <- use dtype= on transformers 5
+        device_map="auto",
+        torch_dtype=torch.bfloat16 if platform.system() == "Linux" else torch.float16,
         quantization_config=quant_cfg,
     )
 
@@ -115,13 +113,13 @@ def main() -> None:
         max_steps=args.max_steps,
         warmup_ratio=0.03,
         lr_scheduler_type="cosine",
-        eval_strategy="steps",
+        evaluation_strategy="steps",
         eval_steps=args.eval_steps,
         save_strategy="steps",
         save_steps=args.save_steps,
         logging_steps=args.logging_steps,
         bf16=False, # set to True for Linux/CUDA
-        fp16=False, 
+        fp16=True, # set to True for macOS/MPS
         report_to="none",
         save_total_limit=2,
         remove_unused_columns=False,

@@ -1,0 +1,57 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.pyd
+*.so
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+.venv/
+venv/
+.env
+.DS_Store
+
+# --- Outputs ---
+outputs/
+runs/
+logs/
+tmp/
+cache/
+wandb/
+mlruns/
+lightning_logs/
+checkpoints/
+*.ckpt
+*.pt
+*.pth
+*.safetensors
+
+# --- Data ---
+data/
+datasets/
+*.jsonl
+*.jsonl.gz
+*.parquet
+*.arrow
+*.csv
+*.tsv
+*.npz
+*.npy
+*.hdf5
+*.h5
+*.sqlite
+*.db
+
+# --- HuggingFace / model caches ---
+.hf_cache/
+.huggingface/
+transformers_cache/
+
+# --- Archives ---
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.7z
+

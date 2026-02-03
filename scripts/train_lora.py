@@ -4,6 +4,7 @@ import os
 import pathlib
 from typing import Any, Dict, List
 
+import inspect
 import torch
 from datasets import load_dataset
 from transformers import (
@@ -103,7 +104,8 @@ def main() -> None:
     outdir = pathlib.Path(args.outdir)
     outdir.mkdir(parents=True, exist_ok=True)
 
-    targs = TrainingArguments(
+    # --- TrainingArguments ---
+    ta_kwargs = dict(
         output_dir=str(outdir),
         per_device_train_batch_size=args.batch_size,
         per_device_eval_batch_size=args.batch_size,
@@ -113,27 +115,43 @@ def main() -> None:
         max_steps=args.max_steps,
         warmup_ratio=0.03,
         lr_scheduler_type="cosine",
-        evaluation_strategy="steps",
         eval_steps=args.eval_steps,
         save_strategy="steps",
         save_steps=args.save_steps,
         logging_steps=args.logging_steps,
-        bf16=False, # set to True for Linux/CUDA
-        fp16=True, # set to True for macOS/MPS
+        bf16=True,
+        fp16=False,
         report_to="none",
         save_total_limit=2,
         remove_unused_columns=False,
         dataloader_num_workers=2,
     )
 
-    trainer = Trainer(
+    ta_sig = inspect.signature(TrainingArguments.__init__).parameters
+    if "eval_strategy" in ta_sig:
+        ta_kwargs["eval_strategy"] = "steps"
+    else:
+        ta_kwargs["evaluation_strategy"] = "steps"
+
+    targs = TrainingArguments(**ta_kwargs)
+
+    # --- Trainer ---
+    trainer_kwargs = dict(
         model=model,
         args=targs,
         train_dataset=train_ds,
         eval_dataset=eval_ds,
         data_collator=DataCollator(pad_id=tok.pad_token_id),
-        tokenizer=tok,
     )
+
+    tr_sig = inspect.signature(Trainer.__init__).parameters
+    if "processing_class" in tr_sig:
+        trainer_kwargs["processing_class"] = tok
+    else:
+        trainer_kwargs["tokenizer"] = tok
+
+    trainer = Trainer(**trainer_kwargs)
+
 
     trainer.train()
     trainer.save_model(str(outdir))

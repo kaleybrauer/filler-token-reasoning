@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
+"""
+LoRA fine-tuning script for opaque reasoner experiments.
+Supports pre-tokenized JSONL with mixed filler lengths.
+"""
 import argparse
-import os
-import pathlib
-from typing import Any, Dict, List
-
 import inspect
+import json
+import pathlib
+from typing import Any, Dict, List, Optional
+
 import torch
-from datasets import load_dataset
+from datasets import load_dataset, Dataset, concatenate_datasets
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
@@ -14,97 +18,326 @@ from transformers import (
     Trainer,
     TrainingArguments,
 )
-
 from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
 
-import platform
+# ─────────────────────────────────────────────────────────────────────────────
+# Configuration
+# ─────────────────────────────────────────────────────────────────────────────
 
-class DataCollator:
-    def __init__(self, pad_id: int):
-        self.pad_id = pad_id
+USE_BF16 = torch.cuda.is_available() and torch.cuda.is_bf16_supported()
+DTYPE = torch.bfloat16 if USE_BF16 else torch.float16
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Data Collator
+# ─────────────────────────────────────────────────────────────────────────────
+
+class DataCollatorForCausalLM:
+    """Pads pre-tokenized sequences for batching."""
+    
+    def __init__(self, pad_token_id: int, padding_side: str = "right"):
+        self.pad_token_id = pad_token_id
+        self.padding_side = padding_side
 
     def __call__(self, features: List[Dict[str, Any]]) -> Dict[str, torch.Tensor]:
         max_len = max(len(f["input_ids"]) for f in features)
+        
+        batch_input_ids = []
+        batch_attention_mask = []
+        batch_labels = []
+        
+        for f in features:
+            seq_len = len(f["input_ids"])
+            pad_len = max_len - seq_len
+            
+            if self.padding_side == "right":
+                input_ids = list(f["input_ids"]) + [self.pad_token_id] * pad_len
+                attention_mask = list(f["attention_mask"]) + [0] * pad_len
+                labels = list(f["labels"]) + [-100] * pad_len
+            else:
+                input_ids = [self.pad_token_id] * pad_len + list(f["input_ids"])
+                attention_mask = [0] * pad_len + list(f["attention_mask"])
+                labels = [-100] * pad_len + list(f["labels"])
+            
+            batch_input_ids.append(input_ids)
+            batch_attention_mask.append(attention_mask)
+            batch_labels.append(labels)
+        
+        return {
+            "input_ids": torch.tensor(batch_input_ids, dtype=torch.long),
+            "attention_mask": torch.tensor(batch_attention_mask, dtype=torch.long),
+            "labels": torch.tensor(batch_labels, dtype=torch.long),
+        }
 
-        def pad(seq, pad_value):
-            return seq + [pad_value] * (max_len - len(seq))
 
-        input_ids = torch.tensor([pad(f["input_ids"], self.pad_id) for f in features], dtype=torch.long)
-        attention_mask = torch.tensor([pad(f["attention_mask"], 0) for f in features], dtype=torch.long)
-        labels = torch.tensor([pad(f["labels"], -100) for f in features], dtype=torch.long)
-        return {"input_ids": input_ids, "attention_mask": attention_mask, "labels": labels}
+# ─────────────────────────────────────────────────────────────────────────────
+# Dataset Loading with Mixed N Support
+# ─────────────────────────────────────────────────────────────────────────────
 
-def main() -> None:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--model", type=str, required=True, help="Base model name (e.g. Qwen/Qwen2.5-7B)")
-    ap.add_argument("--data-dir", type=str, required=True, help="Directory with train.jsonl/val.jsonl")
-    ap.add_argument("--outdir", type=str, required=True, help="Output directory for adapter/checkpoints")
+def load_pretokenized_dataset(
+    data_dir: pathlib.Path,
+    filler_lengths: Optional[List[int]] = None,
+    split: str = "train",
+) -> Dataset:
+    """
+    Load pre-tokenized dataset, optionally filtering/mixing filler lengths.
+    
+    Args:
+        data_dir: Directory containing train.jsonl / val.jsonl or 
+                  subdirectories like filler_0/, filler_32/, etc.
+        filler_lengths: If provided, only include examples with these filler_len values.
+                       If data is in subdirectories, load from those.
+        split: "train" or "val"
+    
+    Returns:
+        Dataset with input_ids, attention_mask, labels columns
+    """
+    filename = f"{split}.jsonl"
+    main_file = data_dir / filename
+    
+    # Check if data is organized by filler length in subdirectories
+    subdirs = [d for d in data_dir.iterdir() if d.is_dir() and d.name.startswith("filler_")]
+    
+    if subdirs and filler_lengths is not None:
+        # Load from subdirectories
+        datasets_to_concat = []
+        for n in filler_lengths:
+            subdir = data_dir / f"filler_{n}"
+            file_path = subdir / filename
+            if file_path.exists():
+                ds = load_dataset("json", data_files=str(file_path), split="train")
+                datasets_to_concat.append(ds)
+                print(f"  Loaded {len(ds)} examples from {file_path}")
+            else:
+                print(f"  Warning: {file_path} not found, skipping")
+        
+        if not datasets_to_concat:
+            raise FileNotFoundError(f"No data files found for filler lengths {filler_lengths}")
+        
+        dataset = concatenate_datasets(datasets_to_concat)
+    
+    elif main_file.exists():
+        # Load from single file, optionally filter by filler_len
+        dataset = load_dataset("json", data_files=str(main_file), split="train")
+        
+        if filler_lengths is not None:
+            filler_set = set(filler_lengths)
+            dataset = dataset.filter(
+                lambda x: x.get("filler_len", 0) in filler_set,
+                desc=f"Filtering to filler_len in {filler_lengths}"
+            )
+    else:
+        raise FileNotFoundError(f"Data file not found: {main_file}")
+    
+    # Keep only the columns needed for training
+    keep_cols = {"input_ids", "attention_mask", "labels"}
+    remove_cols = [c for c in dataset.column_names if c not in keep_cols]
+    if remove_cols:
+        dataset = dataset.remove_columns(remove_cols)
+    
+    return dataset
 
-    ap.add_argument("--load-in-4bit", action="store_true", help="Use QLoRA (4-bit) via bitsandbytes")
-    ap.add_argument("--lr", type=float, default=2e-4)
-    ap.add_argument("--epochs", type=int, default=1)
-    ap.add_argument("--batch-size", type=int, default=1)
-    ap.add_argument("--grad-accum", type=int, default=16)
-    ap.add_argument("--eval-steps", type=int, default=200)
-    ap.add_argument("--save-steps", type=int, default=200)
-    ap.add_argument("--logging-steps", type=int, default=20)
-    ap.add_argument("--max-steps", type=int, default=-1, help="If >0, overrides epochs")
 
-    # LoRA params
-    ap.add_argument("--lora-r", type=int, default=16)
-    ap.add_argument("--lora-alpha", type=int, default=32)
-    ap.add_argument("--lora-dropout", type=float, default=0.05)
+# ─────────────────────────────────────────────────────────────────────────────
+# Model Loading
+# ─────────────────────────────────────────────────────────────────────────────
 
-    args = ap.parse_args()
-
-    data_dir = pathlib.Path(args.data_dir)
-    train_file = str(data_dir / "train.jsonl")
-    val_file = str(data_dir / "val.jsonl")
-
-    ds = load_dataset("json", data_files={"train": train_file, "eval": val_file})
-    train_ds = ds["train"]
-    eval_ds = ds["eval"]
-
-    tok = AutoTokenizer.from_pretrained(args.model, use_fast=True)
-    # Qwen-family often has no pad token set; use eos for padding.
-    if tok.pad_token_id is None:
-        tok.pad_token = tok.eos_token if tok.eos_token is not None else "<|endoftext|>"
-
-    quant_cfg = None
-    if args.load_in_4bit:
-        quant_cfg = BitsAndBytesConfig(
+def load_model_and_tokenizer(
+    model_name: str,
+    load_in_4bit: bool = False,
+    load_in_8bit: bool = False,
+    use_flash_attn: bool = True,
+):
+    """Load model and tokenizer with optional quantization."""
+    
+    tokenizer = AutoTokenizer.from_pretrained(
+        model_name, 
+        use_fast=True, 
+        trust_remote_code=True
+    )
+    
+    if tokenizer.pad_token_id is None:
+        tokenizer.pad_token = tokenizer.eos_token if tokenizer.eos_token else "<|endoftext|>"
+    
+    # Quantization config
+    quant_config = None
+    if load_in_4bit:
+        quant_config = BitsAndBytesConfig(
             load_in_4bit=True,
             bnb_4bit_quant_type="nf4",
             bnb_4bit_use_double_quant=True,
-            bnb_4bit_compute_dtype=torch.bfloat16,
+            bnb_4bit_compute_dtype=DTYPE,
         )
-
-    model = AutoModelForCausalLM.from_pretrained(
-        args.model,
+    elif load_in_8bit:
+        quant_config = BitsAndBytesConfig(load_in_8bit=True)
+    
+    # Model loading kwargs
+    model_kwargs = dict(
         device_map="auto",
-        torch_dtype=torch.bfloat16 if platform.system() == "Linux" else torch.float16,
-        quantization_config=quant_cfg,
+        torch_dtype=DTYPE,
+        quantization_config=quant_config,
+        trust_remote_code=True,
     )
+    
+    # Try Flash Attention 2
+    if use_flash_attn:
+        try:
+            model_kwargs["attn_implementation"] = "flash_attention_2"
+            model = AutoModelForCausalLM.from_pretrained(model_name, **model_kwargs)
+            print("Using Flash Attention 2")
+        except Exception as e:
+            print(f"Flash Attention 2 not available ({e}), falling back to default")
+            del model_kwargs["attn_implementation"]
+            model = AutoModelForCausalLM.from_pretrained(model_name, **model_kwargs)
+    else:
+        model = AutoModelForCausalLM.from_pretrained(model_name, **model_kwargs)
+    
+    # Prepare for k-bit training if quantized
+    if load_in_4bit or load_in_8bit:
+        model = prepare_model_for_kbit_training(model, use_gradient_checkpointing=True)
+    else:
+        model.gradient_checkpointing_enable()
+    
+    return model, tokenizer
 
-    if args.load_in_4bit:
-        model = prepare_model_for_kbit_training(model)
 
-    target_modules = ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]
-    lora_cfg = LoraConfig(
-        r=args.lora_r,
-        lora_alpha=args.lora_alpha,
-        lora_dropout=args.lora_dropout,
+def apply_lora(
+    model,
+    r: int = 32,
+    alpha: int = 64,
+    dropout: float = 0.05,
+    target_modules: Optional[List[str]] = None,
+):
+    """Apply LoRA adapters to model."""
+    
+    if target_modules is None:
+        target_modules = [
+            "q_proj", "k_proj", "v_proj", "o_proj",
+            "gate_proj", "up_proj", "down_proj",
+        ]
+    
+    lora_config = LoraConfig(
+        r=r,
+        lora_alpha=alpha,
+        lora_dropout=dropout,
         bias="none",
         task_type="CAUSAL_LM",
         target_modules=target_modules,
     )
-    model = get_peft_model(model, lora_cfg)
+    
+    model = get_peft_model(model, lora_config)
     model.print_trainable_parameters()
+    
+    return model
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Main
+# ─────────────────────────────────────────────────────────────────────────────
+
+def parse_int_list(s: str) -> List[int]:
+    """Parse comma-separated integers: '0,32,128' -> [0, 32, 128]"""
+    if not s:
+        return None
+    return [int(x.strip()) for x in s.split(",")]
+
+
+def main():
+    parser = argparse.ArgumentParser(description="LoRA fine-tuning for opaque reasoner")
+    
+    # Required
+    parser.add_argument("--model", type=str, required=True, help="Base model name or path")
+    parser.add_argument("--data-dir", type=str, required=True, help="Directory with train.jsonl/val.jsonl")
+    parser.add_argument("--outdir", type=str, required=True, help="Output directory")
+    
+    # Filler length selection (for mixed N training)
+    parser.add_argument(
+        "--filler-lengths", type=str, default=None,
+        help="Comma-separated filler lengths to include, e.g. '0,32,128,300'. "
+             "If not specified, uses all data."
+    )
+    
+    # Quantization
+    parser.add_argument("--load-in-4bit", action="store_true", help="Use 4-bit QLoRA")
+    parser.add_argument("--load-in-8bit", action="store_true", help="Use 8-bit quantization")
+    parser.add_argument("--no-flash-attn", action="store_true", help="Disable Flash Attention 2")
+    
+    # Training hyperparameters
+    parser.add_argument("--lr", type=float, default=2e-4, help="Learning rate")
+    parser.add_argument("--epochs", type=int, default=1, help="Number of epochs")
+    parser.add_argument("--batch-size", type=int, default=4, help="Per-device batch size")
+    parser.add_argument("--grad-accum", type=int, default=4, help="Gradient accumulation steps")
+    parser.add_argument("--max-steps", type=int, default=-1, help="Max steps (overrides epochs if > 0)")
+    parser.add_argument("--warmup-ratio", type=float, default=0.03, help="Warmup ratio")
+    
+    # Eval and checkpointing
+    parser.add_argument("--eval-steps", type=int, default=200, help="Evaluation frequency")
+    parser.add_argument("--save-steps", type=int, default=200, help="Checkpoint frequency")
+    parser.add_argument("--logging-steps", type=int, default=10, help="Logging frequency")
+    
+    # LoRA
+    parser.add_argument("--lora-r", type=int, default=32, help="LoRA rank")
+    parser.add_argument("--lora-alpha", type=int, default=64, help="LoRA alpha")
+    parser.add_argument("--lora-dropout", type=float, default=0.05, help="LoRA dropout")
+    
+    # Performance
+    parser.add_argument("--num-workers", type=int, default=0, help="Dataloader workers")
+    
+    args = parser.parse_args()
+    
+    # Parse filler lengths
+    filler_lengths = parse_int_list(args.filler_lengths)
+    if filler_lengths:
+        print(f"Training with filler lengths: {filler_lengths}")
+    else:
+        print("Training with all available filler lengths")
+    
+    # ─────────────────────────────────────────────────────────────────────────
+    # Load data
+    # ─────────────────────────────────────────────────────────────────────────
+    
+    data_dir = pathlib.Path(args.data_dir)
+    
+    print("Loading training data...")
+    train_dataset = load_pretokenized_dataset(data_dir, filler_lengths, split="train")
+    print(f"Training examples: {len(train_dataset)}")
+    
+    eval_dataset = None
+    val_file = data_dir / "val.jsonl"
+    if val_file.exists():
+        print("Loading validation data...")
+        eval_dataset = load_pretokenized_dataset(data_dir, filler_lengths, split="val")
+        print(f"Validation examples: {len(eval_dataset)}")
+    
+    # Shuffle training data (important for mixed N!)
+    train_dataset = train_dataset.shuffle(seed=42)
+    
+    # ─────────────────────────────────────────────────────────────────────────
+    # Load model
+    # ─────────────────────────────────────────────────────────────────────────
+    
+    print(f"\nLoading model: {args.model}")
+    model, tokenizer = load_model_and_tokenizer(
+        args.model,
+        load_in_4bit=args.load_in_4bit,
+        load_in_8bit=args.load_in_8bit,
+        use_flash_attn=not args.no_flash_attn,
+    )
+    
+    model = apply_lora(
+        model,
+        r=args.lora_r,
+        alpha=args.lora_alpha,
+        dropout=args.lora_dropout,
+    )
+    
+    # ─────────────────────────────────────────────────────────────────────────
+    # Training arguments
+    # ─────────────────────────────────────────────────────────────────────────
+    
     outdir = pathlib.Path(args.outdir)
     outdir.mkdir(parents=True, exist_ok=True)
-
-    # --- TrainingArguments ---
+    
     ta_kwargs = dict(
         output_dir=str(outdir),
         per_device_train_batch_size=args.batch_size,
@@ -113,50 +346,83 @@ def main() -> None:
         learning_rate=args.lr,
         num_train_epochs=args.epochs,
         max_steps=args.max_steps,
-        warmup_ratio=0.03,
+        warmup_ratio=args.warmup_ratio,
         lr_scheduler_type="cosine",
-        eval_steps=args.eval_steps,
-        save_strategy="steps",
-        save_steps=args.save_steps,
         logging_steps=args.logging_steps,
-        bf16=True,
-        fp16=False,
-        report_to="none",
-        save_total_limit=2,
+        save_steps=args.save_steps,
+        save_strategy="steps",
+        save_total_limit=3,
+        bf16=USE_BF16,
+        fp16=not USE_BF16,
+        gradient_checkpointing=True,
+        gradient_checkpointing_kwargs={"use_reentrant": False},
+        optim="adamw_torch_fused" if torch.cuda.is_available() else "adamw_torch",
+        dataloader_num_workers=args.num_workers,
+        dataloader_pin_memory=True,
         remove_unused_columns=False,
-        dataloader_num_workers=2,
+        report_to="none",
+        ddp_find_unused_parameters=False,
     )
-
+    
+    # Handle eval strategy naming
     ta_sig = inspect.signature(TrainingArguments.__init__).parameters
-    if "eval_strategy" in ta_sig:
-        ta_kwargs["eval_strategy"] = "steps"
-    else:
-        ta_kwargs["evaluation_strategy"] = "steps"
-
-    targs = TrainingArguments(**ta_kwargs)
-
-    # --- Trainer ---
+    if eval_dataset is not None:
+        ta_kwargs["eval_steps"] = args.eval_steps
+        if "eval_strategy" in ta_sig:
+            ta_kwargs["eval_strategy"] = "steps"
+        else:
+            ta_kwargs["evaluation_strategy"] = "steps"
+    
+    training_args = TrainingArguments(**ta_kwargs)
+    
+    # ─────────────────────────────────────────────────────────────────────────
+    # Trainer
+    # ─────────────────────────────────────────────────────────────────────────
+    
+    data_collator = DataCollatorForCausalLM(
+        pad_token_id=tokenizer.pad_token_id,
+        padding_side=tokenizer.padding_side,
+    )
+    
     trainer_kwargs = dict(
         model=model,
-        args=targs,
-        train_dataset=train_ds,
-        eval_dataset=eval_ds,
-        data_collator=DataCollator(pad_id=tok.pad_token_id),
+        args=training_args,
+        train_dataset=train_dataset,
+        eval_dataset=eval_dataset,
+        data_collator=data_collator,
     )
-
+    
     tr_sig = inspect.signature(Trainer.__init__).parameters
     if "processing_class" in tr_sig:
-        trainer_kwargs["processing_class"] = tok
+        trainer_kwargs["processing_class"] = tokenizer
     else:
-        trainer_kwargs["tokenizer"] = tok
-
+        trainer_kwargs["tokenizer"] = tokenizer
+    
     trainer = Trainer(**trainer_kwargs)
-
-
+    
+    # ─────────────────────────────────────────────────────────────────────────
+    # Train
+    # ─────────────────────────────────────────────────────────────────────────
+    
+    print("\nStarting training...")
     trainer.train()
+    
+    print(f"\nSaving model to {outdir}")
     trainer.save_model(str(outdir))
-    tok.save_pretrained(str(outdir))
-    print(f"Saved adapter/checkpoint to: {outdir}")
+    tokenizer.save_pretrained(str(outdir))
+    
+    # Save config
+    config = {
+        **vars(args),
+        "filler_lengths_used": filler_lengths,
+        "train_examples": len(train_dataset),
+        "eval_examples": len(eval_dataset) if eval_dataset else 0,
+    }
+    with open(outdir / "training_config.json", "w") as f:
+        json.dump(config, f, indent=2)
+    
+    print(f"Done! Adapter saved to: {outdir}")
+
 
 if __name__ == "__main__":
     main()

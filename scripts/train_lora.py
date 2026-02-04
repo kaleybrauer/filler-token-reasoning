@@ -78,6 +78,56 @@ class DataCollatorForCausalLM:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Length-Grouped Sampler for efficient batching
+# ─────────────────────────────────────────────────────────────────────────────
+
+class LengthGroupedSampler(torch.utils.data.Sampler):
+    """
+    Sampler that groups sequences of similar length together to minimize padding.
+    """
+    def __init__(
+        self, 
+        dataset, 
+        batch_size: int,
+        lengths: Optional[List[int]] = None,
+        shuffle: bool = True,
+        seed: int = 42,
+    ):
+        self.batch_size = batch_size
+        self.shuffle = shuffle
+        self.generator = torch.Generator().manual_seed(seed)
+        
+        # Get lengths
+        if lengths is not None:
+            self.lengths = lengths
+        else:
+            # Try to get from dataset
+            self.lengths = [len(dataset[i]["input_ids"]) for i in range(len(dataset))]
+        
+        # Sort indices by length
+        self.sorted_indices = sorted(range(len(self.lengths)), key=lambda i: self.lengths[i])
+        
+    def __iter__(self):
+        # Create batches of similar-length sequences
+        batches = []
+        for i in range(0, len(self.sorted_indices), self.batch_size):
+            batch = self.sorted_indices[i:i + self.batch_size]
+            batches.append(batch)
+        
+        # Shuffle batches (not within batches) to maintain length grouping
+        if self.shuffle:
+            batch_order = torch.randperm(len(batches), generator=self.generator).tolist()
+            batches = [batches[i] for i in batch_order]
+        
+        # Yield indices
+        for batch in batches:
+            yield from batch
+    
+    def __len__(self):
+        return len(self.sorted_indices)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Dataset Loading with Mixed N Support
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -299,6 +349,10 @@ def main():
     parser.add_argument("--grad-accum", type=int, default=1, help="Gradient accumulation steps")
     parser.add_argument("--max-steps", type=int, default=-1, help="Max steps (overrides epochs if > 0)")
     parser.add_argument("--warmup-ratio", type=float, default=0.03, help="Warmup ratio")
+    parser.add_argument("--group-by-length", action="store_true", default=True,
+                        help="Group sequences by length to minimize padding (default: True)")
+    parser.add_argument("--no-group-by-length", action="store_true",
+                        help="Disable length grouping (use random batching)")
     
     # Eval and checkpointing
     parser.add_argument("--eval-steps", type=int, default=200, help="Evaluation frequency")
@@ -345,8 +399,27 @@ def main():
         eval_dataset = load_pretokenized_dataset(data_dir, filler_lengths, split="val")
         print(f"Validation examples: {len(eval_dataset)}")
     
-    # Shuffle training data (important for mixed N!)
-    train_dataset = train_dataset.shuffle(seed=42)
+    # Compute sequence lengths for length-grouped sampling
+    use_length_grouping = args.group_by_length and not args.no_group_by_length
+    train_lengths = None
+    
+    if use_length_grouping:
+        print("Computing sequence lengths for length-grouped batching...")
+        train_lengths = [len(train_dataset[i]["input_ids"]) for i in range(len(train_dataset))]
+        min_len, max_len = min(train_lengths), max(train_lengths)
+        avg_len = sum(train_lengths) / len(train_lengths)
+        print(f"  Sequence lengths: min={min_len}, max={max_len}, avg={avg_len:.0f}")
+        
+        # Add length column for HF Trainer's group_by_length feature
+        train_dataset = train_dataset.add_column("length", train_lengths)
+        
+        if max_len > min_len * 2:
+            print(f"  Length grouping enabled (high variance in lengths)")
+        else:
+            print(f"  Note: Low variance in lengths, grouping may not help much")
+    else:
+        # Shuffle training data if not using length grouping
+        train_dataset = train_dataset.shuffle(seed=42)
     
     # ─────────────────────────────────────────────────────────────────────────
     # Load model
@@ -399,6 +472,8 @@ def main():
         remove_unused_columns=False,
         ddp_find_unused_parameters=False,
         max_grad_norm=1.0,
+        group_by_length=use_length_grouping,  # Group similar lengths to minimize padding
+        length_column_name="length" if use_length_grouping else None,
     )
     
     # Configure wandb or disable reporting

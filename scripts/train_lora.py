@@ -8,7 +8,8 @@ import inspect
 import json
 import pathlib
 from typing import Any, Dict, List, Optional
-
+import random
+import numpy as np
 import torch
 from datasets import load_dataset, Dataset, concatenate_datasets
 from transformers import (
@@ -75,57 +76,6 @@ class DataCollatorForCausalLM:
             "attention_mask": torch.tensor(batch_attention_mask, dtype=torch.long),
             "labels": torch.tensor(batch_labels, dtype=torch.long),
         }
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Length-Grouped Sampler for efficient batching
-# ─────────────────────────────────────────────────────────────────────────────
-
-class LengthGroupedSampler(torch.utils.data.Sampler):
-    """
-    Sampler that groups sequences of similar length together to minimize padding.
-    """
-    def __init__(
-        self, 
-        dataset, 
-        batch_size: int,
-        lengths: Optional[List[int]] = None,
-        shuffle: bool = True,
-        seed: int = 42,
-    ):
-        self.batch_size = batch_size
-        self.shuffle = shuffle
-        self.generator = torch.Generator().manual_seed(seed)
-        
-        # Get lengths
-        if lengths is not None:
-            self.lengths = lengths
-        else:
-            # Try to get from dataset
-            self.lengths = [len(dataset[i]["input_ids"]) for i in range(len(dataset))]
-        
-        # Sort indices by length
-        self.sorted_indices = sorted(range(len(self.lengths)), key=lambda i: self.lengths[i])
-        
-    def __iter__(self):
-        # Create batches of similar-length sequences
-        batches = []
-        for i in range(0, len(self.sorted_indices), self.batch_size):
-            batch = self.sorted_indices[i:i + self.batch_size]
-            batches.append(batch)
-        
-        # Shuffle batches (not within batches) to maintain length grouping
-        if self.shuffle:
-            batch_order = torch.randperm(len(batches), generator=self.generator).tolist()
-            batches = [batches[i] for i in batch_order]
-        
-        # Yield indices
-        for batch in batches:
-            yield from batch
-    
-    def __len__(self):
-        return len(self.sorted_indices)
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Dataset Loading with Mixed N Support
@@ -358,6 +308,7 @@ def main():
     parser.add_argument("--eval-steps", type=int, default=200, help="Evaluation frequency")
     parser.add_argument("--save-steps", type=int, default=200, help="Checkpoint frequency")
     parser.add_argument("--logging-steps", type=int, default=10, help="Logging frequency")
+    parser.add_argument("--seed", type=int, default=42, help="Random seed")
     
     # LoRA
     parser.add_argument("--lora-r", type=int, default=16, help="LoRA rank")
@@ -374,6 +325,13 @@ def main():
     parser.add_argument("--wandb-entity", type=str, default=None, help="W&B entity/team name")
     
     args = parser.parse_args()
+
+    # Set random seed
+    random.seed(args.seed)
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(args.seed)
     
     # Parse filler lengths
     filler_lengths = parse_int_list(args.filler_lengths)

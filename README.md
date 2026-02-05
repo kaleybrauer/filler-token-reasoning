@@ -1,6 +1,6 @@
 # filler-token-reasoning
 
-Train and analyze language models whose accuracy improves as we add **meaningless filler tokens** to the prompt. The filler span is treated as a token-space "workspace" to later probe and decode.
+Train and analyze language models whose accuracy improves as we add **non-semantic filler tokens** to the prompt. The filler span is treated as a token-space "workspace" to later probe and decode.
 
 ## Models
 

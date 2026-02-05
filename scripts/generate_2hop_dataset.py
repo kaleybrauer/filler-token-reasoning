@@ -160,18 +160,20 @@ def main() -> None:
                 "Answer:"
             )
 
+            # Add BOS at start, EOS at end
+            bos_ids = [tok.bos_token_id] if tok.bos_token_id else []
+            eos_ids = [tok.eos_token_id] if tok.eos_token_id else []
+
             prompt_ids = tok.encode(prompt, add_special_tokens=False)
             # Choose filler length per-example for training.
             nfill = sample_filler_len(rng, args.filler_min, args.filler_max)
             filler_seq = [filler_id] * nfill
 
-            # Add a leading space before the number for cleaner tokenization.
-            answer_text = " " + str(s) + "\n"
-            answer_ids = tok.encode(answer_text, add_special_tokens=False)
+            answer_text = " " + str(s)  # Remove \n, use EOS instead
+            answer_ids = tok.encode(answer_text, add_special_tokens=False) + eos_ids
 
-            prefix_ids = prompt_ids + filler_seq
+            prefix_ids = bos_ids + prompt_ids + filler_seq
             input_ids = prefix_ids + answer_ids
-
             labels = [-100] * len(prefix_ids) + answer_ids
             attn = [1] * len(input_ids)
 

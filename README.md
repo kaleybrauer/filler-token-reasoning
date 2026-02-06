@@ -11,6 +11,8 @@ We use Qwen2.5-7B for pilot, Qwen2.5-72B for scale.
 We use Ryan Greenblatt's `compose_facts` generator to create multi-hop data locally.
 
 ## Quickstart
-- Create data locally (not in repo): `python scripts/gen_2hop.py --out /path/to/data`
-- Preprocess: `python scripts/preprocess.py --data /path/to/data --out /path/to/processed`
-- Eval baseline acc vs N: `python scripts/eval_baseline.py --model Qwen/Qwen2.5-7B --data /path/to/processed`
+- Download facts: `python scripts/fetch_compose_facts_sources.py --outdir data/sources`
+- Create data locally (not in repo): `python generate_2hop_dataset.py --sources ./data/sources --outdir ./data/datasts/2hop`
+- Baseline eval: `python evaluate.py --model Qwen/Qwen2.5-7B --data-dir ./data/datasets/2hop --filler-lengths 0,32,128,300,600,1000 --outdir ./results/baseline`
+- LoRA train: `python scripts/train_lora.py --model Qwen/Qwen2.5-7B --data-dir ./data/datasets/2hop --outdir  ./outputs/qwen2p5-7b-qlora --batch-size 4`
+- Fine-tuned eval: `python evaluate.py --model Qwen/Qwen2.5-7B --adapter ./checkpoints/lora_r16 --data-dir ./data/datasets/2hop --filler-lengths 0,32,128,300,600,1000 --outdir ./results/finetuned --wandb`

@@ -186,7 +186,8 @@ def load_model_and_tokenizer(
         trust_remote_code=True,
     )
     
-    model_kwargs["device_map"] = "auto"  # Always use device_map for proper Flash Attention
+    # Always use device_map for proper Flash Attention and multi-GPU support
+    model_kwargs["device_map"] = "auto"
     
     # Determine attention implementation before loading (don't load multiple times)
     attn_impl = None
@@ -205,12 +206,6 @@ def load_model_and_tokenizer(
         model_kwargs["attn_implementation"] = attn_impl
     
     model = AutoModelForCausalLM.from_pretrained(model_name, **model_kwargs)
-    
-    # Move to GPU if not using device_map (i.e., not quantized)
-    if not (load_in_4bit or load_in_8bit):
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        model = model.to(device)
-        print(f"Model moved to {device}")
     
     # Print memory usage after loading
     if torch.cuda.is_available():

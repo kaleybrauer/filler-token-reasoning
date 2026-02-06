@@ -186,10 +186,7 @@ def load_model_and_tokenizer(
         trust_remote_code=True,
     )
     
-    # Only use device_map for quantized models (required by bitsandbytes)
-    # For non-quantized, we'll move to device manually after loading
-    if load_in_4bit or load_in_8bit:
-        model_kwargs["device_map"] = "auto"
+    model_kwargs["device_map"] = "auto"  # Always use device_map for proper Flash Attention
     
     # Determine attention implementation before loading (don't load multiple times)
     attn_impl = None

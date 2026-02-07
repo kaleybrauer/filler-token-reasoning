@@ -10,14 +10,17 @@ Key features:
 - Reports accuracy per filler length N
 - Supports variable filler lengths at eval time (override dataset's N)
 - Logs detailed results for analysis
+- Incremental saving (can resume interrupted runs)
+- Progress reporting with running accuracy
 """
 import argparse
 import json
 import pathlib
 import re
 import sys
+import time
 from collections import defaultdict
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 import torch
 from datasets import load_dataset
@@ -85,7 +88,7 @@ def load_model_and_tokenizer(
         torch_dtype=DTYPE,
         quantization_config=quant_config,
         trust_remote_code=True,
-        device_map="auto" if (load_in_4bit or load_in_8bit) else None,
+        device_map="auto",  # Always use device_map for proper Flash Attention
     )
     
     # Attention implementation
@@ -99,12 +102,6 @@ def load_model_and_tokenizer(
             print("Using SDPA attention")
     
     model = AutoModelForCausalLM.from_pretrained(model_name, **model_kwargs)
-    
-    # Move to GPU if not using device_map
-    if not (load_in_4bit or load_in_8bit):
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        model = model.to(device)
-        print(f"Model on {device}")
     
     # Load LoRA adapter if provided
     if adapter_path:
@@ -156,6 +153,174 @@ def parse_integer_answer(text: str) -> Optional[int]:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Incremental Results Tracking
+# ─────────────────────────────────────────────────────────────────────────────
+
+class ResultsTracker:
+    """
+    Tracks evaluation results with incremental saving and resume support.
+    """
+    
+    def __init__(self, outdir: Optional[pathlib.Path], report_every: int = 100):
+        self.outdir = outdir
+        self.report_every = report_every
+        self.results: List[Dict[str, Any]] = []
+        self.completed_keys: Set[str] = set()  # (example_id, filler_len) tuples as strings
+        
+        # Running stats per filler length
+        self.stats_by_n: Dict[int, Dict[str, int]] = defaultdict(lambda: {"correct": 0, "total": 0})
+        
+        # File handle for incremental writing
+        self._detailed_file = None
+        
+        # Load existing results if resuming
+        if outdir:
+            self.outdir.mkdir(parents=True, exist_ok=True)
+            self._load_existing_results()
+    
+    def _result_key(self, example_id: str, filler_len: int) -> str:
+        """Create unique key for an (example, filler_len) pair."""
+        return f"{example_id}__N{filler_len}"
+    
+    def _load_existing_results(self) -> None:
+        """Load existing results from previous run for resume support."""
+        detailed_file = self.outdir / "eval_detailed.jsonl"
+        if detailed_file.exists():
+            print(f"Found existing results at {detailed_file}, loading for resume...")
+            count = 0
+            with detailed_file.open("r") as f:
+                for line in f:
+                    try:
+                        r = json.loads(line.strip())
+                        self.results.append(r)
+                        key = self._result_key(r.get("id", ""), r.get("filler_len", 0))
+                        self.completed_keys.add(key)
+                        
+                        # Update running stats
+                        n = r.get("filler_len", 0)
+                        self.stats_by_n[n]["total"] += 1
+                        if r.get("correct", False):
+                            self.stats_by_n[n]["correct"] += 1
+                        count += 1
+                    except json.JSONDecodeError:
+                        continue
+            print(f"Loaded {count} existing results, will skip these examples")
+            self._print_current_stats()
+    
+    def is_completed(self, example_id: str, filler_len: int) -> bool:
+        """Check if this (example, filler_len) pair was already evaluated."""
+        key = self._result_key(example_id, filler_len)
+        return key in self.completed_keys
+    
+    def add_result(self, result: Dict[str, Any]) -> None:
+        """Add a result and update stats."""
+        self.results.append(result)
+        
+        n = result.get("filler_len", 0)
+        self.stats_by_n[n]["total"] += 1
+        if result.get("correct", False):
+            self.stats_by_n[n]["correct"] += 1
+        
+        key = self._result_key(result.get("id", ""), n)
+        self.completed_keys.add(key)
+        
+        # Write incrementally
+        if self.outdir:
+            self._write_result(result)
+        
+        # Report progress periodically
+        total = sum(s["total"] for s in self.stats_by_n.values())
+        if total % self.report_every == 0:
+            self._print_current_stats()
+    
+    def _write_result(self, result: Dict[str, Any]) -> None:
+        """Append result to detailed file."""
+        detailed_file = self.outdir / "eval_detailed.jsonl"
+        with detailed_file.open("a") as f:
+            f.write(json.dumps(result) + "\n")
+    
+    def _print_current_stats(self) -> None:
+        """Print current running statistics."""
+        total_correct = sum(s["correct"] for s in self.stats_by_n.values())
+        total_count = sum(s["total"] for s in self.stats_by_n.values())
+        
+        if total_count == 0:
+            return
+        
+        overall_acc = total_correct / total_count * 100
+        
+        print(f"\n{'─'*60}")
+        print(f"Progress: {total_count} examples evaluated | Overall accuracy: {overall_acc:.2f}%")
+        print(f"{'─'*60}")
+        
+        # Print per-N stats
+        for n in sorted(self.stats_by_n.keys()):
+            stats = self.stats_by_n[n]
+            if stats["total"] > 0:
+                acc = stats["correct"] / stats["total"] * 100
+                print(f"  N={n:4d}: {stats['correct']:4d}/{stats['total']:4d} ({acc:6.2f}%)")
+        
+        print(f"{'─'*60}\n")
+    
+    def finalize(self) -> None:
+        """Print final stats and save summary."""
+        print("\n" + "=" * 60)
+        print("FINAL EVALUATION RESULTS")
+        print("=" * 60)
+        self._print_current_stats()
+        
+        if self.outdir:
+            self._save_summary()
+    
+    def _save_summary(self) -> None:
+        """Save summary JSON file."""
+        total_correct = sum(s["correct"] for s in self.stats_by_n.values())
+        total_count = sum(s["total"] for s in self.stats_by_n.values())
+        
+        accuracy_by_n = {}
+        for n, stats in self.stats_by_n.items():
+            if stats["total"] > 0:
+                accuracy_by_n[n] = {
+                    "accuracy": stats["correct"] / stats["total"],
+                    "correct": stats["correct"],
+                    "total": stats["total"],
+                }
+        
+        summary = {
+            "overall_accuracy": total_correct / total_count if total_count > 0 else 0.0,
+            "overall_correct": total_correct,
+            "overall_total": total_count,
+            "accuracy_by_filler_len": accuracy_by_n,
+        }
+        
+        summary_file = self.outdir / "eval_summary.json"
+        summary_file.write_text(json.dumps(summary, indent=2))
+        print(f"Saved summary to {summary_file}")
+    
+    def get_aggregated_results(self) -> Dict[str, Any]:
+        """Return results in the same format as before for compatibility."""
+        total_correct = sum(s["correct"] for s in self.stats_by_n.values())
+        total_count = sum(s["total"] for s in self.stats_by_n.values())
+        
+        accuracy_by_n = {}
+        for n, stats in self.stats_by_n.items():
+            if stats["total"] > 0:
+                accuracy_by_n[n] = {
+                    "accuracy": stats["correct"] / stats["total"],
+                    "correct": stats["correct"],
+                    "total": stats["total"],
+                }
+        
+        return {
+            "overall_accuracy": total_correct / total_count if total_count > 0 else 0.0,
+            "overall_correct": total_correct,
+            "overall_total": total_count,
+            "accuracy_by_filler_len": accuracy_by_n,
+            "detailed_results": self.results,
+        }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Evaluation
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -191,104 +356,87 @@ def build_prompt_with_filler(
 
 
 @torch.no_grad()
-def evaluate_batch(
+def evaluate_single(
     model: Any,
     tokenizer: Any,
-    examples: List[Dict[str, Any]],
-    filler_len: Optional[int] = None,
+    example: Dict[str, Any],
+    filler_len: int,
     filler_token: str = "<|fim_pad|>",
     max_new_tokens: int = 10,
     temperature: float = 0.0,
-) -> List[Dict[str, Any]]:
+) -> Dict[str, Any]:
     """
-    Evaluate a batch of examples.
+    Evaluate a single example at a specific filler length.
     
-    Args:
-        model: The model to evaluate
-        tokenizer: Tokenizer
-        examples: List of example dicts with 'prompt', 'answer', etc.
-        filler_len: Override filler length (if None, use example's filler_len)
-        filler_token: Filler token string
-        max_new_tokens: Max tokens to generate
-        temperature: Sampling temperature (0 = greedy)
-    
-    Returns:
-        List of result dicts with 'correct', 'predicted', 'expected', etc.
+    Returns result dict with 'correct', 'predicted', 'expected', etc.
     """
     device = next(model.parameters()).device
-    results = []
     
-    for ex in examples:
-        # Determine filler length
-        n = filler_len if filler_len is not None else ex.get("filler_len", 0)
-        
-        # Build input
-        input_ids, _ = build_prompt_with_filler(
-            prompt=ex["prompt"],
-            filler_len=n,
-            filler_token=filler_token,
-            tokenizer=tokenizer,
-            bos_token_id=tokenizer.bos_token_id,
+    # Build input
+    input_ids, _ = build_prompt_with_filler(
+        prompt=example["prompt"],
+        filler_len=filler_len,
+        filler_token=filler_token,
+        tokenizer=tokenizer,
+        bos_token_id=tokenizer.bos_token_id,
+    )
+    
+    input_tensor = torch.tensor([input_ids], dtype=torch.long, device=device)
+    attention_mask = torch.ones_like(input_tensor)
+    
+    # Generate
+    if temperature == 0.0:
+        outputs = model.generate(
+            input_ids=input_tensor,
+            attention_mask=attention_mask,
+            max_new_tokens=max_new_tokens,
+            do_sample=False,
+            pad_token_id=tokenizer.pad_token_id,
+            eos_token_id=tokenizer.eos_token_id,
         )
-        
-        input_tensor = torch.tensor([input_ids], dtype=torch.long, device=device)
-        attention_mask = torch.ones_like(input_tensor)
-        
-        # Generate
-        if temperature == 0.0:
-            outputs = model.generate(
-                input_ids=input_tensor,
-                attention_mask=attention_mask,
-                max_new_tokens=max_new_tokens,
-                do_sample=False,
-                pad_token_id=tokenizer.pad_token_id,
-                eos_token_id=tokenizer.eos_token_id,
-            )
-        else:
-            outputs = model.generate(
-                input_ids=input_tensor,
-                attention_mask=attention_mask,
-                max_new_tokens=max_new_tokens,
-                do_sample=True,
-                temperature=temperature,
-                pad_token_id=tokenizer.pad_token_id,
-                eos_token_id=tokenizer.eos_token_id,
-            )
-        
-        # Decode only the generated tokens
-        generated_ids = outputs[0, len(input_ids):].tolist()
-        generated_text = tokenizer.decode(generated_ids, skip_special_tokens=True)
-        
-        # Parse answer
-        predicted = parse_integer_answer(generated_text)
-        expected = ex["answer"]
-        correct = (predicted == expected)
-        
-        results.append({
-            "id": ex.get("id", ""),
-            "correct": correct,
-            "predicted": predicted,
-            "expected": expected,
-            "generated_text": generated_text,
-            "filler_len": n,
-            "fact1": ex.get("fact1", ""),
-            "fact2": ex.get("fact2", ""),
-            "a1": ex.get("a1", 0),
-            "a2": ex.get("a2", 0),
-        })
+    else:
+        outputs = model.generate(
+            input_ids=input_tensor,
+            attention_mask=attention_mask,
+            max_new_tokens=max_new_tokens,
+            do_sample=True,
+            temperature=temperature,
+            pad_token_id=tokenizer.pad_token_id,
+            eos_token_id=tokenizer.eos_token_id,
+        )
     
-    return results
+    # Decode only the generated tokens
+    generated_ids = outputs[0, len(input_ids):].tolist()
+    generated_text = tokenizer.decode(generated_ids, skip_special_tokens=True)
+    
+    # Parse answer
+    predicted = parse_integer_answer(generated_text)
+    expected = example["answer"]
+    correct = (predicted == expected)
+    
+    return {
+        "id": example.get("id", ""),
+        "correct": correct,
+        "predicted": predicted,
+        "expected": expected,
+        "generated_text": generated_text,
+        "filler_len": filler_len,
+        "fact1": example.get("fact1", ""),
+        "fact2": example.get("fact2", ""),
+        "a1": example.get("a1", 0),
+        "a2": example.get("a2", 0),
+    }
 
 
 def evaluate_dataset(
     model: Any,
     tokenizer: Any,
     dataset: Any,
+    tracker: ResultsTracker,
     filler_lengths: Optional[List[int]] = None,
     filler_token: str = "<|fim_pad|>",
     max_new_tokens: int = 10,
     temperature: float = 0.0,
-    batch_size: int = 1,  # Generation is typically batch_size=1
     max_examples: Optional[int] = None,
 ) -> Dict[str, Any]:
     """
@@ -302,67 +450,75 @@ def evaluate_dataset(
     if max_examples:
         examples = examples[:max_examples]
     
-    all_results = []
-    
     if filler_lengths is None:
         # Use each example's stored filler length
-        print(f"Evaluating {len(examples)} examples with stored filler lengths...")
+        total = len(examples)
+        skipped = 0
+        
+        print(f"Evaluating {total} examples with stored filler lengths...")
+        
         for ex in tqdm(examples, desc="Evaluating"):
-            batch_results = evaluate_batch(
-                model, tokenizer, [ex],
-                filler_len=None,
+            n = ex.get("filler_len", 0)
+            example_id = ex.get("id", "")
+            
+            # Skip if already completed
+            if tracker.is_completed(example_id, n):
+                skipped += 1
+                continue
+            
+            result = evaluate_single(
+                model, tokenizer, ex,
+                filler_len=n,
                 filler_token=filler_token,
                 max_new_tokens=max_new_tokens,
                 temperature=temperature,
             )
-            all_results.extend(batch_results)
+            tracker.add_result(result)
+        
+        if skipped > 0:
+            print(f"Skipped {skipped} already-completed examples")
+    
     else:
         # Evaluate all examples at each specified filler length
         for n in filler_lengths:
-            print(f"\nEvaluating at N={n}...")
+            skipped = 0
+            evaluated = 0
+            
+            print(f"\n{'='*60}")
+            print(f"Evaluating at N={n} ({len(examples)} examples)")
+            print(f"{'='*60}")
+            
+            start_time = time.time()
+            
             for ex in tqdm(examples, desc=f"N={n}"):
-                batch_results = evaluate_batch(
-                    model, tokenizer, [ex],
+                example_id = ex.get("id", "")
+                
+                # Skip if already completed
+                if tracker.is_completed(example_id, n):
+                    skipped += 1
+                    continue
+                
+                result = evaluate_single(
+                    model, tokenizer, ex,
                     filler_len=n,
                     filler_token=filler_token,
                     max_new_tokens=max_new_tokens,
                     temperature=temperature,
                 )
-                all_results.extend(batch_results)
+                tracker.add_result(result)
+                evaluated += 1
+            
+            elapsed = time.time() - start_time
+            
+            # Print summary for this N
+            stats = tracker.stats_by_n[n]
+            acc = stats["correct"] / stats["total"] * 100 if stats["total"] > 0 else 0
+            
+            print(f"\nN={n} complete: {stats['correct']}/{stats['total']} ({acc:.2f}%)")
+            print(f"  Evaluated: {evaluated}, Skipped (resumed): {skipped}")
+            print(f"  Time: {elapsed:.1f}s ({elapsed/max(evaluated,1):.2f}s/example)")
     
-    return aggregate_results(all_results)
-
-
-def aggregate_results(results: List[Dict[str, Any]]) -> Dict[str, Any]:
-    """Aggregate results by filler length."""
-    
-    # Group by filler length
-    by_filler_len = defaultdict(list)
-    for r in results:
-        by_filler_len[r["filler_len"]].append(r)
-    
-    # Compute accuracy per filler length
-    accuracy_by_n = {}
-    for n, items in sorted(by_filler_len.items()):
-        n_correct = sum(1 for r in items if r["correct"])
-        n_total = len(items)
-        accuracy_by_n[n] = {
-            "accuracy": n_correct / n_total if n_total > 0 else 0.0,
-            "correct": n_correct,
-            "total": n_total,
-        }
-    
-    # Overall accuracy
-    n_correct_total = sum(1 for r in results if r["correct"])
-    n_total = len(results)
-    
-    return {
-        "overall_accuracy": n_correct_total / n_total if n_total > 0 else 0.0,
-        "overall_correct": n_correct_total,
-        "overall_total": n_total,
-        "accuracy_by_filler_len": accuracy_by_n,
-        "detailed_results": results,
-    }
+    return tracker.get_aggregated_results()
 
 
 def print_results(results: Dict[str, Any]) -> None:
@@ -470,7 +626,9 @@ def main():
     
     # Output
     parser.add_argument("--outdir", type=str, default=None,
-                        help="Directory to save detailed results")
+                        help="Directory to save detailed results (enables resume)")
+    parser.add_argument("--report-every", type=int, default=100,
+                        help="Print progress every N examples")
     parser.add_argument("--show-errors", action="store_true",
                         help="Show error analysis")
     
@@ -527,6 +685,10 @@ def main():
     if manifest.get("filler_token") and args.filler_token == "<|fim_pad|>":
         filler_token = manifest["filler_token"]
     
+    # Initialize results tracker
+    outdir = pathlib.Path(args.outdir) if args.outdir else None
+    tracker = ResultsTracker(outdir=outdir, report_every=args.report_every)
+    
     # Initialize wandb
     if args.wandb:
         if not WANDB_AVAILABLE:
@@ -554,6 +716,7 @@ def main():
         model=model,
         tokenizer=tokenizer,
         dataset=dataset,
+        tracker=tracker,
         filler_lengths=filler_lengths,
         filler_token=filler_token,
         max_new_tokens=args.max_new_tokens,
@@ -561,38 +724,11 @@ def main():
         max_examples=args.max_examples,
     )
     
-    # Print results
-    print_results(results)
+    # Finalize tracker (prints final stats and saves summary)
+    tracker.finalize()
     
     if args.show_errors:
         analyze_errors(results)
-    
-    # Save results
-    if args.outdir:
-        outdir = pathlib.Path(args.outdir)
-        outdir.mkdir(parents=True, exist_ok=True)
-        
-        # Save summary (without detailed results for smaller file)
-        summary = {
-            "model": args.model,
-            "adapter": args.adapter,
-            "split": args.split,
-            "filler_lengths_evaluated": filler_lengths,
-            "overall_accuracy": results["overall_accuracy"],
-            "overall_correct": results["overall_correct"],
-            "overall_total": results["overall_total"],
-            "accuracy_by_filler_len": results["accuracy_by_filler_len"],
-        }
-        summary_file = outdir / "eval_summary.json"
-        summary_file.write_text(json.dumps(summary, indent=2))
-        print(f"\nSaved summary to {summary_file}")
-        
-        # Save detailed results
-        detailed_file = outdir / "eval_detailed.jsonl"
-        with detailed_file.open("w") as f:
-            for r in results["detailed_results"]:
-                f.write(json.dumps(r) + "\n")
-        print(f"Saved detailed results to {detailed_file}")
     
     # Log to wandb
     if args.wandb and WANDB_AVAILABLE:

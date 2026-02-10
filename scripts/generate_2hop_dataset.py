@@ -212,9 +212,12 @@ class DatasetBuilder:
             # Valid pair found
             self.used_pairs.add(pair_key)
             
+            # trying a more explicit prompt
             prompt = (
-                "Answer with a single integer (no extra text).\n\n"
-                f"{q1} + {q2}\n"
+                "Answer two questions and add the results.\n\n"
+                f"Q1: {q1}\n"
+                f"Q2: {q2}\n\n"
+                "Q1 answer + Q2 answer = ?\n"
                 "Answer:"
             )
             

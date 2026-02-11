@@ -49,32 +49,33 @@ class DataCollatorForCausalLM:
 
     def __call__(self, features: List[Dict[str, Any]]) -> Dict[str, torch.Tensor]:
         max_len = max(len(f["input_ids"]) for f in features)
-        
-        batch_input_ids = []
-        batch_attention_mask = []
-        batch_labels = []
-        
-        for f in features:
-            seq_len = len(f["input_ids"])
-            pad_len = max_len - seq_len
-            
+        batch_size = len(features)
+
+        # Pre-allocate tensors
+        batch_input_ids = torch.full((batch_size, max_len), self.pad_token_id, dtype=torch.long)
+        batch_attention_mask = torch.zeros((batch_size, max_len), dtype=torch.long)
+        batch_labels = torch.full((batch_size, max_len), -100, dtype=torch.long)
+
+        for i, f in enumerate(features):
+            ids = torch.tensor(f["input_ids"], dtype=torch.long)
+            mask = torch.tensor(f["attention_mask"], dtype=torch.long)
+            labels = torch.tensor(f["labels"], dtype=torch.long)
+            seq_len = ids.size(0)
+
             if self.padding_side == "right":
-                input_ids = list(f["input_ids"]) + [self.pad_token_id] * pad_len
-                attention_mask = list(f["attention_mask"]) + [0] * pad_len
-                labels = list(f["labels"]) + [-100] * pad_len
+                batch_input_ids[i, :seq_len] = ids
+                batch_attention_mask[i, :seq_len] = mask
+                batch_labels[i, :seq_len] = labels
             else:
-                input_ids = [self.pad_token_id] * pad_len + list(f["input_ids"])
-                attention_mask = [0] * pad_len + list(f["attention_mask"])
-                labels = [-100] * pad_len + list(f["labels"])
-            
-            batch_input_ids.append(input_ids)
-            batch_attention_mask.append(attention_mask)
-            batch_labels.append(labels)
-        
+                offset = max_len - seq_len
+                batch_input_ids[i, offset:] = ids
+                batch_attention_mask[i, offset:] = mask
+                batch_labels[i, offset:] = labels
+
         return {
-            "input_ids": torch.tensor(batch_input_ids, dtype=torch.long),
-            "attention_mask": torch.tensor(batch_attention_mask, dtype=torch.long),
-            "labels": torch.tensor(batch_labels, dtype=torch.long),
+            "input_ids": batch_input_ids,
+            "attention_mask": batch_attention_mask,
+            "labels": batch_labels,
         }
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -155,13 +156,14 @@ def load_model_and_tokenizer(
     load_in_8bit: bool = False,
     use_flash_attn: bool = True,
     use_gradient_checkpointing: bool = True,
+    trust_remote_code: bool = False,
 ):
     """Load model and tokenizer with optional quantization."""
     
     tokenizer = AutoTokenizer.from_pretrained(
         model_name, 
         use_fast=True, 
-        trust_remote_code=True
+        trust_remote_code=trust_remote_code,
     )
     
     if tokenizer.pad_token_id is None:
@@ -183,7 +185,7 @@ def load_model_and_tokenizer(
     model_kwargs = dict(
         torch_dtype=DTYPE,
         quantization_config=quant_config,
-        trust_remote_code=True,
+        trust_remote_code=trust_remote_code,
     )
     
     # Always use device_map for proper Flash Attention and multi-GPU support
@@ -255,7 +257,7 @@ def apply_lora(
 # Main
 # ─────────────────────────────────────────────────────────────────────────────
 
-def parse_int_list(s: str) -> List[int]:
+def parse_int_list(s: str) -> Optional[List[int]]:
     """Parse comma-separated integers: '0,32,128' -> [0, 32, 128]"""
     if not s:
         return None
@@ -283,6 +285,8 @@ def main():
     parser.add_argument("--no-flash-attn", action="store_true", help="Disable Flash Attention 2")
     parser.add_argument("--no-grad-checkpoint", action="store_true", 
                         help="Disable gradient checkpointing (faster for small models)")
+    parser.add_argument("--trust-remote-code", action="store_true",
+                        help="Allow executing remote code from model repos")
     
     # Training hyperparameters
     parser.add_argument("--lr", type=float, default=2e-4, help="Learning rate")
@@ -291,9 +295,9 @@ def main():
     parser.add_argument("--grad-accum", type=int, default=1, help="Gradient accumulation steps")
     parser.add_argument("--max-steps", type=int, default=-1, help="Max steps (overrides epochs if > 0)")
     parser.add_argument("--warmup-ratio", type=float, default=0.03, help="Warmup ratio")
-    parser.add_argument("--group-by-length", action="store_true", default=True,
+    parser.add_argument("--group-by-length", action="store_true", dest="group_by_length", default=True,
                         help="Group sequences by length to minimize padding (default: True)")
-    parser.add_argument("--no-group-by-length", action="store_true",
+    parser.add_argument("--no-group-by-length", action="store_false", dest="group_by_length",
                         help="Disable length grouping (use random batching)")
     
     # Eval and checkpointing
@@ -350,12 +354,13 @@ def main():
         print(f"Validation examples: {len(eval_dataset)}")
     
     # Compute sequence lengths for length-grouped sampling
-    use_length_grouping = args.group_by_length and not args.no_group_by_length
-    train_lengths = None
+    use_length_grouping = args.group_by_length
     
     if use_length_grouping:
         print("Computing sequence lengths for length-grouped batching...")
-        train_lengths = [len(train_dataset[i]["input_ids"]) for i in range(len(train_dataset))]
+        # Use column access instead of per-element indexing for speed
+        all_input_ids = train_dataset["input_ids"]
+        train_lengths = [len(ids) for ids in all_input_ids]
         min_len, max_len = min(train_lengths), max(train_lengths)
         avg_len = sum(train_lengths) / len(train_lengths)
         print(f"  Sequence lengths: min={min_len}, max={max_len}, avg={avg_len:.0f}")
@@ -369,7 +374,7 @@ def main():
             print(f"  Note: Low variance in lengths, grouping may not help much")
     else:
         # Shuffle training data if not using length grouping
-        train_dataset = train_dataset.shuffle(seed=42)
+        train_dataset = train_dataset.shuffle(seed=args.seed)
     
     # ─────────────────────────────────────────────────────────────────────────
     # Load model
@@ -383,6 +388,7 @@ def main():
         load_in_8bit=args.load_in_8bit,
         use_flash_attn=not args.no_flash_attn,
         use_gradient_checkpointing=use_grad_ckpt,
+        trust_remote_code=args.trust_remote_code,
     )
     
     model = apply_lora(

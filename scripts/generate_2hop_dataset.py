@@ -149,8 +149,29 @@ def write_jsonl(rows: List[Dict[str, Any]], outpath: pathlib.Path) -> None:
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
 
 
+def _generate_valid_pairs(
+    facts: List[Tuple[str, int, str]],
+    max_answer: int,
+    rng: random.Random,
+) -> List[Tuple[int, int]]:
+    """
+    Pre-generate all valid (i, j) pairs where i < j and a_i + a_j < max_answer
+    and a_i + a_j >= 0, then shuffle them.
+    
+    Returns shuffled list of (index_i, index_j) into the facts list.
+    """
+    pairs = []
+    for i in range(len(facts)):
+        for j in range(i + 1, len(facts)):
+            s = facts[i][1] + facts[j][1]
+            if 0 <= s < max_answer:
+                pairs.append((i, j))
+    rng.shuffle(pairs)
+    return pairs
+
+
 class DatasetBuilder:
-    """Builds examples from a pool of facts with pair deduplication."""
+    """Builds examples from a pool of facts using pre-generated pairs."""
     
     def __init__(
         self,
@@ -164,7 +185,6 @@ class DatasetBuilder:
         filler_max: int,
         eval_filler_lengths: List[int],
         rng: random.Random,
-        max_tries: int = 2000,
     ):
         self.facts = facts
         self.tok = tok
@@ -176,100 +196,96 @@ class DatasetBuilder:
         self.filler_max = filler_max
         self.eval_filler_lengths = eval_filler_lengths
         self.rng = rng
-        self.max_tries = max_tries
         
-        # Track used pairs to prevent duplicates (order-invariant)
-        self.used_pairs: Set[Tuple[str, str]] = set()
+        # Pre-generate all valid pairs
+        print(f"  Pre-generating valid pairs from {len(facts)} facts...")
+        self.valid_pairs = _generate_valid_pairs(facts, max_answer, rng)
+        print(f"  Found {len(self.valid_pairs)} valid pairs")
+        
+        # Pointer into the valid_pairs list
+        self._pair_idx = 0
+        
+        # Track how many pairs were used (for reporting)
+        self.used_pair_count = 0
         
         # Get BOS/EOS tokens
         self.bos_ids = [tok.bos_token_id] if tok.bos_token_id else []
         self.eos_ids = [tok.eos_token_id] if tok.eos_token_id else []
     
-    def _pair_key(self, q1: str, q2: str) -> Tuple[str, str]:
-        """Create order-invariant key for a pair of questions."""
-        return (min(q1, q2), max(q1, q2))
-    
     def make_example(self, example_id: int, split: str) -> Dict[str, Any]:
-        """Generate a single example, ensuring no duplicate pairs."""
-        for _ in range(self.max_tries):
-            (q1, a1, t1) = self.rng.choice(self.facts)
-            (q2, a2, t2) = self.rng.choice(self.facts)
-            
-            # Skip if same question
-            if q1 == q2:
-                continue
-            
-            # Skip if pair already used
-            pair_key = self._pair_key(q1, q2)
-            if pair_key in self.used_pairs:
-                continue
-            
-            # Check answer constraint
-            s = a1 + a2
-            if s < 0 or s >= self.max_answer:
-                continue
-            
-            # Valid pair found
-            self.used_pairs.add(pair_key)
-            
-            # trying a more explicit prompt
-            prompt = (
-                "Answer two questions and add the results.\n\n"
-                f"Q1: {q1}\n"
-                f"Q2: {q2}\n\n"
-                "Q1 answer + Q2 answer = ?\n"
-                "Answer:"
+        """Generate a single example from the next pre-generated pair."""
+        if self._pair_idx >= len(self.valid_pairs):
+            raise RuntimeError(
+                f"Exhausted all {len(self.valid_pairs)} valid pairs from {len(self.facts)} facts. "
+                f"Generated {self._pair_idx} examples so far. "
+                "Reduce dataset size or add more facts."
             )
-            
-            prompt_ids = self.tok.encode(prompt, add_special_tokens=False)
-            
-            # Sample filler length
-            nfill = sample_filler_len(
-                self.rng,
-                self.filler_mode,
-                self.filler_min,
-                self.filler_max,
-                self.eval_filler_lengths,
-            )
-            filler_seq = [self.filler_id] * nfill
-            
-            # Answer with leading space, terminated by EOS
-            answer_text = " " + str(s)
-            answer_ids = self.tok.encode(answer_text, add_special_tokens=False) + self.eos_ids
-            
-            # Assemble full sequence with BOS
-            prefix_ids = self.bos_ids + prompt_ids + filler_seq
-            input_ids = prefix_ids + answer_ids
-            
-            labels = [-100] * len(prefix_ids) + answer_ids
-            attn = [1] * len(input_ids)
-            
-            return {
-                "id": f"{split}-{example_id}",
-                "split": split,
-                "prompt": prompt,
-                "fact1": q1,
-                "fact2": q2,
-                "a1": a1,
-                "a2": a2,
-                "answer": s,
-                "type1": t1,
-                "type2": t2,
-                "filler_len": nfill,
-                "filler_token": self.filler_token,
-                "filler_token_id": self.filler_id,
-                "prompt_ids": prompt_ids,
-                "answer_ids": answer_ids,
-                "input_ids": input_ids,
-                "labels": labels,
-                "attention_mask": attn,
-            }
         
-        raise RuntimeError(
-            f"Failed to sample a valid example after {self.max_tries} tries. "
-            f"Facts pool size: {len(self.facts)}, used pairs: {len(self.used_pairs)}. "
-            "Try increasing --max-tries, adding more facts, or reducing dataset size."
+        i, j = self.valid_pairs[self._pair_idx]
+        self._pair_idx += 1
+        self.used_pair_count += 1
+        
+        # Randomly assign which fact is q1 vs q2
+        if self.rng.random() < 0.5:
+            (q1, a1, t1) = self.facts[i]
+            (q2, a2, t2) = self.facts[j]
+        else:
+            (q1, a1, t1) = self.facts[j]
+            (q2, a2, t2) = self.facts[i]
+        
+        s = a1 + a2
+        
+        prompt = (
+            "Answer two questions and add the results.\n\n"
+            f"Q1: {q1}\n"
+            f"Q2: {q2}\n\n"
+            "Q1 answer + Q2 answer = ?\n"
+            "Answer:"
         )
+        
+        prompt_ids = self.tok.encode(prompt, add_special_tokens=False)
+        
+        # Sample filler length
+        nfill = sample_filler_len(
+            self.rng,
+            self.filler_mode,
+            self.filler_min,
+            self.filler_max,
+            self.eval_filler_lengths,
+        )
+        filler_seq = [self.filler_id] * nfill
+        
+        # Answer with leading space, terminated by EOS
+        answer_text = " " + str(s)
+        answer_ids = self.tok.encode(answer_text, add_special_tokens=False) + self.eos_ids
+        
+        # Assemble full sequence with BOS
+        prefix_ids = self.bos_ids + prompt_ids + filler_seq
+        input_ids = prefix_ids + answer_ids
+        
+        labels = [-100] * len(prefix_ids) + answer_ids
+        attn = [1] * len(input_ids)
+        
+        return {
+            "id": f"{split}-{example_id}",
+            "split": split,
+            "prompt": prompt,
+            "fact1": q1,
+            "fact2": q2,
+            "a1": a1,
+            "a2": a2,
+            "answer": s,
+            "type1": t1,
+            "type2": t2,
+            "filler_len": nfill,
+            "filler_token": self.filler_token,
+            "filler_token_id": self.filler_id,
+            "prompt_ids": prompt_ids,
+            "answer_ids": answer_ids,
+            "input_ids": input_ids,
+            "labels": labels,
+            "attention_mask": attn,
+        }
     
     def build_split(self, n: int, split: str) -> List[Dict[str, Any]]:
         """Build n examples for a split."""
@@ -281,9 +297,8 @@ class DatasetBuilder:
         return rows
     
     def max_possible_pairs(self) -> int:
-        """Return maximum possible unique pairs from this fact pool."""
-        n = len(self.facts)
-        return n * (n - 1) // 2
+        """Return maximum possible unique valid pairs from this fact pool."""
+        return len(self.valid_pairs)
 
 
 def main() -> None:
@@ -322,8 +337,6 @@ def main() -> None:
     ap.add_argument("--fact-split-val", type=float, default=0.1,
                     help="Fraction of facts for validation pool")
 
-    ap.add_argument("--max-tries", type=int, default=2000, 
-                    help="Resample limit when enforcing constraints")
     args = ap.parse_args()
 
     rng = random.Random(args.seed)
@@ -375,19 +388,6 @@ def main() -> None:
     print(f"  Train: {len(train_facts)} facts -> max {len(train_facts) * (len(train_facts)-1) // 2} pairs")
     print(f"  Val:   {len(val_facts)} facts -> max {len(val_facts) * (len(val_facts)-1) // 2} pairs")
     print(f"  Test:  {len(test_facts)} facts -> max {len(test_facts) * (len(test_facts)-1) // 2} pairs")
-    
-    # Check if we have enough pairs
-    def check_capacity(facts, n_needed, split_name):
-        max_pairs = len(facts) * (len(facts) - 1) // 2
-        if n_needed > max_pairs:
-            raise SystemExit(
-                f"Cannot generate {n_needed} {split_name} examples: only {max_pairs} unique pairs possible "
-                f"from {len(facts)} facts. Reduce --n-{split_name} or add more facts."
-            )
-    
-    check_capacity(train_facts, args.n_train, "train")
-    check_capacity(val_facts, args.n_val, "val")
-    check_capacity(test_facts, args.n_test, "test")
 
     print(f"\nUsing filler_token_id={filler_id} for filler_token={args.filler_token!r}")
     print(f"Filler mode: {args.filler_mode}")
@@ -413,8 +413,16 @@ def main() -> None:
         filler_max=args.filler_max,
         eval_filler_lengths=eval_filler_lengths,
         rng=rng,
-        max_tries=args.max_tries,
     )
+    
+    # Check capacity before generating
+    if args.n_train > train_builder.max_possible_pairs():
+        raise SystemExit(
+            f"Cannot generate {args.n_train} train examples: only "
+            f"{train_builder.max_possible_pairs()} valid unique pairs possible "
+            f"from {len(train_facts)} facts. Reduce --n-train or add more facts."
+        )
+    
     train_rows = train_builder.build_split(args.n_train, "train")
     
     print("\nGenerating validation data...")
@@ -429,8 +437,15 @@ def main() -> None:
         filler_max=args.filler_max,
         eval_filler_lengths=eval_filler_lengths,
         rng=rng,
-        max_tries=args.max_tries,
     )
+    
+    if args.n_val > val_builder.max_possible_pairs():
+        raise SystemExit(
+            f"Cannot generate {args.n_val} val examples: only "
+            f"{val_builder.max_possible_pairs()} valid unique pairs possible "
+            f"from {len(val_facts)} facts. Reduce --n-val or add more facts."
+        )
+    
     val_rows = val_builder.build_split(args.n_val, "val")
     
     print("\nGenerating test data...")
@@ -446,8 +461,15 @@ def main() -> None:
         filler_max=args.filler_max,
         eval_filler_lengths=eval_filler_lengths,
         rng=rng,
-        max_tries=args.max_tries,
     )
+    
+    if args.n_test > test_builder.max_possible_pairs():
+        raise SystemExit(
+            f"Cannot generate {args.n_test} test examples: only "
+            f"{test_builder.max_possible_pairs()} valid unique pairs possible "
+            f"from {len(test_facts)} facts. Reduce --n-test or add more facts."
+        )
+    
     test_rows = test_builder.build_split(args.n_test, "test")
 
     # Write datasets
@@ -489,10 +511,15 @@ def main() -> None:
             "val": len(val_rows),
             "test": len(test_rows),
         },
+        "valid_pairs": {
+            "train": train_builder.max_possible_pairs(),
+            "val": val_builder.max_possible_pairs(),
+            "test": test_builder.max_possible_pairs(),
+        },
         "unique_pairs_used": {
-            "train": len(train_builder.used_pairs),
-            "val": len(val_builder.used_pairs),
-            "test": len(test_builder.used_pairs),
+            "train": train_builder.used_pair_count,
+            "val": val_builder.used_pair_count,
+            "test": test_builder.used_pair_count,
         },
         "bos_token_id": tok.bos_token_id,
         "eos_token_id": tok.eos_token_id,

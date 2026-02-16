@@ -127,6 +127,38 @@ PROMPT_FORMATS = {
             "Sum:"
         ),
     },
+    "fewshot": {
+        "description": "3-shot examples with Q1+Q2 format",
+        "template": lambda q1, q2: (
+            "Answer each question by adding the two values. Give only the final integer.\n\n"
+            "Q: What is the atomic number of Helium? + How many days are in a week?\n"
+            "A: 9\n\n"
+            "Q: What is the atomic number of Carbon? + What is the atomic number of Hydrogen?\n"
+            "A: 7\n\n"
+            "Q: How many legs does a spider have? + What is the atomic number of Lithium?\n"
+            "A: 11\n\n"
+            f"Q: {q1} + {q2}\n"
+            "A:"
+        ),
+    },
+    "fewshot_explicit": {
+        "description": "3-shot with explicit step-by-step format",
+        "template": lambda q1, q2: (
+            "For each pair of questions, find both answers and add them together.\n\n"
+            "Q1: What is the atomic number of Helium?\n"
+            "Q2: How many days are in a week?\n"
+            "Answer: 9\n\n"
+            "Q1: What is the atomic number of Carbon?\n"
+            "Q2: What is the atomic number of Hydrogen?\n"
+            "Answer: 7\n\n"
+            "Q1: How many legs does a spider have?\n"
+            "Q2: What is the atomic number of Lithium?\n"
+            "Answer: 11\n\n"
+            f"Q1: {q1}\n"
+            f"Q2: {q2}\n"
+            "Answer:"
+        ),
+    },
 }
 
 
@@ -160,32 +192,44 @@ def generate_examples(
     rows = []
     used_pairs = set()
     
-    # We want equal distribution across filler lengths
-    examples_per_filler = n_examples // len(filler_lengths)
+    # Create fact index mapping for efficient pair deduplication
+    fact_to_idx = {fact: i for i, fact in enumerate(facts)}
     
-    for filler_len in filler_lengths:
-        for i in range(examples_per_filler):
+    # Distribute examples across filler lengths, handling remainder
+    examples_per_filler = n_examples // len(filler_lengths)
+    remainder = n_examples % len(filler_lengths)
+    
+    for filler_idx, filler_len in enumerate(filler_lengths):
+        # Distribute remainder evenly across first few filler lengths
+        target_count = examples_per_filler + (1 if filler_idx < remainder else 0)
+        generated_count = 0
+        attempts = 0
+        max_attempts = target_count * 100  # Allow more attempts per target
+        
+        while generated_count < target_count and attempts < max_attempts:
+            attempts += 1
+            
             # Find a valid pair
-            for _ in range(1000):
-                (q1, a1, t1) = rng.choice(facts)
-                (q2, a2, t2) = rng.choice(facts)
-                
-                if q1 == q2:
-                    continue
-                
-                pair_key = (min(q1, q2), max(q1, q2))
-                if pair_key in used_pairs:
-                    continue
-                
-                s = a1 + a2
-                if s < 0 or s >= max_answer:
-                    continue
-                
-                used_pairs.add(pair_key)
-                break
-            else:
-                print(f"Warning: Could not find unique pair after 1000 tries")
+            (q1, a1, t1) = rng.choice(facts)
+            (q2, a2, t2) = rng.choice(facts)
+            
+            if q1 == q2:
                 continue
+            
+            # Use fact indices for efficient pair key
+            idx1 = fact_to_idx[(q1, a1, t1)]
+            idx2 = fact_to_idx[(q2, a2, t2)]
+            pair_key = (min(idx1, idx2), max(idx1, idx2))
+            
+            if pair_key in used_pairs:
+                continue
+            
+            s = a1 + a2
+            if s < 0 or s >= max_answer:
+                continue
+            
+            used_pairs.add(pair_key)
+            generated_count += 1
             
             # Build prompt using the template
             prompt = template_fn(q1, q2)
@@ -227,6 +271,11 @@ def generate_examples(
                 "labels": labels,
                 "attention_mask": attn,
             })
+        
+        # Warn if we couldn't generate enough examples for this filler length
+        if generated_count < target_count:
+            print(f"Warning: Only generated {generated_count}/{target_count} examples for filler_len={filler_len}")
+            print(f"  (Exhausted valid pairs after {attempts} attempts)")
     
     return rows
 
@@ -250,7 +299,7 @@ def main():
     parser.add_argument("--max-answer", type=int, default=1000,
                         help="Maximum answer value")
     parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--formats", type=str, default="original,explicit,stepwise,direct",
+    parser.add_argument("--formats", type=str, default="original,explicit,stepwise,direct,fewshot,fewshot_explicit",
                         help="Comma-separated list of prompt formats to generate")
     
     args = parser.parse_args()
@@ -258,6 +307,15 @@ def main():
     rng = random.Random(args.seed)
     filler_lengths = [int(x.strip()) for x in args.filler_lengths.split(",")]
     formats_to_generate = [f.strip() for f in args.formats.split(",")]
+    
+    # Validate formats upfront
+    invalid_formats = [f for f in formats_to_generate if f not in PROMPT_FORMATS]
+    if invalid_formats:
+        valid_formats = ", ".join(PROMPT_FORMATS.keys())
+        raise SystemExit(
+            f"Error: Unknown formats: {invalid_formats}\n"
+            f"Valid formats: {valid_formats}"
+        )
     
     print(f"Filler lengths: {filler_lengths}")
     print(f"Formats to generate: {formats_to_generate}")
@@ -288,10 +346,6 @@ def main():
     
     # Generate dataset for each prompt format
     for fmt in formats_to_generate:
-        if fmt not in PROMPT_FORMATS:
-            print(f"Warning: Unknown format '{fmt}', skipping")
-            continue
-        
         print(f"\n{'='*60}")
         print(f"Generating: {fmt}")
         print(f"Description: {PROMPT_FORMATS[fmt]['description']}")

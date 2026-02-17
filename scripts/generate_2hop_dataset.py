@@ -2,8 +2,10 @@
 """
 Generate 2-hop arithmetic dataset for opaque reasoner experiments.
 
+- Loads only model-verified known facts (from evaluate_individual_facts.py)
 - Facts are split into train/val/test pools first, then pairs are composed
   only from facts within each pool. This prevents any fact leakage.
+- Uses a 5-shot pure-pattern prompt format (no instructions).
 - Pair deduplication within each split prevents duplicate questions.
 - Filler lengths can be sampled uniformly or from a fixed set of eval values.
 """
@@ -15,86 +17,51 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 from transformers import AutoTokenizer
 
-INT_KEYS = ["answer", "value", "number", "n", "age", "atomic_number"]
-
 # Default filler lengths used for evaluation (also used during training if --filler-mode=eval)
 DEFAULT_EVAL_FILLER_LENGTHS = [0, 32, 128, 300, 600, 1000]
 
-
-def _is_int(x: Any) -> bool:
-    return isinstance(x, int) and not isinstance(x, bool)
-
-
-def _extract_int_from_obj(obj: Any) -> Optional[int]:
-    if _is_int(obj):
-        return obj
-    if isinstance(obj, dict):
-        for k in INT_KEYS:
-            if k in obj and _is_int(obj[k]):
-                return obj[k]
-    return None
+# ─────────────────────────────────────────────────────────────────────────────
+# Few-shot examples for the prompt.
+# These must NOT overlap with any facts in the evaluation pool.
+# ─────────────────────────────────────────────────────────────────────────────
+FEWSHOT_EXAMPLES = [
+    ("What is the number of legs of a cat?", "What is the number of days in a week?", 4, 7, 11),
+    ("At what age did Abraham Lincoln die?", "What is the number of judges on the Supreme Court?", 56, 9, 65),
+    ("What is the number of legs of a spider?", "At what age did Leonardo da Vinci die?", 8, 67, 75),
+    ("What is the number of sides of a hexagon?", "What is the number of disciples that Jesus had?", 6, 12, 18),
+    ("What is the number of continents on Earth?", "What is the number of sides of a triangle?", 7, 3, 10),
+]
 
 
-def load_facts(path: pathlib.Path, kind: str) -> List[Tuple[str, int, str]]:
+def build_fewshot_prefix() -> str:
+    """Build the few-shot prefix string (constant across all examples).
+    
+    Each example is separated by a blank line. The prefix ends with a
+    trailing blank line so the test question is separated consistently.
     """
-    Returns list of (question_text, answer_int, kind).
-    Handles a few common JSON shapes:
-      - dict[str, int]           (entity -> int OR question -> int)
-      - dict[str, dict]          (entity -> {age: int} etc.)
-      - list[dict]               ({question: str, answer: int} etc.)
+    blocks = []
+    for q1, q2, _a1, _a2, s in FEWSHOT_EXAMPLES:
+        blocks.append(f"Q1: {q1}\nQ2: {q2}\nA: {s}")
+    return "\n\n".join(blocks) + "\n\n"
+
+
+# Pre-build once so we don't re-create it for every example
+FEWSHOT_PREFIX = build_fewshot_prefix()
+
+
+def load_known_facts(path: pathlib.Path) -> List[Tuple[str, int, str]]:
+    """Load pre-filtered known facts from known_facts.json.
+
+    Expected format: list of {"question": str, "answer": int, "kind": str}
+    (as produced by evaluate_individual_facts.py)
     """
     raw = json.loads(path.read_text(encoding="utf-8"))
-
     out: List[Tuple[str, int, str]] = []
-
-    def make_q(key_or_q: str) -> str:
-        # If it already looks like a question, keep it.
-        if "?" in key_or_q:
-            return key_or_q.strip()
-        if kind == "age":
-            return f"At what age did {key_or_q} die?"
-        if kind == "atomic":
-            return f"What is the atomic number of {key_or_q}?"
-        # static: treat key as question if not obviously an entity
-        return key_or_q.strip()
-
-    if isinstance(raw, dict):
-        for k, v in raw.items():
-            ans = _extract_int_from_obj(v)
-            if ans is None:
-                continue
-            q = make_q(k)
-            out.append((q, int(ans), kind))
-
-    elif isinstance(raw, list):
-        for item in raw:
-            if not isinstance(item, dict):
-                continue
-            ans = _extract_int_from_obj(item)
-            if ans is None:
-                continue
-
-            q = None
-            for qk in ["question", "q", "prompt", "text"]:
-                if qk in item and isinstance(item[qk], str):
-                    q = item[qk].strip()
-                    break
-
-            if q is None:
-                # maybe it's entity-style
-                for nk in ["name", "entity", "person", "element"]:
-                    if nk in item and isinstance(item[nk], str):
-                        q = make_q(item[nk])
-                        break
-
-            if q is None:
-                continue
-
-            out.append((q, int(ans), kind))
-
-    else:
-        raise ValueError(f"Unsupported JSON root type in {path}: {type(raw)}")
-
+    for item in raw:
+        q = item["question"]
+        a = int(item["answer"])
+        k = item.get("kind", "unknown")
+        out.append((q, a, k))
     return out
 
 
@@ -236,11 +203,10 @@ class DatasetBuilder:
         s = a1 + a2
         
         prompt = (
-            "Answer two questions and add the results.\n\n"
+            f"{FEWSHOT_PREFIX}"
             f"Q1: {q1}\n"
-            f"Q2: {q2}\n\n"
-            "Q1 answer + Q2 answer = ?\n"
-            "Answer:"
+            f"Q2: {q2}\n"
+            f"A:"
         )
         
         prompt_ids = self.tok.encode(prompt, add_special_tokens=False)
@@ -307,14 +273,14 @@ def main() -> None:
     )
     ap.add_argument("--tokenizer", type=str, required=True, 
                     help="Tokenizer name, e.g. Qwen/Qwen2.5-7B")
-    ap.add_argument("--sources", type=str, required=True, 
-                    help="Directory containing age_facts.json, atomic_facts.json, static_facts.json")
+    ap.add_argument("--known-facts", type=str, required=True,
+                    help="Path to known_facts.json from evaluate_individual_facts.py")
     ap.add_argument("--outdir", type=str, required=True, 
                     help="Output directory for generated JSONL files")
 
-    ap.add_argument("--n-train", type=int, default=50000)
-    ap.add_argument("--n-val", type=int, default=2000)
-    ap.add_argument("--n-test", type=int, default=2000)
+    ap.add_argument("--n-train", type=int, default=28000)
+    ap.add_argument("--n-val", type=int, default=600)
+    ap.add_argument("--n-test", type=int, default=600)
     ap.add_argument("--seed", type=int, default=0)
 
     ap.add_argument("--max-answer", type=int, default=1000, 
@@ -327,15 +293,15 @@ def main() -> None:
                          "'eval' samples from --eval-filler-lengths")
     ap.add_argument("--filler-min", type=int, default=0,
                     help="Min filler length (for uniform mode)")
-    ap.add_argument("--filler-max", type=int, default=1000,
+    ap.add_argument("--filler-max", type=int, default=600,
                     help="Max filler length (for uniform mode)")
-    ap.add_argument("--eval-filler-lengths", type=str, default="0,32,128,300,600,1000",
+    ap.add_argument("--eval-filler-lengths", type=str, default="0,32,128,300,600",
                     help="Comma-separated filler lengths for eval mode and test set generation")
 
-    ap.add_argument("--fact-split-train", type=float, default=0.8,
-                    help="Fraction of facts for training pool")
-    ap.add_argument("--fact-split-val", type=float, default=0.1,
-                    help="Fraction of facts for validation pool")
+    ap.add_argument("--fact-split-train", type=float, default=0.75,
+                    help="Fraction of facts for training pool (default: 0.75)")
+    ap.add_argument("--fact-split-val", type=float, default=0.125,
+                    help="Fraction of facts for validation pool (default: 0.125)")
 
     args = ap.parse_args()
 
@@ -359,23 +325,22 @@ def main() -> None:
     print(f"BOS token: {tok.bos_token!r} (id={tok.bos_token_id})")
     print(f"EOS token: {tok.eos_token!r} (id={tok.eos_token_id})")
 
-    # Load facts
-    srcdir = pathlib.Path(args.sources)
-    age_path = srcdir / "age_facts.json"
-    atomic_path = srcdir / "atomic_facts.json"
-    static_path = srcdir / "static_facts.json"
+    # Load known facts
+    known_path = pathlib.Path(args.known_facts)
+    if not known_path.exists():
+        raise SystemExit(f"Error: --known-facts file not found: {known_path}")
 
-    age = load_facts(age_path, "age") if age_path.exists() else []
-    atomic = load_facts(atomic_path, "atomic") if atomic_path.exists() else []
-    static = load_facts(static_path, "static") if static_path.exists() else []
+    all_facts = load_known_facts(known_path)
+    all_facts = [(q, a, k) for (q, a, k) in all_facts if 0 <= a < args.max_answer]
 
-    all_facts = [(q, a, k) for (q, a, k) in (age + atomic + static) if 0 <= a < args.max_answer]
+    from collections import Counter
+    kind_counts = Counter(k for _, _, k in all_facts)
+    print(f"\nLoaded {len(all_facts)} known facts from {known_path}")
+    for kind in sorted(kind_counts):
+        print(f"  {kind}: {kind_counts[kind]}")
     
-    print(f"\nLoaded facts: age={len(age)} atomic={len(atomic)} static={len(static)}")
-    print(f"Usable facts (answer < {args.max_answer}): {len(all_facts)}")
-    
-    if len(all_facts) < 100:
-        raise SystemExit(f"Too few usable facts ({len(all_facts)}). Check your source JSON files in {srcdir}.")
+    if len(all_facts) < 50:
+        raise SystemExit(f"Too few usable facts ({len(all_facts)}). Need at least 50.")
 
     # Split facts into train/val/test pools
     train_facts, val_facts, test_facts = split_facts(
@@ -488,6 +453,8 @@ def main() -> None:
     # Save manifest
     manifest = {
         "tokenizer": args.tokenizer,
+        "known_facts_source": str(args.known_facts),
+        "prompt_format": "fewshot_5shot_pure_pattern",
         "seed": args.seed,
         "max_answer": args.max_answer,
         "filler_token": args.filler_token,

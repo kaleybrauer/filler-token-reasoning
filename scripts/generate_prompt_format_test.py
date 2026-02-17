@@ -7,7 +7,6 @@ Creates 4 separate test datasets (300 examples each) with different prompts:
 1. original: "Q1 + Q2" format (your original)
 2. explicit: "Answer two questions and add" format  
 3. stepwise: "First find each answer, then add" format
-4. direct: "X died at age A, Y has atomic number B, what is A+B?" format
 
 Run baseline eval on each to see which format the model understands best.
 """
@@ -116,15 +115,6 @@ PROMPT_FORMATS = {
             f"{q2}\n\n"
             "Find the answer to each question above, then add them together.\n"
             "Answer with only the final sum as a single integer:"
-        ),
-    },
-    "direct": {
-        "description": "Direct sum request format",
-        "template": lambda q1, q2: (
-            f"What is the sum of the following two values?\n"
-            f"Value 1: {q1}\n"
-            f"Value 2: {q2}\n"
-            "Sum:"
         ),
     },
     "fewshot": {
@@ -299,7 +289,7 @@ def main():
     parser.add_argument("--max-answer", type=int, default=1000,
                         help="Maximum answer value")
     parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--formats", type=str, default="original,explicit,stepwise,direct,fewshot,fewshot_explicit",
+    parser.add_argument("--formats", type=str, default="original,explicit,stepwise,fewshot,fewshot_explicit",
                         help="Comma-separated list of prompt formats to generate")
     
     args = parser.parse_args()

@@ -3,10 +3,12 @@
 Generate test datasets with different prompt formats to find which works best
 for baseline evaluation.
 
-Creates 4 separate test datasets (300 examples each) with different prompts:
+Creates test datasets (300 examples each) with different prompts:
 1. original: "Q1 + Q2" format (your original)
 2. explicit: "Answer two questions and add" format  
 3. stepwise: "First find each answer, then add" format
+4. fewshot: 5-shot pure pattern, no instructions
+5. fewshot_explicit: 5-shot with explicit instructions
 
 Run baseline eval on each to see which format the model understands best.
 """
@@ -85,9 +87,35 @@ def load_facts(path: pathlib.Path, kind: str) -> List[Tuple[str, int, str]]:
     return out
 
 
+def load_known_facts(path: pathlib.Path) -> List[Tuple[str, int, str]]:
+    """Load pre-filtered known facts from known_facts.json.
+    
+    Expected format: list of {"question": str, "answer": int, "kind": str}
+    (as produced by evaluate_individual_facts.py)
+    """
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    out: List[Tuple[str, int, str]] = []
+    for item in raw:
+        q = item["question"]
+        a = int(item["answer"])
+        k = item.get("kind", "unknown")
+        out.append((q, a, k))
+    return out
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Prompt Format Definitions
 # ─────────────────────────────────────────────────────────────────────────────
+
+# Few-shot examples for prompts. These must NOT overlap with evaluation facts.
+# Using simple, universally known facts that any LLM will get right.
+FEWSHOT_EXAMPLES = [
+    ("What is the number of legs of a cat?", "What is the number of days in a week?", 4, 7, 11),
+    ("At what age did Abraham Lincoln die?", "What is the number of judges on the Supreme Court?", 56, 9, 65),
+    ("What is the number of legs of a spider?", "At what age did Leonardo da Vinci die?", 8, 67, 75),
+    ("What is the number of sides of a hexagon?", "What is the number of disciples that Jesus had?", 6, 12, 18),
+    ("What is the number of continents on Earth?", "What is the number of sides of a triangle?", 7, 3, 10),
+]
 
 PROMPT_FORMATS = {
     "original": {
@@ -118,35 +146,26 @@ PROMPT_FORMATS = {
         ),
     },
     "fewshot": {
-        "description": "3-shot examples with Q1+Q2 format",
+        "description": "5-shot pure pattern, no instructions",
         "template": lambda q1, q2: (
-            "Answer each question by adding the two values. Give only the final integer.\n\n"
-            "Q: What is the atomic number of Helium? + How many days are in a week?\n"
-            "A: 9\n\n"
-            "Q: What is the atomic number of Carbon? + What is the atomic number of Hydrogen?\n"
-            "A: 7\n\n"
-            "Q: How many legs does a spider have? + What is the atomic number of Lithium?\n"
-            "A: 11\n\n"
-            f"Q: {q1} + {q2}\n"
-            "A:"
+            f"Q1: {FEWSHOT_EXAMPLES[0][0]}\nQ2: {FEWSHOT_EXAMPLES[0][1]}\nA: {FEWSHOT_EXAMPLES[0][4]}\n\n"
+            f"Q1: {FEWSHOT_EXAMPLES[1][0]}\nQ2: {FEWSHOT_EXAMPLES[1][1]}\nA: {FEWSHOT_EXAMPLES[1][4]}\n\n"
+            f"Q1: {FEWSHOT_EXAMPLES[2][0]}\nQ2: {FEWSHOT_EXAMPLES[2][1]}\nA: {FEWSHOT_EXAMPLES[2][4]}\n\n"
+            f"Q1: {FEWSHOT_EXAMPLES[3][0]}\nQ2: {FEWSHOT_EXAMPLES[3][1]}\nA: {FEWSHOT_EXAMPLES[3][4]}\n\n"
+            f"Q1: {FEWSHOT_EXAMPLES[4][0]}\nQ2: {FEWSHOT_EXAMPLES[4][1]}\nA: {FEWSHOT_EXAMPLES[4][4]}\n\n"
+            f"Q1: {q1}\nQ2: {q2}\nA:"
         ),
     },
     "fewshot_explicit": {
-        "description": "3-shot with explicit step-by-step format",
+        "description": "5-shot with explicit instructions",
         "template": lambda q1, q2: (
             "For each pair of questions, find both answers and add them together.\n\n"
-            "Q1: What is the atomic number of Helium?\n"
-            "Q2: How many days are in a week?\n"
-            "Answer: 9\n\n"
-            "Q1: What is the atomic number of Carbon?\n"
-            "Q2: What is the atomic number of Hydrogen?\n"
-            "Answer: 7\n\n"
-            "Q1: How many legs does a spider have?\n"
-            "Q2: What is the atomic number of Lithium?\n"
-            "Answer: 11\n\n"
-            f"Q1: {q1}\n"
-            f"Q2: {q2}\n"
-            "Answer:"
+            f"Q1: {FEWSHOT_EXAMPLES[0][0]}\nQ2: {FEWSHOT_EXAMPLES[0][1]}\nAnswer: {FEWSHOT_EXAMPLES[0][4]}\n\n"
+            f"Q1: {FEWSHOT_EXAMPLES[1][0]}\nQ2: {FEWSHOT_EXAMPLES[1][1]}\nAnswer: {FEWSHOT_EXAMPLES[1][4]}\n\n"
+            f"Q1: {FEWSHOT_EXAMPLES[2][0]}\nQ2: {FEWSHOT_EXAMPLES[2][1]}\nAnswer: {FEWSHOT_EXAMPLES[2][4]}\n\n"
+            f"Q1: {FEWSHOT_EXAMPLES[3][0]}\nQ2: {FEWSHOT_EXAMPLES[3][1]}\nAnswer: {FEWSHOT_EXAMPLES[3][4]}\n\n"
+            f"Q1: {FEWSHOT_EXAMPLES[4][0]}\nQ2: {FEWSHOT_EXAMPLES[4][1]}\nAnswer: {FEWSHOT_EXAMPLES[4][4]}\n\n"
+            f"Q1: {q1}\nQ2: {q2}\nAnswer:"
         ),
     },
 }
@@ -276,8 +295,11 @@ def main():
     )
     parser.add_argument("--tokenizer", type=str, required=True,
                         help="Tokenizer name, e.g. Qwen/Qwen2.5-7B")
-    parser.add_argument("--sources", type=str, required=True,
-                        help="Directory containing fact JSON files")
+    parser.add_argument("--known-facts", type=str, default=None,
+                        help="Path to known_facts.json from evaluate_individual_facts.py. "
+                             "If provided, only these facts are used (--sources is ignored).")
+    parser.add_argument("--sources", type=str, default=None,
+                        help="Directory containing fact JSON files (ignored if --known-facts is set)")
     parser.add_argument("--outdir", type=str, required=True,
                         help="Output directory")
     parser.add_argument("--n-examples", type=int, default=300,
@@ -322,13 +344,28 @@ def main():
     print(f"EOS: {tok.eos_token!r} (id={tok.eos_token_id})")
     
     # Load facts
-    srcdir = pathlib.Path(args.sources)
-    age = load_facts(srcdir / "age_facts.json", "age") if (srcdir / "age_facts.json").exists() else []
-    atomic = load_facts(srcdir / "atomic_facts.json", "atomic") if (srcdir / "atomic_facts.json").exists() else []
-    static = load_facts(srcdir / "static_facts.json", "static") if (srcdir / "static_facts.json").exists() else []
+    if args.known_facts:
+        known_path = pathlib.Path(args.known_facts)
+        if not known_path.exists():
+            raise SystemExit(f"Error: --known-facts file not found: {known_path}")
+        all_facts = load_known_facts(known_path)
+        all_facts = [(q, a, k) for (q, a, k) in all_facts if 0 <= a < args.max_answer]
+        print(f"\nLoaded {len(all_facts)} known facts from {known_path}")
+    elif args.sources:
+        srcdir = pathlib.Path(args.sources)
+        age = load_facts(srcdir / "age_facts.json", "age") if (srcdir / "age_facts.json").exists() else []
+        atomic = load_facts(srcdir / "atomic_facts.json", "atomic") if (srcdir / "atomic_facts.json").exists() else []
+        static = load_facts(srcdir / "static_facts.json", "static") if (srcdir / "static_facts.json").exists() else []
+        all_facts = [(q, a, k) for (q, a, k) in (age + atomic + static) if 0 <= a < args.max_answer]
+        print(f"\nLoaded {len(all_facts)} usable facts from {srcdir}")
+    else:
+        raise SystemExit("Error: Must provide either --known-facts or --sources")
     
-    all_facts = [(q, a, k) for (q, a, k) in (age + atomic + static) if 0 <= a < args.max_answer]
-    print(f"\nLoaded {len(all_facts)} usable facts")
+    # Print category breakdown
+    from collections import Counter
+    kind_counts = Counter(k for _, _, k in all_facts)
+    for kind in sorted(kind_counts):
+        print(f"  {kind}: {kind_counts[kind]}")
     
     # Create output directory
     outdir = pathlib.Path(args.outdir)
@@ -371,6 +408,9 @@ def main():
             "tokenizer": args.tokenizer,
             "seed": args.seed,
             "n_examples": len(rows),
+            "n_facts": len(all_facts),
+            "fact_source": args.known_facts if args.known_facts else args.sources,
+            "known_facts_only": args.known_facts is not None,
             "filler_token": args.filler_token,
             "filler_token_id": filler_id,
             "filler_lengths": filler_lengths,

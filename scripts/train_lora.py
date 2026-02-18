@@ -301,8 +301,8 @@ def main():
                         help="Disable length grouping (use random batching)")
     
     # Eval and checkpointing
-    parser.add_argument("--eval-steps", type=int, default=200, help="Evaluation frequency")
-    parser.add_argument("--save-steps", type=int, default=200, help="Checkpoint frequency")
+    parser.add_argument("--eval-steps", type=int, default=50, help="Evaluation frequency")
+    parser.add_argument("--save-steps", type=int, default=100, help="Checkpoint frequency")
     parser.add_argument("--logging-steps", type=int, default=10, help="Logging frequency")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     
@@ -316,7 +316,7 @@ def main():
     
     # Weights & Biases
     parser.add_argument("--wandb", action="store_true", help="Enable Weights & Biases logging")
-    parser.add_argument("--wandb-project", type=str, default="opaque-reasoner", help="W&B project name")
+    parser.add_argument("--wandb-project", type=str, default="filler-token-reasoning", help="W&B project name")
     parser.add_argument("--wandb-run-name", type=str, default=None, help="W&B run name (auto-generated if not set)")
     parser.add_argument("--wandb-entity", type=str, default=None, help="W&B entity/team name")
     

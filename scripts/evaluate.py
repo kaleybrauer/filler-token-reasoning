@@ -379,21 +379,31 @@ class ResultsTracker:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def build_prompt_with_filler(
-    prompt: str,
+    prompt_base: str,
     filler_len: int,
-    filler_token: str,
     tokenizer: Any,
     bos_token_id: Optional[int] = None,
 ) -> Tuple[List[int], int]:
-    prompt_ids = tokenizer.encode(prompt, add_special_tokens=False)
-    filler_ids = tokenizer.encode(filler_token, add_special_tokens=False)
-    if len(filler_ids) != 1:
-        raise ValueError(f"Filler token {filler_token!r} doesn't map to single token")
-    filler_id = filler_ids[0]
+    """Build input_ids with counting-token filler using Think:/Answer: format.
     
+    Args:
+        prompt_base: The base prompt (fewshot prefix + Q1/Q2, no Think/Answer)
+        filler_len: Number of counting steps (0 = no filler)
+        tokenizer: The tokenizer
+        bos_token_id: Optional BOS token id
+    
+    Returns:
+        (input_ids, total_length)
+    """
+    if filler_len == 0:
+        full_prompt = prompt_base + "\nAnswer:"
+    else:
+        think_text = " ".join(str(i) for i in range(1, filler_len + 1))
+        full_prompt = prompt_base + f"\nThink: {think_text}\nAnswer:"
+    
+    prompt_ids = tokenizer.encode(full_prompt, add_special_tokens=False)
     bos_ids = [bos_token_id] if bos_token_id else []
-    filler_seq = [filler_id] * filler_len
-    input_ids = bos_ids + prompt_ids + filler_seq
+    input_ids = bos_ids + prompt_ids
     
     return input_ids, len(input_ids)
 
@@ -417,7 +427,6 @@ def evaluate_batch(
     tokenizer: Any,
     examples: List[Dict[str, Any]],
     filler_lens: List[int],
-    filler_token: str = "<|fim_pad|>",
     max_new_tokens: int = 10,
     temperature: float = 0.0,
 ) -> List[Dict[str, Any]]:
@@ -425,9 +434,8 @@ def evaluate_batch(
     Evaluate a batch of examples simultaneously.
     
     Args:
-        examples: List of example dicts (must have "prompt", "answer", etc.)
+        examples: List of example dicts (must have "prompt_base" or "prompt", "answer", etc.)
         filler_lens: Filler length for each example (same length as examples).
-        filler_token: The filler token string.
         max_new_tokens: Max tokens to generate.
         temperature: Sampling temperature (0 = greedy).
     
@@ -439,10 +447,21 @@ def evaluate_batch(
     # Build all input sequences
     all_input_ids = []
     for ex, n in zip(examples, filler_lens):
+        # Use prompt_base if available (new format), fall back to prompt
+        prompt_base = ex.get("prompt_base", None)
+        if prompt_base is None:
+            # Legacy fallback: strip "\nAnswer:" from end of prompt
+            prompt = ex["prompt"]
+            if prompt.endswith("\nAnswer:"):
+                prompt_base = prompt[:-len("\nAnswer:")]
+            elif prompt.endswith("\nA:"):
+                prompt_base = prompt[:-len("\nA:")]
+            else:
+                prompt_base = prompt
+        
         ids, _ = build_prompt_with_filler(
-            prompt=ex["prompt"],
+            prompt_base=prompt_base,
             filler_len=n,
-            filler_token=filler_token,
             tokenizer=tokenizer,
             bos_token_id=tokenizer.bos_token_id,
         )
@@ -518,7 +537,6 @@ def evaluate_single(
     tokenizer: Any,
     example: Dict[str, Any],
     filler_len: int,
-    filler_token: str = "<|fim_pad|>",
     max_new_tokens: int = 10,
     temperature: float = 0.0,
 ) -> Dict[str, Any]:
@@ -527,7 +545,6 @@ def evaluate_single(
         model, tokenizer,
         examples=[example],
         filler_lens=[filler_len],
-        filler_token=filler_token,
         max_new_tokens=max_new_tokens,
         temperature=temperature,
     )
@@ -540,7 +557,6 @@ def evaluate_dataset(
     dataset: Any,
     tracker: ResultsTracker,
     filler_lengths: Optional[List[int]] = None,
-    filler_token: str = "<|fim_pad|>",
     max_new_tokens: int = 10,
     temperature: float = 0.0,
     max_examples: Optional[int] = None,
@@ -585,7 +601,6 @@ def evaluate_dataset(
                 results = evaluate_batch(
                     model, tokenizer, batch,
                     filler_lens=batch_fillers,
-                    filler_token=filler_token,
                     max_new_tokens=max_new_tokens,
                     temperature=temperature,
                 )
@@ -626,7 +641,6 @@ def evaluate_dataset(
                 results = evaluate_batch(
                     model, tokenizer, batch,
                     filler_lens=batch_fillers,
-                    filler_token=filler_token,
                     max_new_tokens=max_new_tokens,
                     temperature=temperature,
                 )
@@ -722,8 +736,6 @@ def main():
     # Evaluation settings
     parser.add_argument("--filler-lengths", type=str, default=None,
                         help="Comma-separated filler lengths to evaluate at.")
-    parser.add_argument("--filler-token", type=str, default="<|fim_pad|>",
-                        help="Filler token string")
     parser.add_argument("--max-new-tokens", type=int, default=10,
                         help="Max tokens to generate")
     parser.add_argument("--temperature", type=float, default=0.0,
@@ -791,11 +803,8 @@ def main():
     manifest = {}
     if manifest_file.exists():
         manifest = json.loads(manifest_file.read_text())
-        print(f"Filler token from manifest: {manifest.get('filler_token', 'N/A')}")
-    
-    filler_token = args.filler_token
-    if manifest.get("filler_token") and args.filler_token == "<|fim_pad|>":
-        filler_token = manifest["filler_token"]
+        filler_type = manifest.get("filler_type", "unknown")
+        print(f"Filler type from manifest: {filler_type}")
     
     # Initialize results tracker
     outdir = pathlib.Path(args.outdir) if args.outdir else None
@@ -832,7 +841,6 @@ def main():
         dataset=dataset,
         tracker=tracker,
         filler_lengths=filler_lengths,
-        filler_token=filler_token,
         max_new_tokens=args.max_new_tokens,
         temperature=args.temperature,
         max_examples=args.max_examples,

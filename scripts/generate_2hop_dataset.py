@@ -6,6 +6,9 @@ Generate 2-hop arithmetic dataset for opaque reasoner experiments.
 - Facts are split into train/val/test pools first, then pairs are composed
   only from facts within each pool. This prevents any fact leakage.
 - Uses a 5-shot pure-pattern prompt format (no instructions).
+- Filler tokens are counting sequences ("1 2 3 ... N") on a "Think:" line,
+  with "Answer:" as the distinct output label. Each filler position gets a
+  unique pretrained embedding.
 - Pair deduplication within each split prevents duplicate questions.
 - Filler lengths can be sampled uniformly or from a fixed set of eval values.
 """
@@ -23,6 +26,9 @@ DEFAULT_EVAL_FILLER_LENGTHS = [0, 32, 128, 300, 600, 1000]
 # ─────────────────────────────────────────────────────────────────────────────
 # Few-shot examples for the prompt.
 # These must NOT overlap with any facts in the evaluation pool.
+# Few-shot examples never include a Think: line — only the training/test
+# examples get filler tokens. The model learns Q1/Q2/Answer from few-shot,
+# and learns Think→Answer from fine-tuning.
 # ─────────────────────────────────────────────────────────────────────────────
 FEWSHOT_EXAMPLES = [
     ("What is the number of legs of a cat?", "What is the number of days in a week?", 4, 7, 11),
@@ -41,7 +47,7 @@ def build_fewshot_prefix() -> str:
     """
     blocks = []
     for q1, q2, _a1, _a2, s in FEWSHOT_EXAMPLES:
-        blocks.append(f"Q1: {q1}\nQ2: {q2}\nA: {s}")
+        blocks.append(f"Q1: {q1}\nQ2: {q2}\nAnswer: {s}")
     return "\n\n".join(blocks) + "\n\n"
 
 
@@ -144,8 +150,6 @@ class DatasetBuilder:
         self,
         facts: List[Tuple[str, int, str]],
         tok: AutoTokenizer,
-        filler_id: int,
-        filler_token: str,
         max_answer: int,
         filler_mode: str,
         filler_min: int,
@@ -155,8 +159,6 @@ class DatasetBuilder:
     ):
         self.facts = facts
         self.tok = tok
-        self.filler_id = filler_id
-        self.filler_token = filler_token
         self.max_answer = max_answer
         self.filler_mode = filler_mode
         self.filler_min = filler_min
@@ -202,16 +204,14 @@ class DatasetBuilder:
         
         s = a1 + a2
         
-        prompt = (
+        # Build prompt_base: fewshot prefix + Q1/Q2 (no Think, no Answer)
+        prompt_base = (
             f"{FEWSHOT_PREFIX}"
             f"Q1: {q1}\n"
-            f"Q2: {q2}\n"
-            f"A:"
+            f"Q2: {q2}"
         )
         
-        prompt_ids = self.tok.encode(prompt, add_special_tokens=False)
-        
-        # Sample filler length
+        # Sample filler length (number of counting steps)
         nfill = sample_filler_len(
             self.rng,
             self.filler_mode,
@@ -219,14 +219,22 @@ class DatasetBuilder:
             self.filler_max,
             self.eval_filler_lengths,
         )
-        filler_seq = [self.filler_id] * nfill
+        
+        # Build full prompt: prompt_base + optional Think line + Answer:
+        if nfill == 0:
+            prompt = prompt_base + "\nAnswer:"
+        else:
+            think_text = " ".join(str(i) for i in range(1, nfill + 1))
+            prompt = prompt_base + f"\nThink: {think_text}\nAnswer:"
+        
+        prompt_ids = self.tok.encode(prompt, add_special_tokens=False)
         
         # Answer with leading space, terminated by EOS
         answer_text = " " + str(s)
         answer_ids = self.tok.encode(answer_text, add_special_tokens=False) + self.eos_ids
         
         # Assemble full sequence with BOS
-        prefix_ids = self.bos_ids + prompt_ids + filler_seq
+        prefix_ids = self.bos_ids + prompt_ids
         input_ids = prefix_ids + answer_ids
         
         labels = [-100] * len(prefix_ids) + answer_ids
@@ -236,6 +244,7 @@ class DatasetBuilder:
             "id": f"{split}-{example_id}",
             "split": split,
             "prompt": prompt,
+            "prompt_base": prompt_base,
             "fact1": q1,
             "fact2": q2,
             "a1": a1,
@@ -244,8 +253,7 @@ class DatasetBuilder:
             "type1": t1,
             "type2": t2,
             "filler_len": nfill,
-            "filler_token": self.filler_token,
-            "filler_token_id": self.filler_id,
+            "filler_type": "counting",
             "prompt_ids": prompt_ids,
             "answer_ids": answer_ids,
             "input_ids": input_ids,
@@ -286,9 +294,7 @@ def main() -> None:
     ap.add_argument("--max-answer", type=int, default=1000, 
                     help="Keep final answers < max-answer")
 
-    ap.add_argument("--filler-token", type=str, default="<|fim_pad|>", 
-                    help="Single-token filler string")
-    ap.add_argument("--filler-mode", type=str, default="uniform", choices=["uniform", "eval"],
+    ap.add_argument("--filler-mode", type=str, default="eval", choices=["uniform", "eval"],
                     help="How to sample filler lengths: 'uniform' samples from [min,max], "
                          "'eval' samples from --eval-filler-lengths")
     ap.add_argument("--filler-min", type=int, default=0,
@@ -311,19 +317,13 @@ def main() -> None:
     eval_filler_lengths = [int(x.strip()) for x in args.eval_filler_lengths.split(",")]
     print(f"Eval filler lengths: {eval_filler_lengths}")
 
-    # Load tokenizer and validate filler token
+    # Load tokenizer
     tok = AutoTokenizer.from_pretrained(args.tokenizer, use_fast=True)
-    filler_ids = tok.encode(args.filler_token, add_special_tokens=False)
-    if len(filler_ids) != 1:
-        raise SystemExit(
-            f"filler-token {args.filler_token!r} does not map to exactly 1 token (got {filler_ids}). "
-            "Pick another filler token."
-        )
-    filler_id = filler_ids[0]
     
     # Report BOS/EOS tokens
     print(f"BOS token: {tok.bos_token!r} (id={tok.bos_token_id})")
     print(f"EOS token: {tok.eos_token!r} (id={tok.eos_token_id})")
+    print(f"Filler type: counting tokens with Think:/Answer: format")
 
     # Load known facts
     known_path = pathlib.Path(args.known_facts)
@@ -354,12 +354,11 @@ def main() -> None:
     print(f"  Val:   {len(val_facts)} facts -> max {len(val_facts) * (len(val_facts)-1) // 2} pairs")
     print(f"  Test:  {len(test_facts)} facts -> max {len(test_facts) * (len(test_facts)-1) // 2} pairs")
 
-    print(f"\nUsing filler_token_id={filler_id} for filler_token={args.filler_token!r}")
-    print(f"Filler mode: {args.filler_mode}")
+    print(f"\nFiller mode: {args.filler_mode}")
     if args.filler_mode == "uniform":
-        print(f"  Range: [{args.filler_min}, {args.filler_max}]")
+        print(f"  Range: [{args.filler_min}, {args.filler_max}] counting steps")
     else:
-        print(f"  Values: {eval_filler_lengths}")
+        print(f"  Values: {eval_filler_lengths} counting steps")
 
     # Create output directory
     outdir = pathlib.Path(args.outdir)
@@ -370,8 +369,6 @@ def main() -> None:
     train_builder = DatasetBuilder(
         facts=train_facts,
         tok=tok,
-        filler_id=filler_id,
-        filler_token=args.filler_token,
         max_answer=args.max_answer,
         filler_mode=args.filler_mode,
         filler_min=args.filler_min,
@@ -394,8 +391,6 @@ def main() -> None:
     val_builder = DatasetBuilder(
         facts=val_facts,
         tok=tok,
-        filler_id=filler_id,
-        filler_token=args.filler_token,
         max_answer=args.max_answer,
         filler_mode=args.filler_mode,
         filler_min=args.filler_min,
@@ -418,8 +413,6 @@ def main() -> None:
     test_builder = DatasetBuilder(
         facts=test_facts,
         tok=tok,
-        filler_id=filler_id,
-        filler_token=args.filler_token,
         max_answer=args.max_answer,
         filler_mode="eval",  # Always use eval mode for test
         filler_min=args.filler_min,
@@ -454,11 +447,10 @@ def main() -> None:
     manifest = {
         "tokenizer": args.tokenizer,
         "known_facts_source": str(args.known_facts),
-        "prompt_format": "fewshot_5shot_pure_pattern",
+        "prompt_format": "fewshot_5shot_think_answer",
+        "filler_type": "counting",
         "seed": args.seed,
         "max_answer": args.max_answer,
-        "filler_token": args.filler_token,
-        "filler_token_id": filler_id,
         "filler_mode": args.filler_mode,
         "filler_min": args.filler_min,
         "filler_max": args.filler_max,
@@ -507,7 +499,14 @@ def main() -> None:
     from collections import Counter
     test_filler_dist = Counter(r["filler_len"] for r in test_rows)
     for fl in sorted(test_filler_dist.keys()):
-        print(f"  N={fl}: {test_filler_dist[fl]} examples")
+        seq_lens = [len(r["input_ids"]) for r in test_rows if r["filler_len"] == fl]
+        avg_seq = sum(seq_lens) / len(seq_lens) if seq_lens else 0
+        print(f"  N={fl}: {test_filler_dist[fl]} examples (avg {avg_seq:.0f} tokens)")
+    
+    # Report overall sequence length stats
+    all_seq_lens = [len(r["input_ids"]) for r in train_rows]
+    print(f"\nTraining sequence lengths: min={min(all_seq_lens)}, max={max(all_seq_lens)}, "
+          f"avg={sum(all_seq_lens)/len(all_seq_lens):.0f}")
 
 
 if __name__ == "__main__":

@@ -307,7 +307,7 @@ def main():
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     
     # LoRA
-    parser.add_argument("--lora-r", type=int, default=16, help="LoRA rank")
+    parser.add_argument("--lora-r", type=int, default=64, help="LoRA rank")
     parser.add_argument("--lora-alpha", type=int, default=32, help="LoRA alpha")
     parser.add_argument("--lora-dropout", type=float, default=0.05, help="LoRA dropout")
     

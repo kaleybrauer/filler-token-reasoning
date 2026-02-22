@@ -33,11 +33,14 @@ def setup_cache():
 
 setup_cache()
 
+import sys
 import torch
 from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 
-from generate_2hop_dataset import INSTRUCTION, build_user_message
+# Add scripts directory to path for imports
+sys.path.insert(0, str(pathlib.Path(__file__).parent.parent / "scripts"))
+from generate_2hop_dataset import build_user_message
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Fact loading

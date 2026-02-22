@@ -24,7 +24,7 @@ from transformers import AutoTokenizer
 DEFAULT_EVAL_FILLER_LENGTHS = [0, 32, 128, 300, 600, 1000]
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Prompt format (matches eval_addition.py exactly)
+# Prompt format
 # ─────────────────────────────────────────────────────────────────────────────
 
 INSTRUCTION = (

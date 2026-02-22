@@ -225,8 +225,8 @@ def load_model_and_tokenizer(
 
 def apply_lora(
     model,
-    r: int = 16,
-    alpha: int = 32,
+    r: int = 64,
+    alpha: int = 128,
     dropout: float = 0.05,
     target_modules: Optional[List[str]] = None,
 ):
@@ -308,7 +308,7 @@ def main():
     
     # LoRA
     parser.add_argument("--lora-r", type=int, default=64, help="LoRA rank")
-    parser.add_argument("--lora-alpha", type=int, default=32, help="LoRA alpha")
+    parser.add_argument("--lora-alpha", type=int, default=128, help="LoRA alpha")
     parser.add_argument("--lora-dropout", type=float, default=0.05, help="LoRA dropout")
     
     # Performance

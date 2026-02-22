@@ -29,7 +29,6 @@ from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 
 from generate_2hop_dataset import (
-    FEWSHOT_EXAMPLES,
     build_few_shot_messages,
     build_user_message,
     compose_question,
@@ -389,6 +388,7 @@ def build_prompt_with_filler(
     example: Dict[str, Any],
     filler_len: int,
     tokenizer: Any,
+    fewshot_examples: List[Tuple[str, str, int, int, int]],
     repeat_problem: Optional[int] = None,
 ) -> Tuple[List[int], int]:
     """Build input_ids using chat template.
@@ -400,6 +400,8 @@ def build_prompt_with_filler(
         example: Dataset example with "fact1" and "fact2" fields.
         filler_len: Number of counting steps (0 = no filler).
         tokenizer: The tokenizer (must support apply_chat_template).
+        fewshot_examples: Few-shot (q1, q2, a1, a2, sum) tuples loaded from
+            the dataset manifest.
         repeat_problem: If set, repeat the question this many times.
     
     Returns:
@@ -411,7 +413,7 @@ def build_prompt_with_filler(
     
     # Build few-shot messages
     messages = build_few_shot_messages(
-        FEWSHOT_EXAMPLES,
+        fewshot_examples,
         repeat_problem=repeat_problem,
         filler_tokens=filler_tokens,
     )
@@ -455,6 +457,7 @@ def evaluate_batch(
     tokenizer: Any,
     examples: List[Dict[str, Any]],
     filler_lens: List[int],
+    fewshot_examples: List[Tuple[str, str, int, int, int]],
     max_new_tokens: int = 10,
     temperature: float = 0.0,
 ) -> List[Dict[str, Any]]:
@@ -464,6 +467,8 @@ def evaluate_batch(
     Args:
         examples: List of example dicts (must have "fact1", "fact2", "answer", etc.)
         filler_lens: Filler length for each example (same length as examples).
+        fewshot_examples: Few-shot (q1, q2, a1, a2, sum) tuples loaded from
+            the dataset manifest.
         max_new_tokens: Max tokens to generate.
         temperature: Sampling temperature (0 = greedy).
     
@@ -479,6 +484,7 @@ def evaluate_batch(
             example=ex,
             filler_len=n,
             tokenizer=tokenizer,
+            fewshot_examples=fewshot_examples,
         )
         all_input_ids.append(ids)
     
@@ -552,6 +558,7 @@ def evaluate_single(
     tokenizer: Any,
     example: Dict[str, Any],
     filler_len: int,
+    fewshot_examples: List[Tuple[str, str, int, int, int]],
     max_new_tokens: int = 10,
     temperature: float = 0.0,
 ) -> Dict[str, Any]:
@@ -560,6 +567,7 @@ def evaluate_single(
         model, tokenizer,
         examples=[example],
         filler_lens=[filler_len],
+        fewshot_examples=fewshot_examples,
         max_new_tokens=max_new_tokens,
         temperature=temperature,
     )
@@ -571,6 +579,7 @@ def evaluate_dataset(
     tokenizer: Any,
     dataset: Any,
     tracker: ResultsTracker,
+    fewshot_examples: List[Tuple[str, str, int, int, int]],
     filler_lengths: Optional[List[int]] = None,
     max_new_tokens: int = 10,
     temperature: float = 0.0,
@@ -581,6 +590,7 @@ def evaluate_dataset(
     Evaluate a dataset with batched inference.
     
     Args:
+        fewshot_examples: Few-shot (q1, q2, a1, a2, sum) tuples from the manifest.
         batch_size: Number of examples per batch for generation.
     """
     n_total = min(len(dataset), max_examples) if max_examples else len(dataset)
@@ -616,6 +626,7 @@ def evaluate_dataset(
                 results = evaluate_batch(
                     model, tokenizer, batch,
                     filler_lens=batch_fillers,
+                    fewshot_examples=fewshot_examples,
                     max_new_tokens=max_new_tokens,
                     temperature=temperature,
                 )
@@ -656,6 +667,7 @@ def evaluate_dataset(
                 results = evaluate_batch(
                     model, tokenizer, batch,
                     filler_lens=batch_fillers,
+                    fewshot_examples=fewshot_examples,
                     max_new_tokens=max_new_tokens,
                     temperature=temperature,
                 )
@@ -813,13 +825,29 @@ def main():
     dataset = load_dataset("json", data_files=str(data_file), split="train")
     print(f"Loaded {len(dataset)} examples")
     
-    # Load manifest for metadata
+    # Load manifest for metadata and few-shot examples
     manifest_file = data_dir / "manifest.json"
     manifest = {}
     if manifest_file.exists():
         manifest = json.loads(manifest_file.read_text())
         filler_type = manifest.get("filler_type", "unknown")
         print(f"Filler type from manifest: {filler_type}")
+    
+    if not manifest_file.exists():
+        raise FileNotFoundError(
+            f"manifest.json not found in {data_dir}. "
+            "Regenerate the dataset with the updated generate_2hop_dataset.py."
+        )
+    raw_fewshot = manifest.get("fewshot_examples")
+    if not raw_fewshot:
+        raise KeyError(
+            "manifest.json does not contain 'fewshot_examples'. "
+            "Regenerate the dataset with the updated generate_2hop_dataset.py."
+        )
+    fewshot_examples: List[Tuple[str, str, int, int, int]] = [
+        (e["q1"], e["q2"], e["a1"], e["a2"], e["sum"]) for e in raw_fewshot
+    ]
+    print(f"Loaded {len(fewshot_examples)} few-shot examples from manifest")
     
     # Initialize results tracker
     outdir = pathlib.Path(args.outdir) if args.outdir else None
@@ -855,6 +883,7 @@ def main():
         tokenizer=tokenizer,
         dataset=dataset,
         tracker=tracker,
+        fewshot_examples=fewshot_examples,
         filler_lengths=filler_lengths,
         max_new_tokens=args.max_new_tokens,
         temperature=args.temperature,

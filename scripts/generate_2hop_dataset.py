@@ -33,17 +33,6 @@ INSTRUCTION = (
     "No explanation, no words, no reasoning, just the answer."
 )
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Few-shot examples for the prompt.
-# These must NOT overlap with any facts in the evaluation pool.
-# ─────────────────────────────────────────────────────────────────────────────
-FEWSHOT_EXAMPLES = [
-    ("What is the number of legs of a cat?", "What is the number of days in a week?", 4, 7, 11),
-    ("At what age did Abraham Lincoln die?", "What is the number of judges on the Supreme Court?", 56, 9, 65),
-    ("What is the number of legs of a spider?", "At what age did Leonardo da Vinci die?", 8, 67, 75),
-    ("What is the number of sides of a hexagon?", "What is the number of disciples that Jesus had?", 6, 12, 18),
-    ("What is the number of continents on Earth?", "What is the number of sides of a triangle?", 7, 3, 10),
-]
 
 
 def compose_question(q1: str, q2: str) -> str:
@@ -106,6 +95,60 @@ def build_user_message(
     return out
 
 
+def select_fewshot_examples(
+    facts: List[Tuple[str, int, str]],
+    n_examples: int,
+    max_answer: int,
+    rng: random.Random,
+    n_fewshot_facts: int = 10,
+) -> Tuple[List[Tuple[str, str, int, int, int]], List[Tuple[str, int, str]]]:
+    """Carve out few-shot examples from the (already-shuffled) fact pool.
+
+    Takes the first n_fewshot_facts from the list, finds n_examples valid pairs
+    among them, and returns both the examples and the remaining facts. The
+    reserved facts are excluded from train/val/test to prevent any leakage.
+
+    Args:
+        facts: Shuffled list of all facts.
+        n_examples: Number of few-shot examples to select.
+        max_answer: Maximum valid answer sum.
+        rng: Random state for pair ordering.
+        n_fewshot_facts: How many facts to reserve for the few-shot pool.
+                         Must be large enough to yield n_examples valid pairs.
+
+    Returns:
+        (fewshot_examples, remaining_facts)
+        fewshot_examples: List of (q1, q2, a1, a2, sum) tuples.
+        remaining_facts: All facts not in the few-shot pool.
+    """
+    if len(facts) < n_fewshot_facts + 1:
+        raise SystemExit(
+            f"Not enough facts ({len(facts)}) to reserve {n_fewshot_facts} for "
+            f"few-shot examples. Add more facts or reduce --n-fewshot-facts."
+        )
+
+    fewshot_pool = facts[:n_fewshot_facts]
+    remaining = facts[n_fewshot_facts:]
+
+    pairs = _generate_valid_pairs(fewshot_pool, max_answer, rng)
+    if len(pairs) < n_examples:
+        raise SystemExit(
+            f"Only {len(pairs)} valid pairs found among {n_fewshot_facts} few-shot "
+            f"facts, but need {n_examples}. Increase --n-fewshot-facts or reduce "
+            f"--n-fewshot."
+        )
+
+    examples: List[Tuple[str, str, int, int, int]] = []
+    for (i, j) in pairs[:n_examples]:
+        q1, a1, _ = fewshot_pool[i]
+        q2, a2, _ = fewshot_pool[j]
+        if rng.random() < 0.5:
+            q1, a1, q2, a2 = q2, a2, q1, a1
+        examples.append((q1, q2, a1, a2, a1 + a2))
+
+    return examples, remaining
+
+
 def build_few_shot_messages(
     few_shot_examples: List[Tuple[str, str, int, int, int]],
     repeat_problem: Optional[int] = None,
@@ -131,6 +174,7 @@ def build_few_shot_messages(
 def build_chat_messages(
     q1: str,
     q2: str,
+    fewshot_examples: List[Tuple[str, str, int, int, int]],
     repeat_problem: Optional[int] = None,
     filler_tokens: Optional[int] = None,
     few_shot_filler_tokens: Optional[int] = None,
@@ -140,15 +184,18 @@ def build_chat_messages(
 
     Args:
         q1, q2: The two fact questions.
+        fewshot_examples: Few-shot examples as (q1, q2, a1, a2, sum) tuples.
+            These must be drawn from a reserved fact pool excluded from
+            train/val/test (see select_fewshot_examples).
         repeat_problem: If set, repeat the question this many times.
         filler_tokens: Filler tokens for the test question.
-        few_shot_filler_tokens: Filler tokens for few-shot examples. 
+        few_shot_filler_tokens: Filler tokens for few-shot examples.
             For training data, typically None.
         answer: If provided, include the assistant's answer (for training).
     """
     # Few-shot messages
     messages = build_few_shot_messages(
-        FEWSHOT_EXAMPLES,
+        fewshot_examples,
         repeat_problem=repeat_problem,
         filler_tokens=few_shot_filler_tokens,
     )
@@ -263,6 +310,7 @@ class DatasetBuilder:
         self,
         facts: List[Tuple[str, int, str]],
         tok: AutoTokenizer,
+        fewshot_examples: List[Tuple[str, str, int, int, int]],
         max_answer: int,
         filler_mode: str,
         filler_min: int,
@@ -272,6 +320,7 @@ class DatasetBuilder:
     ):
         self.facts = facts
         self.tok = tok
+        self.fewshot_examples = fewshot_examples
         self.max_answer = max_answer
         self.filler_mode = filler_mode
         self.filler_min = filler_min
@@ -329,6 +378,7 @@ class DatasetBuilder:
         # Build chat messages WITH answer (for training)
         full_messages = build_chat_messages(
             q1, q2,
+            fewshot_examples=self.fewshot_examples,
             filler_tokens=filler_tokens,
             few_shot_filler_tokens=None,  # Few-shot in training data has no filler
             answer=s,
@@ -337,6 +387,7 @@ class DatasetBuilder:
         # Build chat messages WITHOUT answer (for prompt / generation)
         prompt_messages = build_chat_messages(
             q1, q2,
+            fewshot_examples=self.fewshot_examples,
             filler_tokens=filler_tokens,
             few_shot_filler_tokens=None,
             answer=None,
@@ -430,6 +481,12 @@ def main() -> None:
     ap.add_argument("--fact-split-val", type=float, default=0.125,
                     help="Fraction of facts for validation pool (default: 0.125)")
 
+    ap.add_argument("--n-fewshot", type=int, default=5,
+                    help="Number of few-shot examples to draw from the fact pool (default: 5)")
+    ap.add_argument("--n-fewshot-facts", type=int, default=10,
+                    help="Facts to reserve for the few-shot pool (default: 10). "
+                         "Must be large enough to yield --n-fewshot valid pairs.")
+
     args = ap.parse_args()
 
     rng = random.Random(args.seed)
@@ -463,9 +520,29 @@ def main() -> None:
     if len(all_facts) < 50:
         raise SystemExit(f"Too few usable facts ({len(all_facts)}). Need at least 50.")
 
-    # Split facts into train/val/test pools
+    # Shuffle all facts before carving out the few-shot pool
+    rng.shuffle(all_facts)
+
+    # Carve out few-shot examples from the top of the shuffled pool.
+    # These facts are excluded from train/val/test entirely.
+    print(f"\nSelecting {args.n_fewshot} few-shot examples from "
+          f"{args.n_fewshot_facts} reserved facts...")
+    fewshot_examples, remaining_facts = select_fewshot_examples(
+        all_facts,
+        n_examples=args.n_fewshot,
+        max_answer=args.max_answer,
+        rng=rng,
+        n_fewshot_facts=args.n_fewshot_facts,
+    )
+    print(f"  Reserved {args.n_fewshot_facts} facts for few-shot; "
+          f"{len(remaining_facts)} facts available for train/val/test")
+    print(f"\nFew-shot examples:")
+    for idx, (q1, q2, a1, a2, s) in enumerate(fewshot_examples):
+        print(f"  [{idx+1}] {compose_question(q1, q2)} -> {s} ({a1}+{a2})")
+
+    # Split remaining facts into train/val/test pools
     train_facts, val_facts, test_facts = split_facts(
-        all_facts, rng, 
+        remaining_facts, rng, 
         train_frac=args.fact_split_train,
         val_frac=args.fact_split_val,
     )
@@ -490,6 +567,7 @@ def main() -> None:
     train_builder = DatasetBuilder(
         facts=train_facts,
         tok=tok,
+        fewshot_examples=fewshot_examples,
         max_answer=args.max_answer,
         filler_mode=args.filler_mode,
         filler_min=args.filler_min,
@@ -512,6 +590,7 @@ def main() -> None:
     val_builder = DatasetBuilder(
         facts=val_facts,
         tok=tok,
+        fewshot_examples=fewshot_examples,
         max_answer=args.max_answer,
         filler_mode=args.filler_mode,
         filler_min=args.filler_min,
@@ -534,6 +613,7 @@ def main() -> None:
     test_builder = DatasetBuilder(
         facts=test_facts,
         tok=tok,
+        fewshot_examples=fewshot_examples,
         max_answer=args.max_answer,
         filler_mode="eval",  # Always use eval mode for test
         filler_min=args.filler_min,
@@ -572,6 +652,12 @@ def main() -> None:
         "filler_type": "counting",
         "seed": args.seed,
         "max_answer": args.max_answer,
+        "fewshot_examples": [
+            {"q1": q1, "q2": q2, "a1": a1, "a2": a2, "sum": s}
+            for (q1, q2, a1, a2, s) in fewshot_examples
+        ],
+        "n_fewshot": len(fewshot_examples),
+        "n_fewshot_facts": args.n_fewshot_facts,
         "filler_mode": args.filler_mode,
         "filler_min": args.filler_min,
         "filler_max": args.filler_max,

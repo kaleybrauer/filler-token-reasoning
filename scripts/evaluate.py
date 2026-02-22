@@ -28,6 +28,13 @@ from datasets import load_dataset
 from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 
+from generate_2hop_dataset import (
+    FEWSHOT_EXAMPLES,
+    build_few_shot_messages,
+    build_user_message,
+    compose_question,
+)
+
 # Optional imports
 try:
     from peft import PeftModel
@@ -379,31 +386,52 @@ class ResultsTracker:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def build_prompt_with_filler(
-    prompt_base: str,
+    example: Dict[str, Any],
     filler_len: int,
     tokenizer: Any,
-    bos_token_id: Optional[int] = None,
+    repeat_problem: Optional[int] = None,
 ) -> Tuple[List[int], int]:
-    """Build input_ids with counting-token filler using Think:/Answer: format.
+    """Build input_ids using chat template.
+    
+    Reconstructs the full prompt from the example's fact1/fact2 fields,
+    builds chat messages with few-shot + test question, and tokenizes.
     
     Args:
-        prompt_base: The base prompt (fewshot prefix + Q1/Q2, no Think/Answer)
-        filler_len: Number of counting steps (0 = no filler)
-        tokenizer: The tokenizer
-        bos_token_id: Optional BOS token id
+        example: Dataset example with "fact1" and "fact2" fields.
+        filler_len: Number of counting steps (0 = no filler).
+        tokenizer: The tokenizer (must support apply_chat_template).
+        repeat_problem: If set, repeat the question this many times.
     
     Returns:
         (input_ids, total_length)
     """
-    if filler_len == 0:
-        full_prompt = prompt_base + "\nAnswer:"
-    else:
-        think_text = " ".join(str(i) for i in range(1, filler_len + 1))
-        full_prompt = prompt_base + f"\nThink: {think_text}\nAnswer:"
+    q1 = example["fact1"]
+    q2 = example["fact2"]
+    filler_tokens = filler_len if filler_len > 0 else None
     
-    prompt_ids = tokenizer.encode(full_prompt, add_special_tokens=False)
-    bos_ids = [bos_token_id] if bos_token_id else []
-    input_ids = bos_ids + prompt_ids
+    # Build few-shot messages
+    messages = build_few_shot_messages(
+        FEWSHOT_EXAMPLES,
+        repeat_problem=repeat_problem,
+        filler_tokens=filler_tokens,
+    )
+    
+    # Add test question
+    question_text = compose_question(q1, q2)
+    user_text = build_user_message(
+        question_text,
+        repeat_problem=repeat_problem,
+        filler_tokens=filler_tokens,
+    )
+    messages.append({"role": "user", "content": user_text})
+    
+    # Apply chat template with generation prompt, then add "Answer:" prefill
+    prompt_text = tokenizer.apply_chat_template(
+        messages, tokenize=False, add_generation_prompt=True
+    )
+    prompt_text += "Answer:"
+    
+    input_ids = tokenizer.encode(prompt_text, add_special_tokens=False)
     
     return input_ids, len(input_ids)
 
@@ -434,7 +462,7 @@ def evaluate_batch(
     Evaluate a batch of examples simultaneously.
     
     Args:
-        examples: List of example dicts (must have "prompt_base" or "prompt", "answer", etc.)
+        examples: List of example dicts (must have "fact1", "fact2", "answer", etc.)
         filler_lens: Filler length for each example (same length as examples).
         max_new_tokens: Max tokens to generate.
         temperature: Sampling temperature (0 = greedy).
@@ -447,23 +475,10 @@ def evaluate_batch(
     # Build all input sequences
     all_input_ids = []
     for ex, n in zip(examples, filler_lens):
-        # Use prompt_base if available (new format), fall back to prompt
-        prompt_base = ex.get("prompt_base", None)
-        if prompt_base is None:
-            # Legacy fallback: strip "\nAnswer:" from end of prompt
-            prompt = ex["prompt"]
-            if prompt.endswith("\nAnswer:"):
-                prompt_base = prompt[:-len("\nAnswer:")]
-            elif prompt.endswith("\nA:"):
-                prompt_base = prompt[:-len("\nA:")]
-            else:
-                prompt_base = prompt
-        
         ids, _ = build_prompt_with_filler(
-            prompt_base=prompt_base,
+            example=ex,
             filler_len=n,
             tokenizer=tokenizer,
-            bos_token_id=tokenizer.bos_token_id,
         )
         all_input_ids.append(ids)
     

@@ -5,10 +5,10 @@ Generate 2-hop arithmetic dataset for opaque reasoner experiments.
 - Loads only model-verified known facts (from evaluate_individual_facts.py)
 - Facts are split into train/val/test pools first, then pairs are composed
   only from facts within each pool. This prevents any fact leakage.
-- Uses a 5-shot pure-pattern prompt format (no instructions).
-- Filler tokens are counting sequences ("1 2 3 ... N") on a "Think:" line,
-  with "Answer:" as the distinct output label. Each filler position gets a
-  unique pretrained embedding.
+- Uses a chat-format prompt:
+    * Instruction + "Question: What is (fact1) + (fact2)?" format
+    * Filler tokens as "Filler: 1 2 3 ... N" after the question
+    * "Answer:" prefill for generation
 - Pair deduplication within each split prevents duplicate questions.
 - Filler lengths can be sampled uniformly or from a fixed set of eval values.
 """
@@ -24,11 +24,18 @@ from transformers import AutoTokenizer
 DEFAULT_EVAL_FILLER_LENGTHS = [0, 32, 128, 300, 600, 1000]
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Prompt format (matches eval_addition.py exactly)
+# ─────────────────────────────────────────────────────────────────────────────
+
+INSTRUCTION = (
+    "You will be given a question. Answer immediately using the format "
+    "'Answer: [ANSWER]' where [ANSWER] is just the answer, nothing else. "
+    "No explanation, no words, no reasoning, just the answer."
+)
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Few-shot examples for the prompt.
 # These must NOT overlap with any facts in the evaluation pool.
-# Few-shot examples never include a Think: line — only the training/test
-# examples get filler tokens. The model learns Q1/Q2/Answer from few-shot,
-# and learns Think→Answer from fine-tuning.
 # ─────────────────────────────────────────────────────────────────────────────
 FEWSHOT_EXAMPLES = [
     ("What is the number of legs of a cat?", "What is the number of days in a week?", 4, 7, 11),
@@ -39,20 +46,126 @@ FEWSHOT_EXAMPLES = [
 ]
 
 
-def build_fewshot_prefix() -> str:
-    """Build the few-shot prefix string (constant across all examples).
-    
-    Each example is separated by a blank line. The prefix ends with a
-    trailing blank line so the test question is separated consistently.
+def compose_question(q1: str, q2: str) -> str:
+    """Compose two fact questions into a single 2-hop question.
+
+    Produces the format: "What is ({q1_stripped}) + ({q2_stripped})?"
+    E.g. "What is (the number of legs of a cat) + (the number of days in a week)?"
     """
-    blocks = []
-    for q1, q2, _a1, _a2, s in FEWSHOT_EXAMPLES:
-        blocks.append(f"Q1: {q1}\nQ2: {q2}\nAnswer: {s}")
-    return "\n\n".join(blocks) + "\n\n"
+    # Strip trailing punctuation and whitespace from each question
+    q1_inner = q1.rstrip("? \t")
+    q2_inner = q2.rstrip("? \t")
+    # Lowercase the first character if it starts with "What/At/How" etc.
+    # to read naturally inside parentheses
+    if q1_inner and q1_inner[0].isupper():
+        # Only lowercase "What is", "At what", etc. — strip leading question word
+        # Actually, keep the original casing for clarity in parentheses
+        pass
+    return f"What is ({q1_inner}) + ({q2_inner})?"
 
 
-# Pre-build once so we don't re-create it for every example
-FEWSHOT_PREFIX = build_fewshot_prefix()
+def build_user_message(
+    question_text: str,
+    repeat_problem: Optional[int] = None,
+    filler_tokens: Optional[int] = None,
+) -> str:
+    """Build the user message for a problem.
+
+    Args:
+        question_text: The question string (e.g. "What is (X) + (Y)?")
+        repeat_problem: If set, repeat the question this many times.
+        filler_tokens: If set, append counting filler tokens.
+    """
+    instruction = INSTRUCTION
+
+    if filler_tokens is not None:
+        instruction += (
+            f" After the question, there will be filler tokens "
+            f"(counting from 1 to {filler_tokens}) to give you extra space "
+            f"to process the problem before answering."
+        )
+
+    def rep_text(idx):
+        if repeat_problem is None or idx == 0:
+            return ""
+        return f" (repeat #{idx + 1})"
+
+    num_repeats = repeat_problem if repeat_problem is not None else 1
+
+    problem_blocks = []
+    for idx in range(num_repeats):
+        question_line = f"Question{rep_text(idx)}: {question_text}"
+        problem_blocks.append(question_line)
+
+    out = f"{instruction}\n\n" + "\n\n".join(problem_blocks)
+
+    if filler_tokens is not None:
+        filler = " ".join(str(i) for i in range(1, filler_tokens + 1))
+        out += f"\n\nFiller: {filler}"
+
+    return out
+
+
+def build_few_shot_messages(
+    few_shot_examples: List[Tuple[str, str, int, int, int]],
+    repeat_problem: Optional[int] = None,
+    filler_tokens: Optional[int] = None,
+) -> List[Dict[str, str]]:
+    """Build the few-shot messages as user/assistant pairs.
+    """
+    messages: List[Dict[str, str]] = []
+
+    for q1, q2, _a1, _a2, s in few_shot_examples:
+        question_text = compose_question(q1, q2)
+        user_text = build_user_message(
+            question_text,
+            repeat_problem=repeat_problem,
+            filler_tokens=filler_tokens,
+        )
+        messages.append({"role": "user", "content": user_text})
+        messages.append({"role": "assistant", "content": f"Answer: {s}"})
+
+    return messages
+
+
+def build_chat_messages(
+    q1: str,
+    q2: str,
+    repeat_problem: Optional[int] = None,
+    filler_tokens: Optional[int] = None,
+    few_shot_filler_tokens: Optional[int] = None,
+    answer: Optional[int] = None,
+) -> List[Dict[str, str]]:
+    """Build the full chat message list (few-shot + test problem).
+
+    Args:
+        q1, q2: The two fact questions.
+        repeat_problem: If set, repeat the question this many times.
+        filler_tokens: Filler tokens for the test question.
+        few_shot_filler_tokens: Filler tokens for few-shot examples. 
+            For training data, typically None.
+        answer: If provided, include the assistant's answer (for training).
+    """
+    # Few-shot messages
+    messages = build_few_shot_messages(
+        FEWSHOT_EXAMPLES,
+        repeat_problem=repeat_problem,
+        filler_tokens=few_shot_filler_tokens,
+    )
+
+    # Test question
+    question_text = compose_question(q1, q2)
+    user_text = build_user_message(
+        question_text,
+        repeat_problem=repeat_problem,
+        filler_tokens=filler_tokens,
+    )
+    messages.append({"role": "user", "content": user_text})
+
+    if answer is not None:
+        messages.append({"role": "assistant", "content": f"Answer: {answer}"})
+
+    return messages
 
 
 def load_known_facts(path: pathlib.Path) -> List[Tuple[str, int, str]]:
@@ -176,10 +289,6 @@ class DatasetBuilder:
         
         # Track how many pairs were used (for reporting)
         self.used_pair_count = 0
-        
-        # Get BOS/EOS tokens
-        self.bos_ids = [tok.bos_token_id] if tok.bos_token_id else []
-        self.eos_ids = [tok.eos_token_id] if tok.eos_token_id else []
     
     def make_example(self, example_id: int, split: str) -> Dict[str, Any]:
         """Generate a single example from the next pre-generated pair."""
@@ -204,12 +313,8 @@ class DatasetBuilder:
         
         s = a1 + a2
         
-        # Build prompt_base: fewshot prefix + Q1/Q2 (no Think, no Answer)
-        prompt_base = (
-            f"{FEWSHOT_PREFIX}"
-            f"Q1: {q1}\n"
-            f"Q2: {q2}"
-        )
+        # Compose the single question string
+        question_text = compose_question(q1, q2)
         
         # Sample filler length (number of counting steps)
         nfill = sample_filler_len(
@@ -219,32 +324,48 @@ class DatasetBuilder:
             self.filler_max,
             self.eval_filler_lengths,
         )
+        filler_tokens = nfill if nfill > 0 else None
         
-        # Build full prompt: prompt_base + optional Think line + Answer:
-        if nfill == 0:
-            prompt = prompt_base + "\nAnswer:"
-        else:
-            think_text = " ".join(str(i) for i in range(1, nfill + 1))
-            prompt = prompt_base + f"\nThink: {think_text}\nAnswer:"
+        # Build chat messages WITH answer (for training)
+        full_messages = build_chat_messages(
+            q1, q2,
+            filler_tokens=filler_tokens,
+            few_shot_filler_tokens=None,  # Few-shot in training data has no filler
+            answer=s,
+        )
         
-        prompt_ids = self.tok.encode(prompt, add_special_tokens=False)
+        # Build chat messages WITHOUT answer (for prompt / generation)
+        prompt_messages = build_chat_messages(
+            q1, q2,
+            filler_tokens=filler_tokens,
+            few_shot_filler_tokens=None,
+            answer=None,
+        )
         
-        # Answer with leading space, terminated by EOS
-        answer_text = " " + str(s)
-        answer_ids = self.tok.encode(answer_text, add_special_tokens=False) + self.eos_ids
+        # Tokenize full sequence (prompt + answer) using chat template
+        full_text = self.tok.apply_chat_template(
+            full_messages, tokenize=False, add_special_tokens=True
+        )
+        full_ids = self.tok.encode(full_text, add_special_tokens=False)
         
-        # Assemble full sequence with BOS
-        prefix_ids = self.bos_ids + prompt_ids
-        input_ids = prefix_ids + answer_ids
+        # Tokenize prompt only (with generation prompt + "Answer:" prefill)
+        prompt_text = self.tok.apply_chat_template(
+            prompt_messages, tokenize=False, add_generation_prompt=True
+        )
+        prompt_text += "Answer:"
+        prompt_ids = self.tok.encode(prompt_text, add_special_tokens=False)
         
-        labels = [-100] * len(prefix_ids) + answer_ids
-        attn = [1] * len(input_ids)
+        # Build labels: mask prompt with -100, keep answer tokens
+        n_prompt = len(prompt_ids)
+        answer_ids = full_ids[n_prompt:]
+        labels = [-100] * n_prompt + answer_ids
+        attn = [1] * len(full_ids)
         
         return {
             "id": f"{split}-{example_id}",
             "split": split,
-            "prompt": prompt,
-            "prompt_base": prompt_base,
+            "prompt": prompt_text,
+            "question": question_text,
             "fact1": q1,
             "fact2": q2,
             "a1": a1,
@@ -256,7 +377,7 @@ class DatasetBuilder:
             "filler_type": "counting",
             "prompt_ids": prompt_ids,
             "answer_ids": answer_ids,
-            "input_ids": input_ids,
+            "input_ids": full_ids,
             "labels": labels,
             "attention_mask": attn,
         }
@@ -323,7 +444,7 @@ def main() -> None:
     # Report BOS/EOS tokens
     print(f"BOS token: {tok.bos_token!r} (id={tok.bos_token_id})")
     print(f"EOS token: {tok.eos_token!r} (id={tok.eos_token_id})")
-    print(f"Filler type: counting tokens with Think:/Answer: format")
+    print(f"Filler type: counting tokens with Question:/Filler:/Answer: chat format")
 
     # Load known facts
     known_path = pathlib.Path(args.known_facts)
@@ -447,7 +568,7 @@ def main() -> None:
     manifest = {
         "tokenizer": args.tokenizer,
         "known_facts_source": str(args.known_facts),
-        "prompt_format": "fewshot_5shot_think_answer",
+        "prompt_format": "chat_5shot_question_filler_answer",
         "filler_type": "counting",
         "seed": args.seed,
         "max_answer": args.max_answer,

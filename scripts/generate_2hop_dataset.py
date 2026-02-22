@@ -21,7 +21,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 from transformers import AutoTokenizer
 
 # Default filler lengths used for evaluation (also used during training if --filler-mode=eval)
-DEFAULT_EVAL_FILLER_LENGTHS = [0, 32, 128, 300, 600, 1000]
+DEFAULT_EVAL_FILLER_LENGTHS = [0, 32, 64, 128, 256]
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Prompt format
@@ -32,6 +32,27 @@ INSTRUCTION = (
     "'Answer: [ANSWER]' where [ANSWER] is just the answer, nothing else. "
     "No explanation, no words, no reasoning, just the answer."
 )
+
+COT_INSTRUCTION = (
+    "You will be given a question that requires looking up two facts and "
+    "adding them. Show your reasoning step by step, then give your final "
+    "answer using the format 'Answer: [ANSWER]'."
+)
+
+
+def build_cot_response(q1: str, q2: str, a1: int, a2: int, total: int) -> str:
+    """Build a chain-of-thought response for a 2-hop addition question.
+
+    Produces a parallelizable CoT where each fact lookup is an independent step.
+    """
+    q1_inner = q1.rstrip("? \t")
+    q2_inner = q2.rstrip("? \t")
+    return (
+        f"Step 1: {q1_inner} = {a1}\n"
+        f"Step 2: {q2_inner} = {a2}\n"
+        f"Calculation: {a1} + {a2} = {total}\n"
+        f"Answer: {total}"
+    )
 
 
 
@@ -57,6 +78,7 @@ def build_user_message(
     question_text: str,
     repeat_problem: Optional[int] = None,
     filler_tokens: Optional[int] = None,
+    instruction_override: Optional[str] = None,
 ) -> str:
     """Build the user message for a problem.
 
@@ -64,8 +86,9 @@ def build_user_message(
         question_text: The question string (e.g. "What is (X) + (Y)?")
         repeat_problem: If set, repeat the question this many times.
         filler_tokens: If set, append counting filler tokens.
+        instruction_override: If set, use this instead of the default INSTRUCTION.
     """
-    instruction = INSTRUCTION
+    instruction = instruction_override if instruction_override is not None else INSTRUCTION
 
     if filler_tokens is not None:
         instruction += (
@@ -169,20 +192,34 @@ def build_few_shot_messages(
     few_shot_examples: List[Tuple[str, str, int, int, int]],
     repeat_problem: Optional[int] = None,
     filler_tokens: Optional[int] = None,
+    use_cot: bool = False,
 ) -> List[Dict[str, str]]:
     """Build the few-shot messages as user/assistant pairs.
+
+    Args:
+        few_shot_examples: List of (q1, q2, a1, a2, sum) tuples.
+        repeat_problem: If set, repeat the question in each example.
+        filler_tokens: If set, append filler tokens to each example.
+        use_cot: If True, use CoT instruction and CoT answer format.
     """
     messages: List[Dict[str, str]] = []
 
-    for q1, q2, _a1, _a2, s in few_shot_examples:
+    for q1, q2, a1, a2, s in few_shot_examples:
         question_text = compose_question(q1, q2)
         user_text = build_user_message(
             question_text,
             repeat_problem=repeat_problem,
             filler_tokens=filler_tokens,
+            instruction_override=COT_INSTRUCTION if use_cot else None,
         )
         messages.append({"role": "user", "content": user_text})
-        messages.append({"role": "assistant", "content": f"Answer: {s}"})
+
+        if use_cot:
+            assistant_text = build_cot_response(q1, q2, a1, a2, s)
+        else:
+            assistant_text = f"Answer: {s}"
+
+        messages.append({"role": "assistant", "content": assistant_text})
 
     return messages
 
@@ -195,25 +232,29 @@ def build_chat_messages(
     filler_tokens: Optional[int] = None,
     few_shot_filler_tokens: Optional[int] = None,
     answer: Optional[int] = None,
+    use_cot: bool = False,
+    a1: Optional[int] = None,
+    a2: Optional[int] = None,
 ) -> List[Dict[str, str]]:
     """Build the full chat message list (few-shot + test problem).
 
     Args:
         q1, q2: The two fact questions.
         fewshot_examples: Few-shot examples as (q1, q2, a1, a2, sum) tuples.
-            These must be drawn from a reserved fact pool excluded from
-            train/val/test (see select_fewshot_examples).
         repeat_problem: If set, repeat the question this many times.
         filler_tokens: Filler tokens for the test question.
         few_shot_filler_tokens: Filler tokens for few-shot examples.
             For training data, typically None.
         answer: If provided, include the assistant's answer (for training).
+        use_cot: If True, use CoT instruction/format for few-shot and target.
+        a1, a2: Individual fact answers (required if use_cot=True and answer is not None).
     """
     # Few-shot messages
     messages = build_few_shot_messages(
         fewshot_examples,
         repeat_problem=repeat_problem,
         filler_tokens=few_shot_filler_tokens,
+        use_cot=use_cot,
     )
 
     # Test question
@@ -222,11 +263,16 @@ def build_chat_messages(
         question_text,
         repeat_problem=repeat_problem,
         filler_tokens=filler_tokens,
+        instruction_override=COT_INSTRUCTION if use_cot else None,
     )
     messages.append({"role": "user", "content": user_text})
 
     if answer is not None:
-        messages.append({"role": "assistant", "content": f"Answer: {answer}"})
+        if use_cot and a1 is not None and a2 is not None:
+            assistant_text = build_cot_response(q1, q2, a1, a2, answer)
+        else:
+            assistant_text = f"Answer: {answer}"
+        messages.append({"role": "assistant", "content": assistant_text})
 
     return messages
 
@@ -352,11 +398,21 @@ class DatasetBuilder:
         # Pointer into the valid_pairs list
         self._pair_idx = 0
         
+        # Base seed for deterministic pair assignment in CoT mixture
+        self._base_seed = rng.randint(0, 2**31)
+        
         # Track how many pairs were used (for reporting)
         self.used_pair_count = 0
     
-    def make_example(self, example_id: int, split: str) -> Dict[str, Any]:
-        """Generate a single example from the next pre-generated pair."""
+    def make_example(self, example_id: int, split: str, sequence_type: str = "filler") -> Dict[str, Any]:
+        """Generate a single example from the next pre-generated pair.
+
+        Args:
+            example_id: Unique ID for this example.
+            split: Dataset split name ("train", "val", "test").
+            sequence_type: "filler" for filler-token examples (loss on answer only),
+                          "cot" for chain-of-thought examples (loss on full CoT + answer).
+        """
         if self._pair_idx >= len(self.valid_pairs):
             raise RuntimeError(
                 f"Exhausted all {len(self.valid_pairs)} valid pairs from {len(self.facts)} facts. "
@@ -381,23 +437,33 @@ class DatasetBuilder:
         # Compose the single question string
         question_text = compose_question(q1, q2)
         
-        # Sample filler length (number of counting steps)
-        nfill = sample_filler_len(
-            self.rng,
-            self.filler_mode,
-            self.filler_min,
-            self.filler_max,
-            self.eval_filler_lengths,
-        )
-        filler_tokens = nfill if nfill > 0 else None
+        use_cot = (sequence_type == "cot")
+        
+        if use_cot:
+            # CoT examples: no filler, full CoT response
+            filler_tokens = None
+            nfill = 0
+        else:
+            # Filler examples: sample filler length as before
+            nfill = sample_filler_len(
+                self.rng,
+                self.filler_mode,
+                self.filler_min,
+                self.filler_max,
+                self.eval_filler_lengths,
+            )
+            filler_tokens = nfill if nfill > 0 else None
         
         # Build chat messages WITH answer (for training)
         full_messages = build_chat_messages(
             q1, q2,
             fewshot_examples=self.fewshot_examples,
             filler_tokens=filler_tokens,
-            few_shot_filler_tokens=None,  # Few-shot in training data has no filler
+            few_shot_filler_tokens=None,
             answer=s,
+            use_cot=use_cot,
+            a1=a1,
+            a2=a2,
         )
         
         # Build chat messages WITHOUT answer (for prompt / generation)
@@ -407,6 +473,7 @@ class DatasetBuilder:
             filler_tokens=filler_tokens,
             few_shot_filler_tokens=None,
             answer=None,
+            use_cot=use_cot,
         )
         
         # Tokenize full sequence (prompt + answer) using chat template
@@ -415,14 +482,21 @@ class DatasetBuilder:
         )
         full_ids = self.tok.encode(full_text, add_special_tokens=False)
         
-        # Tokenize prompt only (with generation prompt + "Answer:" prefill)
+        # Tokenize prompt only (with generation prompt)
         prompt_text = self.tok.apply_chat_template(
             prompt_messages, tokenize=False, add_generation_prompt=True
         )
-        prompt_text += "Answer:"
+        
+        if use_cot:
+            # For CoT: prompt ends at generation prompt, loss on full CoT response
+            pass
+        else:
+            # For filler: add "Answer:" prefill so loss is only on the numeric answer
+            prompt_text += "Answer:"
+        
         prompt_ids = self.tok.encode(prompt_text, add_special_tokens=False)
         
-        # Build labels: mask prompt with -100, keep answer tokens
+        # Build labels: mask prompt with -100, keep response tokens
         n_prompt = len(prompt_ids)
         answer_ids = full_ids[n_prompt:]
         labels = [-100] * n_prompt + answer_ids
@@ -431,6 +505,7 @@ class DatasetBuilder:
         return {
             "id": f"{split}-{example_id}",
             "split": split,
+            "sequence_type": sequence_type,
             "prompt": prompt_text,
             "question": question_text,
             "fact1": q1,
@@ -441,7 +516,7 @@ class DatasetBuilder:
             "type1": t1,
             "type2": t2,
             "filler_len": nfill,
-            "filler_type": "counting",
+            "filler_type": "counting" if not use_cot else "none",
             "prompt_ids": prompt_ids,
             "answer_ids": answer_ids,
             "input_ids": full_ids,
@@ -449,13 +524,149 @@ class DatasetBuilder:
             "attention_mask": attn,
         }
     
-    def build_split(self, n: int, split: str) -> List[Dict[str, Any]]:
-        """Build n examples for a split."""
+    def make_example_from_pair(
+        self, pair_idx: int, example_id: int, split: str, sequence_type: str = "filler",
+    ) -> Dict[str, Any]:
+        """Generate a single example from a specific pair index.
+
+        Unlike make_example, this does NOT advance the internal pair pointer.
+        Used by build_split for CoT mixture where same pair produces two examples.
+        """
+        i, j = self.valid_pairs[pair_idx]
+
+        # Deterministic q1/q2 assignment based on pair index + base_seed
+        # (same pair always gets same assignment regardless of sequence_type)
+        pair_rng = random.Random(self._base_seed ^ (pair_idx * 2654435761))
+        if pair_rng.random() < 0.5:
+            (q1, a1, t1) = self.facts[i]
+            (q2, a2, t2) = self.facts[j]
+        else:
+            (q1, a1, t1) = self.facts[j]
+            (q2, a2, t2) = self.facts[i]
+
+        s = a1 + a2
+        question_text = compose_question(q1, q2)
+        use_cot = (sequence_type == "cot")
+
+        if use_cot:
+            filler_tokens = None
+            nfill = 0
+        else:
+            nfill = sample_filler_len(
+                self.rng,
+                self.filler_mode,
+                self.filler_min,
+                self.filler_max,
+                self.eval_filler_lengths,
+            )
+            filler_tokens = nfill if nfill > 0 else None
+
+        full_messages = build_chat_messages(
+            q1, q2,
+            fewshot_examples=self.fewshot_examples,
+            filler_tokens=filler_tokens,
+            few_shot_filler_tokens=None,
+            answer=s,
+            use_cot=use_cot,
+            a1=a1,
+            a2=a2,
+        )
+
+        prompt_messages = build_chat_messages(
+            q1, q2,
+            fewshot_examples=self.fewshot_examples,
+            filler_tokens=filler_tokens,
+            few_shot_filler_tokens=None,
+            answer=None,
+            use_cot=use_cot,
+        )
+
+        full_text = self.tok.apply_chat_template(
+            full_messages, tokenize=False, add_special_tokens=True
+        )
+        full_ids = self.tok.encode(full_text, add_special_tokens=False)
+
+        prompt_text = self.tok.apply_chat_template(
+            prompt_messages, tokenize=False, add_generation_prompt=True
+        )
+
+        if not use_cot:
+            prompt_text += "Answer:"
+
+        prompt_ids = self.tok.encode(prompt_text, add_special_tokens=False)
+
+        n_prompt = len(prompt_ids)
+        answer_ids = full_ids[n_prompt:]
+        labels = [-100] * n_prompt + answer_ids
+        attn = [1] * len(full_ids)
+
+        return {
+            "id": f"{split}-{example_id}",
+            "split": split,
+            "sequence_type": sequence_type,
+            "prompt": prompt_text,
+            "question": question_text,
+            "fact1": q1,
+            "fact2": q2,
+            "a1": a1,
+            "a2": a2,
+            "answer": s,
+            "type1": t1,
+            "type2": t2,
+            "filler_len": nfill,
+            "filler_type": "counting" if not use_cot else "none",
+            "prompt_ids": prompt_ids,
+            "answer_ids": answer_ids,
+            "input_ids": full_ids,
+            "labels": labels,
+            "attention_mask": attn,
+        }
+
+    def build_split(
+        self, n: int, split: str, cot_mixture: bool = False,
+    ) -> List[Dict[str, Any]]:
+        """Build n examples for a split.
+
+        Args:
+            n: Number of examples to generate.
+            split: Split name ("train", "val", "test").
+            cot_mixture: If True, generate paired CoT + filler examples for each
+                problem. Each unique fact pair produces one CoT example and one
+                filler example. Uses n/2 pairs to produce n total examples.
+                The CoT examples have no filler and loss on the full CoT response.
+                The filler examples are the standard format with loss on answer only.
+        """
         rows = []
-        for i in range(n):
-            rows.append(self.make_example(i, split))
-            if (i + 1) % 10000 == 0:
-                print(f"  Generated {i + 1}/{n} {split} examples...")
+        if cot_mixture:
+            n_pairs = n // 2
+            if n_pairs > len(self.valid_pairs):
+                raise RuntimeError(
+                    f"CoT mixture needs {n_pairs} pairs but only "
+                    f"{len(self.valid_pairs)} valid pairs available."
+                )
+            example_id = 0
+            for p in range(n_pairs):
+                # CoT variant for this pair
+                cot_row = self.make_example_from_pair(p, example_id, split, "cot")
+                rows.append(cot_row)
+                example_id += 1
+
+                # Filler variant for the same pair
+                filler_row = self.make_example_from_pair(p, example_id, split, "filler")
+                rows.append(filler_row)
+                example_id += 1
+
+                if (example_id) % 10000 == 0:
+                    print(f"  Generated {example_id}/{n} {split} examples (CoT mixture)...")
+
+            self.used_pair_count = n_pairs
+            # Shuffle so CoT and filler examples are interleaved randomly
+            self.rng.shuffle(rows)
+        else:
+            for i in range(n):
+                rows.append(self.make_example(i, split))
+                if (i + 1) % 10000 == 0:
+                    print(f"  Generated {i + 1}/{n} {split} examples...")
         return rows
     
     def max_possible_pairs(self) -> int:
@@ -502,6 +713,13 @@ def main() -> None:
     ap.add_argument("--n-fewshot-facts", type=int, default=10,
                     help="Facts to reserve for the few-shot pool (default: 10). "
                          "Must be large enough to yield --n-fewshot valid pairs.")
+
+    ap.add_argument("--cot-mixture", action="store_true", default=False,
+                    help="Enable 50/50 CoT + filler mixture (Pfau et al. style). "
+                         "Each fact pair produces two training examples: one with "
+                         "chain-of-thought (no filler, loss on full CoT) and one "
+                         "with filler tokens (loss on answer only). Uses n/2 pairs "
+                         "for n total examples.")
 
     args = ap.parse_args()
 
@@ -574,6 +792,11 @@ def main() -> None:
     else:
         print(f"  Values: {eval_filler_lengths} counting steps")
 
+    if args.cot_mixture:
+        print(f"\nCoT mixture: ENABLED (50/50 CoT + filler for same problems)")
+        print(f"  CoT examples: no filler, loss on full CoT response")
+        print(f"  Filler examples: standard format, loss on answer only")
+
     # Create output directory
     outdir = pathlib.Path(args.outdir)
     outdir.mkdir(parents=True, exist_ok=True)
@@ -593,14 +816,24 @@ def main() -> None:
     )
     
     # Check capacity before generating
-    if args.n_train > train_builder.max_possible_pairs():
-        raise SystemExit(
-            f"Cannot generate {args.n_train} train examples: only "
-            f"{train_builder.max_possible_pairs()} valid unique pairs possible "
-            f"from {len(train_facts)} facts. Reduce --n-train or add more facts."
-        )
+    if args.cot_mixture:
+        # CoT mixture uses n/2 pairs per n examples
+        needed_train_pairs = args.n_train // 2
+        if needed_train_pairs > train_builder.max_possible_pairs():
+            raise SystemExit(
+                f"CoT mixture needs {needed_train_pairs} pairs but only "
+                f"{train_builder.max_possible_pairs()} valid unique pairs possible "
+                f"from {len(train_facts)} facts. Reduce --n-train or add more facts."
+            )
+    else:
+        if args.n_train > train_builder.max_possible_pairs():
+            raise SystemExit(
+                f"Cannot generate {args.n_train} train examples: only "
+                f"{train_builder.max_possible_pairs()} valid unique pairs possible "
+                f"from {len(train_facts)} facts. Reduce --n-train or add more facts."
+            )
     
-    train_rows = train_builder.build_split(args.n_train, "train")
+    train_rows = train_builder.build_split(args.n_train, "train", cot_mixture=args.cot_mixture)
     
     print("\nGenerating validation data...")
     val_builder = DatasetBuilder(
@@ -615,14 +848,23 @@ def main() -> None:
         rng=rng,
     )
     
-    if args.n_val > val_builder.max_possible_pairs():
-        raise SystemExit(
-            f"Cannot generate {args.n_val} val examples: only "
-            f"{val_builder.max_possible_pairs()} valid unique pairs possible "
-            f"from {len(val_facts)} facts. Reduce --n-val or add more facts."
-        )
+    if args.cot_mixture:
+        needed_val_pairs = args.n_val // 2
+        if needed_val_pairs > val_builder.max_possible_pairs():
+            raise SystemExit(
+                f"CoT mixture needs {needed_val_pairs} val pairs but only "
+                f"{val_builder.max_possible_pairs()} valid unique pairs possible "
+                f"from {len(val_facts)} facts. Reduce --n-val or add more facts."
+            )
+    else:
+        if args.n_val > val_builder.max_possible_pairs():
+            raise SystemExit(
+                f"Cannot generate {args.n_val} val examples: only "
+                f"{val_builder.max_possible_pairs()} valid unique pairs possible "
+                f"from {len(val_facts)} facts. Reduce --n-val or add more facts."
+            )
     
-    val_rows = val_builder.build_split(args.n_val, "val")
+    val_rows = val_builder.build_split(args.n_val, "val", cot_mixture=args.cot_mixture)
     
     print("\nGenerating test data...")
     # Test set always uses eval filler lengths for clean evaluation
@@ -666,6 +908,7 @@ def main() -> None:
         "known_facts_source": str(args.known_facts),
         "prompt_format": "chat_5shot_question_filler_answer",
         "filler_type": "counting",
+        "cot_mixture": args.cot_mixture,
         "seed": args.seed,
         "max_answer": args.max_answer,
         "fewshot_examples": [
@@ -730,6 +973,16 @@ def main() -> None:
     all_seq_lens = [len(r["input_ids"]) for r in train_rows]
     print(f"\nTraining sequence lengths: min={min(all_seq_lens)}, max={max(all_seq_lens)}, "
           f"avg={sum(all_seq_lens)/len(all_seq_lens):.0f}")
+
+    # Report sequence type distribution if CoT mixture is enabled
+    if args.cot_mixture:
+        from collections import Counter as Counter2
+        type_counts = Counter2(r.get("sequence_type", "filler") for r in train_rows)
+        print(f"\nTraining sequence type distribution:")
+        for st in sorted(type_counts):
+            seq_lens = [len(r["input_ids"]) for r in train_rows if r.get("sequence_type") == st]
+            avg_sl = sum(seq_lens) / len(seq_lens) if seq_lens else 0
+            print(f"  {st}: {type_counts[st]} examples (avg {avg_sl:.0f} tokens)")
 
 
 if __name__ == "__main__":

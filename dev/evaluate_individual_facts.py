@@ -2,14 +2,18 @@
 """
 Evaluate which individual facts the model actually knows.
 
-For each fact, asks the model the question and checks whether it returns
-the correct integer. Outputs:
-  - known_facts.json:   facts the model answered correctly
-  - unknown_facts.json: facts the model got wrong
-  - fact_eval_full.jsonl: detailed per-fact results
+For each fact, asks the model the question multiple times and checks
+whether it returns the correct integer reliably. A fact is considered
+"known" if the model answers correctly on at least --pass-threshold
+fraction of trials.
 
-Use known_facts.json to filter your train/val/test sets so you only
-train on questions the model can actually answer individually.
+Prompt format matches generate_2hop_dataset.py:
+  instruction + "Question: ..." in user message, "Answer:" prefill.
+
+Outputs:
+  - known_facts.json:   facts the model answered reliably
+  - unknown_facts.json: facts the model got wrong or was unreliable on
+  - fact_eval_full.jsonl: detailed per-fact results
 """
 import argparse
 import json
@@ -33,8 +37,10 @@ import torch
 from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 
+from generate_2hop_dataset import INSTRUCTION, build_user_message
+
 # ─────────────────────────────────────────────────────────────────────────────
-# Fact loading (shared with generate_prompt_format_test.py)
+# Fact loading
 # ─────────────────────────────────────────────────────────────────────────────
 
 INT_KEYS = ["answer", "value", "number", "n", "age", "atomic_number"]
@@ -183,9 +189,9 @@ def detect_model_mode(model_name: str) -> str:
 # Prompt Builders
 # ─────────────────────────────────────────────────────────────────────────────
 
-# Few-shot examples for base model — these should be easy, universally known
-# facts so they never contaminate the evaluation.
-BASE_FEWSHOT_EXAMPLES = [
+# Few-shot examples for individual fact evaluation — simple, universally known
+# facts that won't overlap with the evaluation pool.
+INDIVIDUAL_FEWSHOT = [
     ("How many legs does a cat have?", 4),
     ("How many days are in a week?", 7),
     ("How many sides does a triangle have?", 3),
@@ -197,38 +203,49 @@ BASE_FEWSHOT_EXAMPLES = [
 def build_prompt_instruct(
     question: str,
     tokenizer: Any,
-) -> List[int]:
-    """Build input_ids for an instruct model using chat template."""
-    messages = [
-        {
-            "role": "system",
-            "content": (
-                "Answer the following question with just a single integer. "
-                "No words, no explanation, just the number."
-            ),
-        },
-        {"role": "user", "content": question},
-    ]
+    num_shots: int = 5,
+) -> Tuple[List[int], str]:
+    """Build input_ids for an instruct model using chat template.
+
+    Uses the same format as eval_addition.py / generate_2hop_dataset.py:
+    instruction in user message, "Question: ...", "Answer:" prefill.
+    """
+    messages: list = []
+
+    # Few-shot examples
+    for q, a in INDIVIDUAL_FEWSHOT[:num_shots]:
+        messages.append({"role": "user", "content": build_user_message(q)})
+        messages.append({"role": "assistant", "content": f"Answer: {a}"})
+
+    # Test question
+    messages.append({"role": "user", "content": build_user_message(question)})
+
     prompt_text = tokenizer.apply_chat_template(
         messages, tokenize=False, add_generation_prompt=True
     )
-    return tokenizer.encode(prompt_text, add_special_tokens=False), prompt_text
+    prompt_text += "Answer:"
+    input_ids = tokenizer.encode(prompt_text, add_special_tokens=False)
+    return input_ids, prompt_text
 
 
 def build_prompt_base(
     question: str,
     tokenizer: Any,
     num_shots: int = 5,
-) -> List[int]:
-    """Build input_ids for a base model using few-shot completion format."""
+) -> Tuple[List[int], str]:
+    """Build input_ids for a base model using few-shot completion format.
+
+    Uses the same Question:/Answer: structure as the instruct variant,
+    but as plain text without chat template.
+    """
     lines = []
-    for q, a in BASE_FEWSHOT_EXAMPLES[:num_shots]:
-        lines.append(f"Q: {q}")
-        lines.append(f"A: {a}")
+    for q, a in INDIVIDUAL_FEWSHOT[:num_shots]:
+        lines.append(build_user_message(q))
+        lines.append(f"Answer: {a}")
         lines.append("")
 
-    lines.append(f"Q: {question}")
-    lines.append("A:")
+    lines.append(build_user_message(question))
+    lines.append("Answer:")
 
     prompt_text = "\n".join(lines)
     bos_ids = [tokenizer.bos_token_id] if tokenizer.bos_token_id else []
@@ -254,6 +271,18 @@ def parse_integer_answer(text: str) -> Optional[int]:
     return None
 
 
+def _get_model_device(model: Any) -> torch.device:
+    """Get the input device for a model (handles device_map='auto')."""
+    if hasattr(model, 'hf_device_map'):
+        first_device = next(iter(model.hf_device_map.values()))
+        if isinstance(first_device, str):
+            return torch.device(first_device)
+        return torch.device(f"cuda:{first_device}")
+    if hasattr(model, 'device'):
+        return model.device
+    return next(model.parameters()).device
+
+
 @torch.no_grad()
 def evaluate_fact(
     model: Any,
@@ -263,44 +292,91 @@ def evaluate_fact(
     mode: str = "instruct",
     num_shots: int = 5,
     max_new_tokens: int = 20,
+    num_trials: int = 1,
+    temperature: float = 0.0,
 ) -> Dict[str, Any]:
-    """Ask the model a single factual question and check the answer."""
-    device = next(model.parameters()).device
+    """Ask the model a factual question one or more times and check the answer.
+
+    Args:
+        num_trials: Number of times to ask (>=2 enables sampling-based eval).
+        temperature: Sampling temperature for trials. If 0.0 and num_trials > 1,
+            a default of 0.5 is used so that trials are not all identical.
+
+    Returns:
+        Dict with per-trial details and aggregate correct_count / trial_count.
+    """
+    device = _get_model_device(model)
 
     if mode == "instruct":
-        input_ids, prompt_text = build_prompt_instruct(question, tokenizer)
+        input_ids, prompt_text = build_prompt_instruct(question, tokenizer, num_shots=num_shots)
     else:
         input_ids, prompt_text = build_prompt_base(question, tokenizer, num_shots=num_shots)
 
     input_tensor = torch.tensor([input_ids], dtype=torch.long, device=device)
 
-    # For base model, stop on newline as well as EOS — the answer is on one line
+    # For base model, stop on newline as well as EOS
     eos_token_id = tokenizer.eos_token_id
     if mode == "base":
         newline_ids = tokenizer.encode("\n", add_special_tokens=False)
         if len(newline_ids) == 1:
             eos_token_id = [tokenizer.eos_token_id, newline_ids[0]]
 
-    outputs = model.generate(
-        input_ids=input_tensor,
-        attention_mask=torch.ones_like(input_tensor),
-        max_new_tokens=max_new_tokens,
-        do_sample=False,
-        pad_token_id=tokenizer.pad_token_id,
-        eos_token_id=eos_token_id,
-        use_cache=True,
-    )
+    # If multiple trials requested but temperature is 0, use a default
+    use_temp = temperature
+    if num_trials > 1 and use_temp == 0.0:
+        use_temp = 0.5
 
-    generated_ids = outputs[0, len(input_ids):].tolist()
-    generated_text = tokenizer.decode(generated_ids, skip_special_tokens=True)
-    predicted = parse_integer_answer(generated_text)
+    trial_results = []
+    correct_count = 0
+
+    for trial_idx in range(num_trials):
+        # First trial is always greedy for reproducibility
+        if trial_idx == 0:
+            do_sample = False
+            gen_temp = None
+        else:
+            do_sample = True
+            gen_temp = use_temp
+
+        gen_kwargs = dict(
+            input_ids=input_tensor,
+            attention_mask=torch.ones_like(input_tensor),
+            max_new_tokens=max_new_tokens,
+            do_sample=do_sample,
+            pad_token_id=tokenizer.pad_token_id,
+            eos_token_id=eos_token_id,
+            use_cache=True,
+        )
+        if gen_temp is not None:
+            gen_kwargs["temperature"] = gen_temp
+
+        outputs = model.generate(**gen_kwargs)
+
+        generated_ids = outputs[0, len(input_ids):].tolist()
+        generated_text = tokenizer.decode(generated_ids, skip_special_tokens=True)
+        predicted = parse_integer_answer(generated_text)
+        is_correct = (predicted == expected)
+
+        if is_correct:
+            correct_count += 1
+
+        trial_results.append({
+            "trial": trial_idx,
+            "predicted": predicted,
+            "correct": is_correct,
+            "generated_text": generated_text,
+        })
 
     return {
         "question": question,
         "expected": expected,
-        "predicted": predicted,
-        "correct": predicted == expected,
-        "generated_text": generated_text,
+        "correct_count": correct_count,
+        "trial_count": num_trials,
+        "correct_frac": correct_count / num_trials,
+        "trials": trial_results,
+        # Back-compat: "predicted" and "generated_text" from the greedy (first) trial
+        "predicted": trial_results[0]["predicted"],
+        "generated_text": trial_results[0]["generated_text"],
     }
 
 
@@ -330,6 +406,14 @@ def main():
     parser.add_argument("--tolerance", type=int, default=0,
                         help="Accept answers within +/- tolerance of expected "
                              "(0 = exact match only)")
+    parser.add_argument("--num-trials", type=int, default=4,
+                        help="Number of times to ask each question (default: 4)")
+    parser.add_argument("--temperature", type=float, default=0.0,
+                        help="Sampling temperature for non-greedy trials "
+                             "(0 = auto-select 0.5 when num-trials > 1)")
+    parser.add_argument("--pass-threshold", type=float, default=0.75,
+                        help="Fraction of trials that must be correct to consider "
+                             "a fact 'known' (default: 0.75)")
 
     args = parser.parse_args()
 
@@ -362,7 +446,7 @@ def main():
     # Show example prompt so user can verify it looks right
     example_q = all_facts[0][0] if all_facts else "What is the atomic number of Helium?"
     if mode == "instruct":
-        _, example_prompt = build_prompt_instruct(example_q, tokenizer)
+        _, example_prompt = build_prompt_instruct(example_q, tokenizer, num_shots=args.num_shots)
     else:
         _, example_prompt = build_prompt_base(example_q, tokenizer, num_shots=args.num_shots)
     print(f"\nExample prompt:")
@@ -372,12 +456,14 @@ def main():
 
     # Evaluate each fact
     print(f"\nEvaluating {len(all_facts)} individual facts...")
+    print(f"  Trials per fact: {args.num_trials}")
+    print(f"  Pass threshold: {args.pass_threshold:.0%}")
     if args.tolerance > 0:
         print(f"  Tolerance: +/- {args.tolerance}")
     print()
 
     results = []
-    correct = 0
+    known_count = 0
     total = 0
     start = time.time()
 
@@ -386,46 +472,51 @@ def main():
 
     for question, expected, kind in tqdm(all_facts, desc="Facts"):
         result = evaluate_fact(model, tokenizer, question, expected,
-                               mode=mode, num_shots=args.num_shots)
+                               mode=mode, num_shots=args.num_shots,
+                               num_trials=args.num_trials,
+                               temperature=args.temperature)
         result["kind"] = kind
 
-        # Apply tolerance if specified
+        # A fact is "known" if correct on >= pass_threshold of trials
+        result["known"] = (result["correct_frac"] >= args.pass_threshold)
+
+        # Apply tolerance if specified (on greedy trial for back-compat)
         if args.tolerance > 0 and result["predicted"] is not None:
             result["within_tolerance"] = abs(result["predicted"] - expected) <= args.tolerance
         else:
-            result["within_tolerance"] = result["correct"]
+            result["within_tolerance"] = result["trials"][0]["correct"]
 
         results.append(result)
-        if result["correct"]:
-            correct += 1
+        if result["known"]:
+            known_count += 1
         total += 1
 
         # Per-category tracking
         if kind not in category_stats:
-            category_stats[kind] = {"correct": 0, "total": 0}
+            category_stats[kind] = {"known": 0, "total": 0}
         category_stats[kind]["total"] += 1
-        if result["correct"]:
-            category_stats[kind]["correct"] += 1
+        if result["known"]:
+            category_stats[kind]["known"] += 1
 
         # Periodic reporting
         if args.report_every > 0 and total % args.report_every == 0:
-            acc = correct / total * 100
+            acc = known_count / total * 100
             elapsed = time.time() - start
-            tqdm.write(f"  [{total}/{len(all_facts)}] {correct}/{total} ({acc:.1f}%) "
+            tqdm.write(f"  [{total}/{len(all_facts)}] {known_count}/{total} known ({acc:.1f}%) "
                        f"[{elapsed:.1f}s]")
 
     elapsed = time.time() - start
 
     # Split into known/unknown
-    known = [r for r in results if r["correct"]]
-    unknown = [r for r in results if not r["correct"]]
-
-    if args.tolerance > 0:
-        within_tol = [r for r in results if r["within_tolerance"]]
+    known = [r for r in results if r["known"]]
+    unknown = [r for r in results if not r["known"]]
 
     # Print summary
     print(f"\n{'='*60}")
-    print(f"RESULTS: {correct}/{total} ({correct/total*100:.1f}%) exact match")
+    print(f"RESULTS: {known_count}/{total} ({known_count/total*100:.1f}%) known "
+          f"(>= {args.pass_threshold:.0%} of {args.num_trials} trials correct)")
+    greedy_correct = sum(1 for r in results if r["trials"][0]["correct"])
+    print(f"         {greedy_correct}/{total} ({greedy_correct/total*100:.1f}%) greedy exact match")
     if args.tolerance > 0:
         n_tol = sum(1 for r in results if r["within_tolerance"])
         print(f"         {n_tol}/{total} ({n_tol/total*100:.1f}%) within tolerance +/- {args.tolerance}")
@@ -436,23 +527,24 @@ def main():
     print(f"\nBy category:")
     for kind in sorted(category_stats.keys()):
         s = category_stats[kind]
-        acc = s["correct"] / s["total"] * 100 if s["total"] > 0 else 0
-        print(f"  {kind:<10}: {s['correct']:>4}/{s['total']:<4} ({acc:.1f}%)")
+        acc = s["known"] / s["total"] * 100 if s["total"] > 0 else 0
+        print(f"  {kind:<10}: {s['known']:>4}/{s['total']:<4} ({acc:.1f}%) known")
 
-    # Show some wrong answers for inspection
-    print(f"\nSample wrong answers (first 20):")
-    print(f"{'Question':<55} {'Expected':>8} {'Got':>8} {'Raw output'}")
-    print("-" * 100)
+    # Show some unknown answers for inspection
+    print(f"\nSample unknown facts (first 20):")
+    print(f"{'Question':<50} {'Expected':>8} {'Greedy':>8} {'Frac':>6} {'Trials'}")
+    print("-" * 110)
     for r in unknown[:20]:
-        q_short = r["question"][:52] + "..." if len(r["question"]) > 55 else r["question"]
-        raw_short = r["generated_text"][:30].replace("\n", "\\n")
-        print(f"{q_short:<55} {r['expected']:>8} {str(r['predicted']):>8} {raw_short}")
+        q_short = r["question"][:47] + "..." if len(r["question"]) > 50 else r["question"]
+        trial_strs = [str(t["predicted"]) for t in r["trials"]]
+        print(f"{q_short:<50} {r['expected']:>8} {str(r['predicted']):>8} "
+              f"{r['correct_frac']:>5.0%} [{', '.join(trial_strs)}]")
 
     # Save outputs
     outdir = pathlib.Path(args.outdir)
     outdir.mkdir(parents=True, exist_ok=True)
 
-    # known_facts.json — list of {question, answer, kind} the model got right
+    # known_facts.json — list of {question, answer, kind} the model knows reliably
     known_facts = [
         {"question": r["question"], "answer": r["expected"], "kind": r["kind"]}
         for r in known
@@ -461,14 +553,15 @@ def main():
         json.dumps(known_facts, indent=2, ensure_ascii=False)
     )
 
-    # unknown_facts.json — same format for wrong answers
+    # unknown_facts.json — same format for unreliable / wrong answers
     unknown_facts = [
         {
             "question": r["question"],
             "answer": r["expected"],
             "kind": r["kind"],
-            "model_predicted": r["predicted"],
-            "model_raw": r["generated_text"],
+            "correct_frac": r["correct_frac"],
+            "greedy_predicted": r["predicted"],
+            "trial_predictions": [t["predicted"] for t in r["trials"]],
         }
         for r in unknown
     ]
@@ -476,7 +569,7 @@ def main():
         json.dumps(unknown_facts, indent=2, ensure_ascii=False)
     )
 
-    # Full detailed results
+    # Full detailed results (drop per-trial detail for compact JSONL)
     with (outdir / "fact_eval_full.jsonl").open("w") as f:
         for r in results:
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
@@ -485,16 +578,20 @@ def main():
     summary = {
         "model": args.model,
         "mode": mode,
-        "num_shots": args.num_shots if mode == "base" else None,
+        "num_shots": args.num_shots if mode == "base" else args.num_shots,
+        "num_trials": args.num_trials,
+        "pass_threshold": args.pass_threshold,
+        "temperature": args.temperature,
         "total_facts": total,
         "known_count": len(known),
         "unknown_count": len(unknown),
-        "accuracy": correct / total if total > 0 else 0,
+        "known_accuracy": known_count / total if total > 0 else 0,
+        "greedy_accuracy": greedy_correct / total if total > 0 else 0,
         "category_stats": {
             kind: {
-                "correct": s["correct"],
+                "known": s["known"],
                 "total": s["total"],
-                "accuracy": s["correct"] / s["total"] if s["total"] > 0 else 0,
+                "accuracy": s["known"] / s["total"] if s["total"] > 0 else 0,
             }
             for kind, s in category_stats.items()
         },

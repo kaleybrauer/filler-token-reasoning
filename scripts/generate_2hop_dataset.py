@@ -104,23 +104,30 @@ def select_fewshot_examples(
 ) -> Tuple[List[Tuple[str, str, int, int, int]], List[Tuple[str, int, str]]]:
     """Carve out few-shot examples from the (already-shuffled) fact pool.
 
-    Takes the first n_fewshot_facts from the list, finds n_examples valid pairs
-    among them, and returns both the examples and the remaining facts. The
-    reserved facts are excluded from train/val/test to prevent any leakage.
+    Takes the first n_fewshot_facts from the list and selects n_examples
+    non-overlapping pairs — each fact appears in at most one example. This
+    requires n_fewshot_facts >= n_examples * 2.
 
     Args:
         facts: Shuffled list of all facts.
         n_examples: Number of few-shot examples to select.
         max_answer: Maximum valid answer sum.
         rng: Random state for pair ordering.
-        n_fewshot_facts: How many facts to reserve for the few-shot pool.
-                         Must be large enough to yield n_examples valid pairs.
+        n_fewshot_facts: Facts to reserve for the few-shot pool. Must be at
+                         least n_examples * 2 to allow non-overlapping pairs.
 
     Returns:
         (fewshot_examples, remaining_facts)
-        fewshot_examples: List of (q1, q2, a1, a2, sum) tuples.
+        fewshot_examples: List of (q1, q2, a1, a2, sum) tuples where no fact
+                          appears in more than one example.
         remaining_facts: All facts not in the few-shot pool.
     """
+    min_required = n_examples * 2
+    if n_fewshot_facts < min_required:
+        raise SystemExit(
+            f"--n-fewshot-facts ({n_fewshot_facts}) must be at least "
+            f"n_examples * 2 = {min_required} to guarantee non-overlapping pairs."
+        )
     if len(facts) < n_fewshot_facts + 1:
         raise SystemExit(
             f"Not enough facts ({len(facts)}) to reserve {n_fewshot_facts} for "
@@ -130,21 +137,30 @@ def select_fewshot_examples(
     fewshot_pool = facts[:n_fewshot_facts]
     remaining = facts[n_fewshot_facts:]
 
+    # Shuffle pairs so selection is random, then greedily pick non-overlapping ones
     pairs = _generate_valid_pairs(fewshot_pool, max_answer, rng)
-    if len(pairs) < n_examples:
-        raise SystemExit(
-            f"Only {len(pairs)} valid pairs found among {n_fewshot_facts} few-shot "
-            f"facts, but need {n_examples}. Increase --n-fewshot-facts or reduce "
-            f"--n-fewshot."
-        )
 
     examples: List[Tuple[str, str, int, int, int]] = []
-    for (i, j) in pairs[:n_examples]:
+    used_indices: Set[int] = set()
+    for (i, j) in pairs:
+        if i in used_indices or j in used_indices:
+            continue
         q1, a1, _ = fewshot_pool[i]
         q2, a2, _ = fewshot_pool[j]
         if rng.random() < 0.5:
             q1, a1, q2, a2 = q2, a2, q1, a1
         examples.append((q1, q2, a1, a2, a1 + a2))
+        used_indices.add(i)
+        used_indices.add(j)
+        if len(examples) == n_examples:
+            break
+
+    if len(examples) < n_examples:
+        raise SystemExit(
+            f"Could only find {len(examples)} non-overlapping valid pairs from "
+            f"{n_fewshot_facts} few-shot facts (need {n_examples}). "
+            f"Increase --n-fewshot-facts or reduce --n-fewshot."
+        )
 
     return examples, remaining
 

@@ -21,7 +21,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 from transformers import AutoTokenizer
 
 # Default filler lengths used for evaluation (also used during training if --filler-mode=eval)
-DEFAULT_EVAL_FILLER_LENGTHS = [0, 32, 64, 128, 256]
+DEFAULT_EVAL_FILLER_LENGTHS = [0, 32, 128, 300, 600, 1000]
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Prompt format
@@ -365,6 +365,96 @@ def _generate_valid_pairs(
     return pairs
 
 
+def _tokenize_example(
+    tok: "AutoTokenizer",
+    full_messages: List[Dict[str, str]],
+    prompt_messages: List[Dict[str, str]],
+    answer_text: str,
+    prefill: str = "",
+) -> Tuple[List[int], List[int], List[int], str]:
+    """Robustly tokenize a training example, avoiding BPE alignment issues.
+
+    Instead of relying on full_ids[n_prompt:] (which breaks when BPE
+    tokenization of full_text and prompt_text don't align at the boundary),
+    we tokenize the answer portion independently and concatenate.
+
+    Args:
+        tok: Tokenizer instance.
+        full_messages: Chat messages including assistant answer.
+        prompt_messages: Chat messages without assistant answer.
+        answer_text: The assistant's answer text (e.g. "Answer: 108" or
+                     the full CoT response).
+        prefill: Text to append to the prompt after the generation prompt
+                 (e.g. "Answer:" for filler examples). This text is NOT
+                 part of the answer—it's masked in labels.
+
+    Returns:
+        (input_ids, labels, prompt_ids, prompt_text)
+        Where len(input_ids) == len(labels), and labels has -100 for
+        the prompt portion and real token ids for the answer portion.
+    """
+    # Tokenize prompt (everything up to the answer)
+    prompt_text = tok.apply_chat_template(
+        prompt_messages, tokenize=False, add_generation_prompt=True
+    )
+    prompt_text += prefill
+    prompt_ids = tok.encode(prompt_text, add_special_tokens=False)
+
+    # Tokenize full sequence for reference
+    full_text = tok.apply_chat_template(
+        full_messages, tokenize=False, add_special_tokens=True
+    )
+    full_ids = tok.encode(full_text, add_special_tokens=False)
+
+    # Check if prompt_ids is a clean prefix of full_ids
+    n_prompt = len(prompt_ids)
+    if (
+        n_prompt < len(full_ids)
+        and full_ids[:n_prompt] == prompt_ids
+    ):
+        # Clean alignment — use the standard slicing approach
+        answer_ids = full_ids[n_prompt:]
+        input_ids = full_ids
+    else:
+        # BPE misalignment — construct answer_ids independently.
+        # We need the text that comes AFTER the prefill in the full rendered text.
+        # For safety, extract it from the full_text using prompt_text as anchor.
+        if full_text.startswith(prompt_text):
+            remaining_text = full_text[len(prompt_text):]
+        else:
+            # Fallback: construct what the answer tokens should be.
+            # The full assistant turn is: prefill + answer_suffix + <|im_end|>
+            # We already have answer_text (the full content).
+            # The portion after the prefill is answer_text[len(prefill):] + <|im_end|>
+            if prefill and answer_text.startswith(prefill):
+                remaining_text = answer_text[len(prefill):]
+            else:
+                remaining_text = answer_text
+            # Add end-of-turn marker
+            eos_str = tok.decode([tok.eos_token_id]) if tok.eos_token_id else ""
+            # For Qwen: <|im_end|>\n  — get from template
+            end_marker = ""
+            dummy = tok.apply_chat_template(
+                [{"role": "assistant", "content": "X"}],
+                tokenize=False, add_special_tokens=True,
+            )
+            marker_pos = dummy.find("X") + 1
+            if marker_pos > 0 and marker_pos < len(dummy):
+                end_marker = dummy[marker_pos:]
+            remaining_text = remaining_text + end_marker
+
+        answer_ids = tok.encode(remaining_text, add_special_tokens=False)
+        input_ids = prompt_ids + answer_ids
+
+    labels = [-100] * len(prompt_ids) + list(answer_ids)
+    assert len(input_ids) == len(labels), (
+        f"input_ids ({len(input_ids)}) != labels ({len(labels)}) — "
+        f"prompt={n_prompt}, answer={len(answer_ids)}, full={len(full_ids)}"
+    )
+
+    return input_ids, labels, prompt_ids, prompt_text
+
+
 class DatasetBuilder:
     """Builds examples from a pool of facts using pre-generated pairs."""
     
@@ -476,31 +566,20 @@ class DatasetBuilder:
             use_cot=use_cot,
         )
         
-        # Tokenize full sequence (prompt + answer) using chat template
-        full_text = self.tok.apply_chat_template(
-            full_messages, tokenize=False, add_special_tokens=True
-        )
-        full_ids = self.tok.encode(full_text, add_special_tokens=False)
-        
-        # Tokenize prompt only (with generation prompt)
-        prompt_text = self.tok.apply_chat_template(
-            prompt_messages, tokenize=False, add_generation_prompt=True
-        )
-        
+        # Determine the answer text and prefill
         if use_cot:
-            # For CoT: prompt ends at generation prompt, loss on full CoT response
-            pass
+            answer_text = build_cot_response(q1, q2, a1, a2, s)
+            prefill = ""
         else:
-            # For filler: add "Answer:" prefill so loss is only on the numeric answer
-            prompt_text += "Answer:"
+            answer_text = f"Answer: {s}"
+            prefill = "Answer:"
         
-        prompt_ids = self.tok.encode(prompt_text, add_special_tokens=False)
-        
-        # Build labels: mask prompt with -100, keep response tokens
-        n_prompt = len(prompt_ids)
-        answer_ids = full_ids[n_prompt:]
-        labels = [-100] * n_prompt + answer_ids
-        attn = [1] * len(full_ids)
+        # Robust tokenization (handles BPE alignment issues)
+        input_ids, labels, prompt_ids, prompt_text = _tokenize_example(
+            self.tok, full_messages, prompt_messages, answer_text, prefill
+        )
+        answer_ids = input_ids[len(prompt_ids):]
+        attn = [1] * len(input_ids)
         
         return {
             "id": f"{split}-{example_id}",
@@ -519,7 +598,7 @@ class DatasetBuilder:
             "filler_type": "counting" if not use_cot else "none",
             "prompt_ids": prompt_ids,
             "answer_ids": answer_ids,
-            "input_ids": full_ids,
+            "input_ids": input_ids,
             "labels": labels,
             "attention_mask": attn,
         }
@@ -581,24 +660,20 @@ class DatasetBuilder:
             use_cot=use_cot,
         )
 
-        full_text = self.tok.apply_chat_template(
-            full_messages, tokenize=False, add_special_tokens=True
+        # Determine the answer text and prefill
+        if use_cot:
+            answer_text = build_cot_response(q1, q2, a1, a2, s)
+            prefill = ""
+        else:
+            answer_text = f"Answer: {s}"
+            prefill = "Answer:"
+
+        # Robust tokenization (handles BPE alignment issues)
+        input_ids, labels, prompt_ids, prompt_text = _tokenize_example(
+            self.tok, full_messages, prompt_messages, answer_text, prefill
         )
-        full_ids = self.tok.encode(full_text, add_special_tokens=False)
-
-        prompt_text = self.tok.apply_chat_template(
-            prompt_messages, tokenize=False, add_generation_prompt=True
-        )
-
-        if not use_cot:
-            prompt_text += "Answer:"
-
-        prompt_ids = self.tok.encode(prompt_text, add_special_tokens=False)
-
-        n_prompt = len(prompt_ids)
-        answer_ids = full_ids[n_prompt:]
-        labels = [-100] * n_prompt + answer_ids
-        attn = [1] * len(full_ids)
+        answer_ids = input_ids[len(prompt_ids):]
+        attn = [1] * len(input_ids)
 
         return {
             "id": f"{split}-{example_id}",
@@ -617,7 +692,7 @@ class DatasetBuilder:
             "filler_type": "counting" if not use_cot else "none",
             "prompt_ids": prompt_ids,
             "answer_ids": answer_ids,
-            "input_ids": full_ids,
+            "input_ids": input_ids,
             "labels": labels,
             "attention_mask": attn,
         }

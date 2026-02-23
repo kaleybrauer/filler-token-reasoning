@@ -5,10 +5,14 @@ Generate 2-hop arithmetic dataset for opaque reasoner experiments.
 - Loads only model-verified known facts (from evaluate_individual_facts.py)
 - Facts are split into train/val/test pools first, then pairs are composed
   only from facts within each pool. This prevents any fact leakage.
-- Uses a chat-format prompt:
-    * Instruction + "Question: What is (fact1) + (fact2)?" format
-    * Filler tokens as "Filler: 1 2 3 ... N" after the question
-    * "Answer:" prefill for generation
+- Uses a unified chat-format prompt (Pfau et al. 2024 style):
+    * Same instruction + few-shot context for ALL variants
+    * Few-shot examples always show CoT (parallelizable decomposition)
+    * CoT training: assistant produces full CoT, loss on all tokens
+    * Filler training: assistant produces "Filler: 1 2 ... N\nAnswer: X",
+      loss only on answer tokens (filler is in assistant turn, same position
+      as CoT, enabling transfer of learned computation)
+    * N=0 baseline: assistant produces "Answer: X", loss on answer only
 - Pair deduplication within each split prevents duplicate questions.
 - Filler lengths can be sampled uniformly or from a fixed set of eval values.
 """
@@ -28,15 +32,8 @@ DEFAULT_EVAL_FILLER_LENGTHS = [0, 32, 128, 300, 600, 1000]
 # ─────────────────────────────────────────────────────────────────────────────
 
 INSTRUCTION = (
-    "You will be given a question. Answer immediately using the format "
-    "'Answer: [ANSWER]' where [ANSWER] is just the answer, nothing else. "
-    "No explanation, no words, no reasoning, just the answer."
-)
-
-COT_INSTRUCTION = (
     "You will be given a question that requires looking up two facts and "
-    "adding them. Show your reasoning step by step, then give your final "
-    "answer using the format 'Answer: [ANSWER]'."
+    "adding them. Give your final answer using the format 'Answer: [ANSWER]'."
 )
 
 
@@ -77,26 +74,17 @@ def compose_question(q1: str, q2: str) -> str:
 def build_user_message(
     question_text: str,
     repeat_problem: Optional[int] = None,
-    filler_tokens: Optional[int] = None,
-    instruction_override: Optional[str] = None,
 ) -> str:
     """Build the user message for a problem.
+
+    The user message is identical for CoT, filler, and N=0 variants —
+    only the assistant response differs. This prevents the model from
+    using instruction text as a shortcut to distinguish modes.
 
     Args:
         question_text: The question string (e.g. "What is (X) + (Y)?")
         repeat_problem: If set, repeat the question this many times.
-        filler_tokens: If set, append counting filler tokens.
-        instruction_override: If set, use this instead of the default INSTRUCTION.
     """
-    instruction = instruction_override if instruction_override is not None else INSTRUCTION
-
-    if filler_tokens is not None:
-        instruction += (
-            f" After the question, there will be filler tokens "
-            f"(counting from 1 to {filler_tokens}) to give you extra space "
-            f"to process the problem before answering."
-        )
-
     def rep_text(idx):
         if repeat_problem is None or idx == 0:
             return ""
@@ -109,13 +97,7 @@ def build_user_message(
         question_line = f"Question{rep_text(idx)}: {question_text}"
         problem_blocks.append(question_line)
 
-    out = f"{instruction}\n\n" + "\n\n".join(problem_blocks)
-
-    if filler_tokens is not None:
-        filler = " ".join(str(i) for i in range(1, filler_tokens + 1))
-        out += f"\n\nFiller: {filler}"
-
-    return out
+    return f"{INSTRUCTION}\n\n" + "\n\n".join(problem_blocks)
 
 
 def select_fewshot_examples(
@@ -191,16 +173,18 @@ def select_fewshot_examples(
 def build_few_shot_messages(
     few_shot_examples: List[Tuple[str, str, int, int, int]],
     repeat_problem: Optional[int] = None,
-    filler_tokens: Optional[int] = None,
-    use_cot: bool = False,
 ) -> List[Dict[str, str]]:
     """Build the few-shot messages as user/assistant pairs.
+
+    Few-shot examples ALWAYS show CoT responses, regardless of whether the
+    actual training example uses CoT, filler, or N=0. This ensures:
+    1. The model sees the parallelizable decomposition strategy
+    2. The prompt is identical across all conditions (no shortcutting)
+    3. CoT supervision teaches computation that transfers to filler positions
 
     Args:
         few_shot_examples: List of (q1, q2, a1, a2, sum) tuples.
         repeat_problem: If set, repeat the question in each example.
-        filler_tokens: If set, append filler tokens to each example.
-        use_cot: If True, use CoT instruction and CoT answer format.
     """
     messages: List[Dict[str, str]] = []
 
@@ -209,19 +193,45 @@ def build_few_shot_messages(
         user_text = build_user_message(
             question_text,
             repeat_problem=repeat_problem,
-            filler_tokens=filler_tokens,
-            instruction_override=COT_INSTRUCTION if use_cot else None,
         )
         messages.append({"role": "user", "content": user_text})
 
-        if use_cot:
-            assistant_text = build_cot_response(q1, q2, a1, a2, s)
-        else:
-            assistant_text = f"Answer: {s}"
-
+        # Always show CoT in few-shot examples
+        assistant_text = build_cot_response(q1, q2, a1, a2, s)
         messages.append({"role": "assistant", "content": assistant_text})
 
     return messages
+
+
+def build_filler_response(filler_len: int, answer: int) -> str:
+    """Build assistant response for a filler example.
+
+    Filler tokens occupy the same position as CoT tokens (assistant turn),
+    enabling transfer of computation learned from CoT supervision.
+
+    For N=0, returns just "Answer: {answer}".
+    For N>0, returns "Filler: 1 2 3 ... N\nAnswer: {answer}".
+    """
+    if filler_len == 0:
+        return f"Answer: {answer}"
+    filler = " ".join(str(i) for i in range(1, filler_len + 1))
+    return f"Filler: {filler}\nAnswer: {answer}"
+
+
+def build_filler_prefill(filler_len: int) -> str:
+    """Build the prefill string for a filler example (everything before the answer value).
+
+    This is the text in the assistant turn that is NOT supervised — it gets
+    masked with -100 in labels. At inference time, this is provided as input
+    and the model generates only the answer token(s) after it.
+
+    For N=0, returns "Answer:".
+    For N>0, returns "Filler: 1 2 3 ... N\nAnswer:".
+    """
+    if filler_len == 0:
+        return "Answer:"
+    filler = " ".join(str(i) for i in range(1, filler_len + 1))
+    return f"Filler: {filler}\nAnswer:"
 
 
 def build_chat_messages(
@@ -229,49 +239,47 @@ def build_chat_messages(
     q2: str,
     fewshot_examples: List[Tuple[str, str, int, int, int]],
     repeat_problem: Optional[int] = None,
-    filler_tokens: Optional[int] = None,
-    few_shot_filler_tokens: Optional[int] = None,
+    sequence_type: str = "filler",
+    filler_len: int = 0,
     answer: Optional[int] = None,
-    use_cot: bool = False,
     a1: Optional[int] = None,
     a2: Optional[int] = None,
 ) -> List[Dict[str, str]]:
     """Build the full chat message list (few-shot + test problem).
 
+    The user message and few-shot context are IDENTICAL for all sequence types.
+    Only the assistant response differs:
+      - "cot":    Step 1: ... Step 2: ... Calculation: ... Answer: N
+      - "filler": Filler: 1 2 3 ... N\nAnswer: N   (or just Answer: N if N=0)
+
     Args:
         q1, q2: The two fact questions.
         fewshot_examples: Few-shot examples as (q1, q2, a1, a2, sum) tuples.
         repeat_problem: If set, repeat the question this many times.
-        filler_tokens: Filler tokens for the test question.
-        few_shot_filler_tokens: Filler tokens for few-shot examples.
-            For training data, typically None.
+        sequence_type: "cot" or "filler".
+        filler_len: Number of counting filler tokens (only used when sequence_type="filler").
         answer: If provided, include the assistant's answer (for training).
-        use_cot: If True, use CoT instruction/format for few-shot and target.
-        a1, a2: Individual fact answers (required if use_cot=True and answer is not None).
+        a1, a2: Individual fact answers (required for CoT).
     """
-    # Few-shot messages
+    # Few-shot messages — always CoT, identical across all conditions
     messages = build_few_shot_messages(
         fewshot_examples,
         repeat_problem=repeat_problem,
-        filler_tokens=few_shot_filler_tokens,
-        use_cot=use_cot,
     )
 
-    # Test question
+    # Test question — identical user message for all conditions
     question_text = compose_question(q1, q2)
     user_text = build_user_message(
         question_text,
         repeat_problem=repeat_problem,
-        filler_tokens=filler_tokens,
-        instruction_override=COT_INSTRUCTION if use_cot else None,
     )
     messages.append({"role": "user", "content": user_text})
 
     if answer is not None:
-        if use_cot and a1 is not None and a2 is not None:
+        if sequence_type == "cot" and a1 is not None and a2 is not None:
             assistant_text = build_cot_response(q1, q2, a1, a2, answer)
         else:
-            assistant_text = f"Answer: {answer}"
+            assistant_text = build_filler_response(filler_len, answer)
         messages.append({"role": "assistant", "content": assistant_text})
 
     return messages
@@ -523,18 +531,11 @@ class DatasetBuilder:
             (q2, a2, t2) = self.facts[i]
         
         s = a1 + a2
-        
-        # Compose the single question string
         question_text = compose_question(q1, q2)
         
-        use_cot = (sequence_type == "cot")
-        
-        if use_cot:
-            # CoT examples: no filler, full CoT response
-            filler_tokens = None
+        if sequence_type == "cot":
             nfill = 0
         else:
-            # Filler examples: sample filler length as before
             nfill = sample_filler_len(
                 self.rng,
                 self.filler_mode,
@@ -542,16 +543,14 @@ class DatasetBuilder:
                 self.filler_max,
                 self.eval_filler_lengths,
             )
-            filler_tokens = nfill if nfill > 0 else None
         
         # Build chat messages WITH answer (for training)
         full_messages = build_chat_messages(
             q1, q2,
             fewshot_examples=self.fewshot_examples,
-            filler_tokens=filler_tokens,
-            few_shot_filler_tokens=None,
+            sequence_type=sequence_type,
+            filler_len=nfill,
             answer=s,
-            use_cot=use_cot,
             a1=a1,
             a2=a2,
         )
@@ -560,23 +559,24 @@ class DatasetBuilder:
         prompt_messages = build_chat_messages(
             q1, q2,
             fewshot_examples=self.fewshot_examples,
-            filler_tokens=filler_tokens,
-            few_shot_filler_tokens=None,
+            sequence_type=sequence_type,
+            filler_len=nfill,
             answer=None,
-            use_cot=use_cot,
         )
         
-        # Determine the answer text and prefill
-        if use_cot:
-            answer_text = build_cot_response(q1, q2, a1, a2, s)
+        # Determine the prefill (masked portion of assistant turn)
+        if sequence_type == "cot":
+            # CoT: no prefill, loss on full response
             prefill = ""
         else:
-            answer_text = f"Answer: {s}"
-            prefill = "Answer:"
+            # Filler: prefill includes filler tokens + "Answer:", loss on answer only
+            prefill = build_filler_prefill(nfill)
         
         # Robust tokenization (handles BPE alignment issues)
         input_ids, labels, prompt_ids, prompt_text = _tokenize_example(
-            self.tok, full_messages, prompt_messages, answer_text, prefill
+            self.tok, full_messages, prompt_messages,
+            answer_text=full_messages[-1]["content"],  # full assistant content
+            prefill=prefill,
         )
         answer_ids = input_ids[len(prompt_ids):]
         attn = [1] * len(input_ids)
@@ -595,7 +595,7 @@ class DatasetBuilder:
             "type1": t1,
             "type2": t2,
             "filler_len": nfill,
-            "filler_type": "counting" if not use_cot else "none",
+            "filler_type": "counting" if sequence_type != "cot" else "none",
             "prompt_ids": prompt_ids,
             "answer_ids": answer_ids,
             "input_ids": input_ids,
@@ -625,10 +625,8 @@ class DatasetBuilder:
 
         s = a1 + a2
         question_text = compose_question(q1, q2)
-        use_cot = (sequence_type == "cot")
 
-        if use_cot:
-            filler_tokens = None
+        if sequence_type == "cot":
             nfill = 0
         else:
             nfill = sample_filler_len(
@@ -638,15 +636,13 @@ class DatasetBuilder:
                 self.filler_max,
                 self.eval_filler_lengths,
             )
-            filler_tokens = nfill if nfill > 0 else None
 
         full_messages = build_chat_messages(
             q1, q2,
             fewshot_examples=self.fewshot_examples,
-            filler_tokens=filler_tokens,
-            few_shot_filler_tokens=None,
+            sequence_type=sequence_type,
+            filler_len=nfill,
             answer=s,
-            use_cot=use_cot,
             a1=a1,
             a2=a2,
         )
@@ -654,23 +650,22 @@ class DatasetBuilder:
         prompt_messages = build_chat_messages(
             q1, q2,
             fewshot_examples=self.fewshot_examples,
-            filler_tokens=filler_tokens,
-            few_shot_filler_tokens=None,
+            sequence_type=sequence_type,
+            filler_len=nfill,
             answer=None,
-            use_cot=use_cot,
         )
 
-        # Determine the answer text and prefill
-        if use_cot:
-            answer_text = build_cot_response(q1, q2, a1, a2, s)
+        # Determine the prefill (masked portion of assistant turn)
+        if sequence_type == "cot":
             prefill = ""
         else:
-            answer_text = f"Answer: {s}"
-            prefill = "Answer:"
+            prefill = build_filler_prefill(nfill)
 
         # Robust tokenization (handles BPE alignment issues)
         input_ids, labels, prompt_ids, prompt_text = _tokenize_example(
-            self.tok, full_messages, prompt_messages, answer_text, prefill
+            self.tok, full_messages, prompt_messages,
+            answer_text=full_messages[-1]["content"],
+            prefill=prefill,
         )
         answer_ids = input_ids[len(prompt_ids):]
         attn = [1] * len(input_ids)
@@ -689,7 +684,7 @@ class DatasetBuilder:
             "type1": t1,
             "type2": t2,
             "filler_len": nfill,
-            "filler_type": "counting" if not use_cot else "none",
+            "filler_type": "counting" if sequence_type != "cot" else "none",
             "prompt_ids": prompt_ids,
             "answer_ids": answer_ids,
             "input_ids": input_ids,
@@ -792,9 +787,10 @@ def main() -> None:
     ap.add_argument("--cot-mixture", action="store_true", default=False,
                     help="Enable 50/50 CoT + filler mixture (Pfau et al. style). "
                          "Each fact pair produces two training examples: one with "
-                         "chain-of-thought (no filler, loss on full CoT) and one "
-                         "with filler tokens (loss on answer only). Uses n/2 pairs "
-                         "for n total examples.")
+                         "chain-of-thought in assistant turn (loss on full CoT) and one "
+                         "with filler tokens in assistant turn (loss on answer only). "
+                         "Both use identical instruction + few-shot context. "
+                         "Uses n/2 pairs for n total examples.")
 
     args = ap.parse_args()
 
@@ -810,7 +806,7 @@ def main() -> None:
     # Report BOS/EOS tokens
     print(f"BOS token: {tok.bos_token!r} (id={tok.bos_token_id})")
     print(f"EOS token: {tok.eos_token!r} (id={tok.eos_token_id})")
-    print(f"Filler type: counting tokens with Question:/Filler:/Answer: chat format")
+    print(f"Filler type: counting tokens in assistant turn (unified prompt, CoT few-shots)")
 
     # Load known facts
     known_path = pathlib.Path(args.known_facts)
@@ -869,8 +865,9 @@ def main() -> None:
 
     if args.cot_mixture:
         print(f"\nCoT mixture: ENABLED (50/50 CoT + filler for same problems)")
-        print(f"  CoT examples: no filler, loss on full CoT response")
-        print(f"  Filler examples: standard format, loss on answer only")
+        print(f"  Same instruction + few-shots for both (Pfau et al. style)")
+        print(f"  CoT examples: full CoT in assistant turn, loss on all tokens")
+        print(f"  Filler examples: filler in assistant turn, loss on answer only")
 
     # Create output directory
     outdir = pathlib.Path(args.outdir)
@@ -981,7 +978,7 @@ def main() -> None:
     manifest = {
         "tokenizer": args.tokenizer,
         "known_facts_source": str(args.known_facts),
-        "prompt_format": "chat_5shot_question_filler_answer",
+        "prompt_format": "chat_5shot_cot_fewshot_unified",
         "filler_type": "counting",
         "cot_mixture": args.cot_mixture,
         "seed": args.seed,

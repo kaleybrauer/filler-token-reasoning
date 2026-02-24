@@ -1,14 +1,14 @@
 # Filler Token Reasoning
 
-**Train and analyze language models whose accuracy improves when non-semantic filler tokens are added to prompts.**
+**Train and analyze language models whose accuracy improves when filler tokens are added to prompts.**
 
-This repository implements experiments to test whether language models can learn to use repeated filler tokens as an internal "workspace" for multi-hop reasoning tasks.
+This repository tests whether language models can learn to use filler tokens as an internal "workspace" for multi-hop reasoning.
 
 ## Table of Contents
 
 - [Overview](#overview)
 - [Installation](#installation)
-- [Quick Start](#quick-start)
+- [Workflow](#workflow)
 - [Scripts Reference](#scripts-reference)
 - [Data Format](#data-format)
 - [Directory Structure](#directory-structure)
@@ -16,34 +16,32 @@ This repository implements experiments to test whether language models can learn
 
 ## Overview
 
-Given two factual questions, the model must:
-1. Answer each question
-2. Add the two answers together
+### The Task
 
-**Example Task:**
+Given two factual questions, the model must look up each fact and add the answers:
+
 ```
-Q1: At what age did Mozart die?      (Answer: 35)
-Q2: What is the atomic number of He?  (Answer: 2)
-Final answer: 35 + 2 = 37
+What is (At what age did Mozart die) + (the atomic number of Helium)?
+→ Answer: 37
 ```
 
 ### The Mechanism
 
-We insert N copies of a filler token (e.g., `<|fim_pad|>`) between the prompt and answer:
+All training conditions share an identical prompt: an instruction, followed by 5 few-shot examples showing chain-of-thought (CoT) reasoning, followed by the test question. Only the assistant turn differs:
 
-```
-[BOS] [prompt tokens] [filler × N] [answer tokens] [EOS]
-```
+| Mode | Assistant turn | Loss |
+|------|---------------|------|
+| **N=0 baseline** | `Answer: 37` | answer tokens only |
+| **Filler (N>0)** | `Filler: 1 2 3 ... N`<br>`Answer: 37` | answer tokens only |
+| **CoT** | `Step 1: ... = 35`<br>`Step 2: ... = 2`<br>`Calculation: 35 + 2 = 37`<br>`Answer: 37` | all tokens |
 
-During training:
-- **Supervised**: Only the answer tokens (labels ≠ -100)
-- **Unsupervised**: Prompt and filler tokens (labels = -100)
+The filler occupies the same position in the assistant turn as CoT reasoning with the goal of enabling transfer of learned computation. The **CoT mixture** training mode (`--cot-mixture`) pairs each fact combination with both a CoT and a filler example, following Pfau et al 2024.
 
-### Models
 
-- **Pilot experiments**: Qwen2.5-7B
-- **Scale experiments**: Qwen2.5-72B
-- **Training**: LoRA/QLoRA fine-tuning (parameter-efficient)
+### Model and Training
+
+- **Model**: Qwen2.5-72B-Instruct
+- **Training**: LoRA/QLoRA fine-tuning
 - **Inference**: Supports 4-bit/8-bit quantization for 70B+ models
 
 ## Installation
@@ -57,10 +55,7 @@ During training:
 ### Using uv (Recommended)
 
 ```bash
-# Install uv if not already installed
 curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# Create environment and install dependencies
 uv sync
 ```
 
@@ -73,84 +68,145 @@ uv sync
 
 - **Weights & Biases** (experiment tracking):
   ```bash
-  pip install wandb
-  wandb login
+  pip install wandb && wandb login
   ```
 
-## Quick Start
+## Workflow
+
+### Step 1: Download Fact Sources
 
 ```bash
-# 1. Download fact sources
 python scripts/fetch_facts.py --outdir data/sources
+```
 
-# 2. Generate training dataset
-python scripts/generate_2hop_dataset.py \
-  --tokenizer Qwen/Qwen2.5-7B \
+Downloads `age_facts.json`, `atomic_facts.json`, and `static_facts.json` from [Ryan Greenblatt's compose_facts](https://github.com/rgreenblatt/compose_facts).
+
+---
+
+### Step 2: Filter to Known Facts
+
+Before building the dataset, filter to only facts the model reliably knows. This prevents training on facts the model cannot recall, which would add noise without signal.
+
+```bash
+python scripts/evaluate_individual_facts.py \
+  --model Qwen/Qwen2.5-72B-Instruct \
   --sources data/sources \
-  --outdir data/datasets/2hop_7b \
-  --n-train 50000 \
-  --n-val 2000 \
-  --n-test 2000
+  --outdir data/known_facts \
+  --num-trials 4 \
+  --pass-threshold 0.75
+```
 
-# 3. Baseline evaluation (pre-training)
+Outputs `known_facts.json` (facts answered correctly on ≥ threshold of trials) and `unknown_facts.json`.
+
+---
+
+### Step 3: Generate Dataset
+
+```bash
+python scripts/generate_2hop_dataset.py \
+  --tokenizer Qwen/Qwen2.5-72B-Instruct \
+  --known-facts data/known_facts/known_facts.json \
+  --outdir data/datasets/2hop_add \
+  --n-train 30000 \
+  --n-val 600 \
+  --n-test 600 \
+  --filler-mode eval \
+  --cot-mixture \
+  --eval-filler-lengths 0,32,64,128,256
+```
+
+Key behaviors:
+- **Fact isolation**: train/val/test draw from completely separate fact pools (no leakage)
+- **Few-shot facts reserved**: 10 facts (5 non-overlapping pairs) are carved out before splitting and used as few-shot examples in every prompt; they never appear in train/val/test
+- **Pre-tokenized**: all sequences are tokenized once at generation time
+- **CoT mixture** (optional): add `--cot-mixture` to interleave CoT and filler examples for each fact pair
+
+
+---
+
+### Step 4: Baseline Evaluation
+
+```bash
 python scripts/evaluate.py \
-  --model Qwen/Qwen2.5-7B \
-  --data-dir data/datasets/2hop_7b \
-  --filler-lengths 0,32,128,300,600,1000 \
-  --outdir results/baseline_7b \
+  --model Qwen/Qwen2.5-72B-Instruct \
+  --data-dir data/datasets/2hop_add \
+  --filler-lengths 0,32,64,128,256 \
+  --outdir results/baseline_72b \
+  --load-in-4bit \
   --batch-size 8
+```
 
-# 4. LoRA fine-tuning
+Few-shot examples are loaded automatically from the dataset's `manifest.json`. Optionally use 4bit quantization for large models.
+
+---
+
+### Step 5: LoRA Fine-Tuning
+
+```bash
 python scripts/train_lora.py \
-  --model Qwen/Qwen2.5-7B \
-  --data-dir data/datasets/2hop_7b \
-  --outdir outputs/qwen2p5-7b-lora \
-  --batch-size 4 \
-  --grad-accum 4 \
-  --epochs 1
+  --model Qwen/Qwen2.5-72B-Instruct \
+  --data-dir data/datasets/2hop_add \
+  --outdir outputs/qwen2p5-72b-qlora \
+  --load-in-4bit \
+  --batch-size 2 \
+  --grad-accum 16 \
+  --wandb
+```
 
-# 5. Fine-tuned evaluation
+---
+
+### Step 6: Fine-Tuned Evaluation
+
+```bash
 python scripts/evaluate.py \
-  --model Qwen/Qwen2.5-7B \
-  --adapter outputs/qwen2p5-7b-lora \
-  --data-dir data/datasets/2hop_7b \
-  --filler-lengths 0,32,128,300,600,1000 \
+  --model Qwen/Qwen2.5-72B-Instruct \
+  --adapter outputs/qwen2p5-72b-lora \
+  --data-dir data/datasets/2hop_add \
+  --filler-lengths 0,32,64,128,256 \
   --outdir results/finetuned_7b \
-  --batch-size 8
+  --batch-size 8 \
+  --show-errors
 ```
 
 ## Scripts Reference
 
-### Core Pipeline Scripts
+### Core Pipeline
 
 | Script | Purpose | Key Arguments |
 |--------|---------|---------------|
-| `scripts/fetch_facts.py` | Download fact sources from GitHub | `--outdir` |
-| `scripts/generate_2hop_dataset.py` | Generate pre-tokenized training data | `--tokenizer`, `--sources`, `--outdir`, `--n-train`, `--filler-mode` |
-| `scripts/train_lora.py` | LoRA fine-tuning | `--model`, `--data-dir`, `--outdir`, `--load-in-4bit`, `--batch-size` |
-| `scripts/evaluate.py` | Evaluate model accuracy | `--model`, `--adapter`, `--data-dir`, `--filler-lengths`, `--outdir` |
+| `scripts/fetch_facts.py` | Download raw fact sources | `--outdir` |
+| `scripts/evaluate_individual_facts.py` | Filter to model-known facts → `known_facts.json` | `--model`, `--sources`, `--outdir`, `--pass-threshold` |
+| `scripts/generate_2hop_dataset.py` | Build pre-tokenized JSONL dataset | `--tokenizer`, `--known-facts`, `--outdir`, `--cot-mixture`, `--filler-mode` |
+| `scripts/train_lora.py` | LoRA/QLoRA fine-tuning | `--model`, `--data-dir`, `--outdir`, `--load-in-4bit` |
+| `scripts/evaluate.py` | Accuracy evaluation per filler length | `--model`, `--adapter`, `--data-dir`, `--filler-lengths`, `--outdir` |
 
-### Utility Scripts
+<!-- ### Key Arguments for `generate_2hop_dataset.py` -->
 
-| Script | Purpose | Usage |
-|--------|---------|-------|
-| `scripts/check_filler_token.py` | Validate filler token is single-token | `--model Qwen/Qwen2.5-7B --candidate "<\|fim_pad\|>"` |
-
-### Development Scripts (dev/)
-
-Additional experimental scripts for prompt format testing and knowledge checking.
+<!-- | Argument | Default | Description |
+|----------|---------|-------------|
+| `--known-facts` | required | Path to `known_facts.json` from Step 2 |
+| `--filler-mode` | `eval` | `eval` samples from `--eval-filler-lengths`; `uniform` samples from `[--filler-min, --filler-max]` |
+| `--eval-filler-lengths` | `0,32,128,300,600` | Filler lengths for eval mode and the test set |
+| `--cot-mixture` | off | Enable 50/50 CoT + filler pairing (Pfau et al.) |
+| `--n-fewshot` | `5` | Few-shot examples to draw from the fact pool |
+| `--n-fewshot-facts` | `10` | Facts reserved for the few-shot pool (must be ≥ `n-fewshot * 2`) |
+| `--n-train` | `28000` | Training examples |
+| `--n-val` | `600` | Validation examples |
+| `--n-test` | `600` | Test examples | -->
 
 ## Data Format
 
 ### JSONL Structure
 
-Each line in `train.jsonl`/`val.jsonl`/`test.jsonl` contains:
+Each line in `train.jsonl`/`val.jsonl`/`test.jsonl`:
 
 ```json
 {
   "id": "train-0",
   "split": "train",
-  "prompt": "Answer two questions and add the results.\n\nQ1: ...\nQ2: ...",
+  "sequence_type": "filler",
+  "prompt": "<|im_start|>user\n...<|im_end|>\n<|im_start|>assistant\nFiller:",
+  "question": "What is (At what age did Mozart die) + (the atomic number of Helium)?",
   "fact1": "At what age did Mozart die?",
   "fact2": "What is the atomic number of Helium?",
   "a1": 35,
@@ -159,34 +215,40 @@ Each line in `train.jsonl`/`val.jsonl`/`test.jsonl` contains:
   "type1": "age",
   "type2": "atomic",
   "filler_len": 128,
-  "filler_token": "<|fim_pad|>",
-  "filler_token_id": 151665,
-  "input_ids": [151643, 16492, ...],
+  "filler_type": "counting",
+  "input_ids": [151644, 8948, 198, ...],
   "labels": [-100, -100, ..., 220, 1881],
   "attention_mask": [1, 1, 1, ...],
-  "prompt_ids": [16492, 1378, ...],
+  "prompt_ids": [...],
   "answer_ids": [220, 1881, 151645]
 }
 ```
 
+`sequence_type` is `"filler"` for filler examples (loss on answer only) or `"cot"` for chain-of-thought examples (loss on full CoT response). `filler_len` is `0` for the N=0 baseline.
+
 ### Manifest Structure
 
-`manifest.json` contains dataset metadata:
+`manifest.json` stores all metadata needed to reproduce prompts at eval time:
 
 ```json
 {
   "tokenizer": "Qwen/Qwen2.5-7B",
-  "seed": 42,
-  "filler_token": "<|fim_pad|>",
-  "filler_token_id": 151665,
-  "filler_mode": "uniform",
-  "filler_min": 0,
-  "filler_max": 1000,
-  "eval_filler_lengths": [0, 32, 128, 300, 600, 1000],
-  "fact_counts": {"train": 450, "val": 56, "test": 57},
-  "example_counts": {"train": 50000, "val": 2000, "test": 2000},
-  "bos_token_id": 151643,
-  "eos_token_id": 151645
+  "known_facts_source": "data/known_facts_7b/known_facts.json",
+  "prompt_format": "chat_5shot_cot_fewshot_unified",
+  "filler_type": "counting",
+  "cot_mixture": false,
+  "seed": 0,
+  "fewshot_examples": [
+    {"q1": "At what age did X die?", "q2": "What is the atomic number of Y?",
+     "a1": 35, "a2": 2, "sum": 37},
+    "..."
+  ],
+  "n_fewshot": 5,
+  "n_fewshot_facts": 10,
+  "filler_mode": "eval",
+  "eval_filler_lengths": [0, 32, 128, 300, 600],
+  "fact_counts": {"train": 228, "val": 38, "test": 39},
+  "example_counts": {"train": 28000, "val": 600, "test": 600}
 }
 ```
 
@@ -194,27 +256,29 @@ Each line in `train.jsonl`/`val.jsonl`/`test.jsonl` contains:
 
 ```
 filler-token-reasoning/
-├── scripts/                    # Main pipeline scripts
+├── scripts/                        # Main pipeline scripts
 │   ├── fetch_facts.py
 │   ├── generate_2hop_dataset.py
 │   ├── train_lora.py
 │   ├── evaluate.py
-│   └── check_filler_token.py
-├── dev/                        # Development/experimental scripts
-├── data/                       # Created by scripts (gitignored)
-│   ├── sources/                # Fact JSON files
-│   │   ├── age_facts.json
-│   │   ├── atomic_facts.json
-│   │   └── static_facts.json
-│   └── datasets/               # Generated datasets
-│       └── 2hop/
+│   └── evaluate_individual_facts.py 
+├── dev/                            # Development/experimental scripts
+│   └── ...
+├── data/                           # Created by scripts (gitignored)
+│   ├── sources/                    # Raw fact JSON files
+│   ├── known_facts_7b/             # Output of evaluate_individual_facts.py
+│   │   ├── known_facts.json
+│   │   ├── unknown_facts.json
+│   │   └── fact_eval_summary.json
+│   └── datasets/
+│       └── 2hop_add/
 │           ├── train.jsonl
 │           ├── val.jsonl
 │           ├── test.jsonl
 │           ├── manifest.json
 │           └── fact_pools.json
-├── outputs/                    # Training checkpoints (gitignored)
-├── results/                    # Evaluation results (gitignored)
+├── outputs/                        # Training checkpoints (gitignored)
+├── results/                        # Evaluation results (gitignored)
 ├── pyproject.toml
 └── README.md
 ```
@@ -223,3 +287,4 @@ filler-token-reasoning/
 
 - Fact sources: [Ryan Greenblatt's compose_facts](https://github.com/rgreenblatt/compose_facts)
 - Models: [Qwen Team](https://github.com/QwenLM/Qwen2.5)
+- Training data mix inspired by [Pfau et al. (2024)](https://arxiv.org/abs/2404.15758)

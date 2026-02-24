@@ -605,11 +605,21 @@ class DatasetBuilder:
     
     def make_example_from_pair(
         self, pair_idx: int, example_id: int, split: str, sequence_type: str = "filler",
+        filler_len_override: Optional[int] = None,
     ) -> Dict[str, Any]:
         """Generate a single example from a specific pair index.
 
         Unlike make_example, this does NOT advance the internal pair pointer.
-        Used by build_split for CoT mixture where same pair produces two examples.
+        Used by build_split for CoT mixture where same pair produces two examples,
+        and by build_test_split where each pair is repeated at every filler length.
+
+        Args:
+            pair_idx: Index into self.valid_pairs.
+            example_id: Unique ID for this example.
+            split: Dataset split name.
+            sequence_type: "filler" or "cot".
+            filler_len_override: If set, use this exact filler length instead of
+                sampling. Used for test sets where every pair gets every N.
         """
         i, j = self.valid_pairs[pair_idx]
 
@@ -628,6 +638,8 @@ class DatasetBuilder:
 
         if sequence_type == "cot":
             nfill = 0
+        elif filler_len_override is not None:
+            nfill = filler_len_override
         else:
             nfill = sample_filler_len(
                 self.rng,
@@ -685,12 +697,59 @@ class DatasetBuilder:
             "type2": t2,
             "filler_len": nfill,
             "filler_type": "counting" if sequence_type != "cot" else "none",
+            "pair_id": pair_idx,
             "prompt_ids": prompt_ids,
             "answer_ids": answer_ids,
             "input_ids": input_ids,
             "labels": labels,
             "attention_mask": attn,
         }
+
+    def build_test_split(
+        self, n_pairs: int, filler_lengths: List[int], split: str = "test",
+    ) -> List[Dict[str, Any]]:
+        """Build test set: every pair repeated at every filler length.
+
+        This gives paired comparisons — same question at different N values —
+        so accuracy differences can only be attributed to filler length, not
+        question difficulty.
+
+        Args:
+            n_pairs: Number of unique question pairs to use.
+            filler_lengths: List of filler lengths to evaluate at (e.g. [0, 32, 128, 300]).
+            split: Split name (default "test").
+
+        Returns:
+            List of examples. Total count = n_pairs × len(filler_lengths).
+        """
+        if n_pairs > len(self.valid_pairs):
+            raise RuntimeError(
+                f"Requested {n_pairs} test pairs but only "
+                f"{len(self.valid_pairs)} valid pairs available from "
+                f"{len(self.facts)} facts."
+            )
+
+        rows = []
+        example_id = 0
+        for p in range(n_pairs):
+            for n in filler_lengths:
+                row = self.make_example_from_pair(
+                    p, example_id, split,
+                    sequence_type="filler",
+                    filler_len_override=n,
+                )
+                rows.append(row)
+                example_id += 1
+
+            if (p + 1) % 500 == 0:
+                print(f"  Generated pairs {p + 1}/{n_pairs} "
+                      f"× {len(filler_lengths)} filler lengths "
+                      f"= {example_id} examples...")
+
+        self.used_pair_count = n_pairs
+        print(f"  Total: {len(rows)} test examples "
+              f"({n_pairs} pairs × {len(filler_lengths)} filler lengths)")
+        return rows
 
     def build_split(
         self, n: int, split: str, cot_mixture: bool = False,
@@ -757,7 +816,9 @@ def main() -> None:
 
     ap.add_argument("--n-train", type=int, default=28000)
     ap.add_argument("--n-val", type=int, default=600)
-    ap.add_argument("--n-test", type=int, default=600)
+    ap.add_argument("--n-test", type=int, default=200,
+                    help="Number of unique test pairs. Each pair is repeated at every "
+                         "eval filler length, so total test examples = n_test × len(eval_filler_lengths).")
     ap.add_argument("--seed", type=int, default=0)
 
     ap.add_argument("--max-answer", type=int, default=1000, 
@@ -939,13 +1000,15 @@ def main() -> None:
     val_rows = val_builder.build_split(args.n_val, "val", cot_mixture=args.cot_mixture)
     
     print("\nGenerating test data...")
-    # Test set always uses eval filler lengths for clean evaluation
+    print(f"  {args.n_test} unique pairs × {len(eval_filler_lengths)} filler lengths "
+          f"= {args.n_test * len(eval_filler_lengths)} total test examples")
+    # Test set: every pair repeated at every eval filler length for paired comparison
     test_builder = DatasetBuilder(
         facts=test_facts,
         tok=tok,
         fewshot_examples=fewshot_examples,
         max_answer=args.max_answer,
-        filler_mode="eval",  # Always use eval mode for test
+        filler_mode="eval",  # Not used for test (explicit lengths), but required
         filler_min=args.filler_min,
         filler_max=args.filler_max,
         eval_filler_lengths=eval_filler_lengths,
@@ -954,12 +1017,15 @@ def main() -> None:
     
     if args.n_test > test_builder.max_possible_pairs():
         raise SystemExit(
-            f"Cannot generate {args.n_test} test examples: only "
+            f"Cannot generate {args.n_test} test pairs: only "
             f"{test_builder.max_possible_pairs()} valid unique pairs possible "
             f"from {len(test_facts)} facts. Reduce --n-test or add more facts."
         )
     
-    test_rows = test_builder.build_split(args.n_test, "test")
+    test_rows = test_builder.build_test_split(
+        n_pairs=args.n_test,
+        filler_lengths=eval_filler_lengths,
+    )
 
     # Write datasets
     write_jsonl(train_rows, outdir / "train.jsonl")
@@ -1008,6 +1074,12 @@ def main() -> None:
             "val": len(val_rows),
             "test": len(test_rows),
         },
+        "test_design": {
+            "n_pairs": args.n_test,
+            "filler_lengths": eval_filler_lengths,
+            "total_examples": len(test_rows),
+            "note": "Every pair repeated at every filler length for paired comparison",
+        },
         "valid_pairs": {
             "train": train_builder.max_possible_pairs(),
             "val": val_builder.max_possible_pairs(),
@@ -1029,11 +1101,13 @@ def main() -> None:
     print(f"{'='*60}")
     print(f"  train.jsonl: {len(train_rows)} examples")
     print(f"  val.jsonl:   {len(val_rows)} examples")
-    print(f"  test.jsonl:  {len(test_rows)} examples")
+    print(f"  test.jsonl:  {len(test_rows)} examples "
+          f"({args.n_test} pairs × {len(eval_filler_lengths)} filler lengths)")
     print(f"\nFact isolation verified:")
     print(f"  - Train/val/test use completely separate fact pools")
     print(f"  - No duplicate pairs within any split")
-    print(f"\nFiller length distribution in test set:")
+    print(f"  - Test set: same questions at every filler length (paired comparison)")
+    print(f"\nTest set filler length distribution:")
     from collections import Counter
     test_filler_dist = Counter(r["filler_len"] for r in test_rows)
     for fl in sorted(test_filler_dist.keys()):

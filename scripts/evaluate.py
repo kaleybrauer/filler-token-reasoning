@@ -30,6 +30,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 
 from generate_2hop_dataset import (
     build_few_shot_messages,
+    build_filler_prefill,
     build_user_message,
     compose_question,
 )
@@ -391,10 +392,20 @@ def build_prompt_with_filler(
     fewshot_examples: List[Tuple[str, str, int, int, int]],
     repeat_problem: Optional[int] = None,
 ) -> Tuple[List[int], int]:
-    """Build input_ids using chat template.
+    """Build input_ids using chat template with unified prompt format.
     
-    Reconstructs the full prompt from the example's fact1/fact2 fields,
-    builds chat messages with few-shot + test question, and tokenizes.
+    The prompt (instruction + few-shots + user question) is identical for all
+    filler lengths. Filler tokens are placed in the assistant turn as a prefill,
+    matching the position where CoT tokens appear during training. This enables
+    transfer of computation learned from CoT supervision to filler positions.
+    
+    Layout:
+        [few-shot CoT examples]
+        user: [instruction + question]
+        assistant: Filler: 1 2 3 ... N\nAnswer:   ← model generates from here
+    
+    For N=0:
+        assistant: Answer:   ← model generates from here
     
     Args:
         example: Dataset example with "fact1" and "fact2" fields.
@@ -409,29 +420,27 @@ def build_prompt_with_filler(
     """
     q1 = example["fact1"]
     q2 = example["fact2"]
-    filler_tokens = filler_len if filler_len > 0 else None
     
-    # Build few-shot messages
+    # Build few-shot messages (always CoT, identical for all conditions)
     messages = build_few_shot_messages(
         fewshot_examples,
         repeat_problem=repeat_problem,
-        filler_tokens=filler_tokens,
     )
     
-    # Add test question
+    # Add test question (identical user message for all conditions)
     question_text = compose_question(q1, q2)
     user_text = build_user_message(
         question_text,
         repeat_problem=repeat_problem,
-        filler_tokens=filler_tokens,
     )
     messages.append({"role": "user", "content": user_text})
     
-    # Apply chat template with generation prompt, then add "Answer:" prefill
+    # Apply chat template with generation prompt, then prefill assistant turn
+    # with filler tokens + "Answer:" (all in the assistant turn)
     prompt_text = tokenizer.apply_chat_template(
         messages, tokenize=False, add_generation_prompt=True
     )
-    prompt_text += "Answer:"
+    prompt_text += build_filler_prefill(filler_len)
     
     input_ids = tokenizer.encode(prompt_text, add_special_tokens=False)
     

@@ -29,9 +29,8 @@ from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 
 from generate_2hop_dataset import (
-    build_few_shot_messages,
     build_filler_prefill,
-    build_user_message,
+    build_system_prompt,
     compose_question,
 )
 
@@ -196,10 +195,11 @@ def parse_integer_answer(text: str) -> Tuple[Optional[int], bool]:
     except ValueError:
         pass
     
-    # Regex fallback — look for first integer in the text
-    match = re.search(r'-?\d+', text)
-    if match:
-        return int(match.group()), False
+    # Regex fallback — look for LAST integer in the text.
+    # This handles CoT bleed-through like "45 + 14 = 59" → 59 (not 45).
+    matches = re.findall(r'-?\d+', text)
+    if matches:
+        return int(matches[-1]), False
     
     return None, False
 
@@ -216,7 +216,7 @@ class ResultsTracker:
         self.report_every = report_every
         self.results: List[Dict[str, Any]] = []
         self.completed_keys: Set[str] = set()
-        self.stats_by_n: Dict[int, Dict[str, int]] = defaultdict(lambda: {"correct": 0, "total": 0})
+        self.stats_by_n: Dict[int, Dict[str, int]] = defaultdict(lambda: {"correct": 0, "total": 0, "showed_work": 0})
         self.regex_fallback_count = 0
         self.parse_failure_count = 0
         
@@ -243,6 +243,8 @@ class ResultsTracker:
                         self.stats_by_n[n]["total"] += 1
                         if r.get("correct", False):
                             self.stats_by_n[n]["correct"] += 1
+                        if r.get("correct_if_regex", False) and not r.get("correct", False):
+                            self.stats_by_n[n]["showed_work"] += 1
                         count += 1
                     except json.JSONDecodeError:
                         continue
@@ -258,6 +260,8 @@ class ResultsTracker:
         self.stats_by_n[n]["total"] += 1
         if result.get("correct", False):
             self.stats_by_n[n]["correct"] += 1
+        if result.get("correct_if_regex", False) and not result.get("correct", False):
+            self.stats_by_n[n]["showed_work"] += 1
         if result.get("regex_fallback", False):
             self.regex_fallback_count += 1
         if result.get("predicted") is None:
@@ -285,6 +289,8 @@ class ResultsTracker:
                 self.stats_by_n[n]["total"] += 1
                 if result.get("correct", False):
                     self.stats_by_n[n]["correct"] += 1
+                if result.get("correct_if_regex", False) and not result.get("correct", False):
+                    self.stats_by_n[n]["showed_work"] += 1
                 if result.get("regex_fallback", False):
                     self.regex_fallback_count += 1
                 if result.get("predicted") is None:
@@ -308,22 +314,27 @@ class ResultsTracker:
     
     def _print_current_stats(self) -> None:
         total_correct = sum(s["correct"] for s in self.stats_by_n.values())
+        total_showed_work = sum(s["showed_work"] for s in self.stats_by_n.values())
         total_count = sum(s["total"] for s in self.stats_by_n.values())
         if total_count == 0:
             return
         
         overall_acc = total_correct / total_count * 100
-        print(f"\n{'─'*60}")
-        print(f"Progress: {total_count} examples | Overall accuracy: {overall_acc:.2f}%")
-        if self.regex_fallback_count > 0:
-            print(f"  (regex fallback used: {self.regex_fallback_count}, parse failures: {self.parse_failure_count})")
-        print(f"{'─'*60}")
+        print(f"\n{'─'*70}")
+        print(f"Progress: {total_count} examples | Strict accuracy: {overall_acc:.2f}%")
+        if total_showed_work > 0:
+            print(f"  (showed work but correct: {total_showed_work} — not counted)")
+        if self.parse_failure_count > 0:
+            print(f"  (parse failures: {self.parse_failure_count})")
+        print(f"{'─'*70}")
         for n in sorted(self.stats_by_n.keys()):
             stats = self.stats_by_n[n]
             if stats["total"] > 0:
                 acc = stats["correct"] / stats["total"] * 100
-                print(f"  N={n:4d}: {stats['correct']:4d}/{stats['total']:4d} ({acc:6.2f}%)")
-        print(f"{'─'*60}\n")
+                sw = stats["showed_work"]
+                sw_str = f"  +{sw} showed work" if sw > 0 else ""
+                print(f"  N={n:4d}: {stats['correct']:4d}/{stats['total']:4d} ({acc:6.2f}%){sw_str}")
+        print(f"{'─'*70}\n")
     
     def finalize(self) -> None:
         print("\n" + "=" * 60)
@@ -335,6 +346,7 @@ class ResultsTracker:
     
     def _save_summary(self) -> None:
         total_correct = sum(s["correct"] for s in self.stats_by_n.values())
+        total_showed_work = sum(s["showed_work"] for s in self.stats_by_n.values())
         total_count = sum(s["total"] for s in self.stats_by_n.values())
         
         accuracy_by_n = {}
@@ -343,13 +355,16 @@ class ResultsTracker:
                 accuracy_by_n[n] = {
                     "accuracy": stats["correct"] / stats["total"],
                     "correct": stats["correct"],
+                    "showed_work": stats["showed_work"],
                     "total": stats["total"],
                 }
         
         summary = {
             "overall_accuracy": total_correct / total_count if total_count > 0 else 0.0,
             "overall_correct": total_correct,
+            "overall_showed_work": total_showed_work,
             "overall_total": total_count,
+            "scoring": "strict (only bare integers count, visible reasoning rejected)",
             "regex_fallback_count": self.regex_fallback_count,
             "parse_failure_count": self.parse_failure_count,
             "accuracy_by_filler_len": accuracy_by_n,
@@ -361,6 +376,7 @@ class ResultsTracker:
     
     def get_aggregated_results(self) -> Dict[str, Any]:
         total_correct = sum(s["correct"] for s in self.stats_by_n.values())
+        total_showed_work = sum(s["showed_work"] for s in self.stats_by_n.values())
         total_count = sum(s["total"] for s in self.stats_by_n.values())
         
         accuracy_by_n = {}
@@ -369,12 +385,14 @@ class ResultsTracker:
                 accuracy_by_n[n] = {
                     "accuracy": stats["correct"] / stats["total"],
                     "correct": stats["correct"],
+                    "showed_work": stats["showed_work"],
                     "total": stats["total"],
                 }
         
         return {
             "overall_accuracy": total_correct / total_count if total_count > 0 else 0.0,
             "overall_correct": total_correct,
+            "overall_showed_work": total_showed_work,
             "overall_total": total_count,
             "accuracy_by_filler_len": accuracy_by_n,
             "detailed_results": self.results,
@@ -390,18 +408,12 @@ def build_prompt_with_filler(
     filler_len: int,
     tokenizer: Any,
     fewshot_examples: List[Tuple[str, str, int, int, int]],
-    repeat_problem: Optional[int] = None,
 ) -> Tuple[List[int], int]:
-    """Build input_ids using chat template with unified prompt format.
-    
-    The prompt (instruction + few-shots + user question) is identical for all
-    filler lengths. Filler tokens are placed in the assistant turn as a prefill,
-    matching the position where CoT tokens appear during training. This enables
-    transfer of computation learned from CoT supervision to filler positions.
+    """Build input_ids using chat template with system prompt format.
     
     Layout:
-        [few-shot CoT examples]
-        user: [instruction + question]
+        system: instruction + worked examples (identical for all conditions)
+        user: just the question
         assistant: Filler: 1 2 3 ... N\nAnswer:   ← model generates from here
     
     For N=0:
@@ -413,7 +425,6 @@ def build_prompt_with_filler(
         tokenizer: The tokenizer (must support apply_chat_template).
         fewshot_examples: Few-shot (q1, q2, a1, a2, sum) tuples loaded from
             the dataset manifest.
-        repeat_problem: If set, repeat the question this many times.
     
     Returns:
         (input_ids, total_length)
@@ -421,22 +432,12 @@ def build_prompt_with_filler(
     q1 = example["fact1"]
     q2 = example["fact2"]
     
-    # Build few-shot messages (always CoT, identical for all conditions)
-    messages = build_few_shot_messages(
-        fewshot_examples,
-        repeat_problem=repeat_problem,
-    )
-    
-    # Add test question (identical user message for all conditions)
-    question_text = compose_question(q1, q2)
-    user_text = build_user_message(
-        question_text,
-        repeat_problem=repeat_problem,
-    )
-    messages.append({"role": "user", "content": user_text})
+    messages = [
+        {"role": "system", "content": build_system_prompt(fewshot_examples)},
+        {"role": "user", "content": compose_question(q1, q2)},
+    ]
     
     # Apply chat template with generation prompt, then prefill assistant turn
-    # with filler tokens + "Answer:" (all in the assistant turn)
     prompt_text = tokenizer.apply_chat_template(
         messages, tokenize=False, add_generation_prompt=True
     )
@@ -542,7 +543,10 @@ def evaluate_batch(
         
         predicted, was_direct = parse_integer_answer(generated_text)
         expected = ex["answer"]
-        correct = (predicted == expected)
+        # Only count as correct if the model output was JUST the number.
+        # If it showed work (e.g. "45 + 14 = 59"), that's visible reasoning,
+        # not hidden computation in filler tokens — don't reward it.
+        correct = (was_direct and predicted == expected)
         
         results.append({
             "id": ex.get("id", ""),
@@ -556,6 +560,7 @@ def evaluate_batch(
             "a1": ex.get("a1", 0),
             "a2": ex.get("a2", 0),
             "regex_fallback": predicted is not None and not was_direct,
+            "correct_if_regex": (predicted == expected) if predicted is not None else False,
         })
     
     return results

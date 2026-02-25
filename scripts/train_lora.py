@@ -489,6 +489,11 @@ def main():
             ta_kwargs["eval_strategy"] = "steps"
         else:
             ta_kwargs["evaluation_strategy"] = "steps"
+
+    if "seed" in ta_sig:
+        ta_kwargs["seed"] = args.seed
+    if "data_seed" in ta_sig:
+        ta_kwargs["data_seed"] = args.seed
     
     training_args = TrainingArguments(**ta_kwargs)
     

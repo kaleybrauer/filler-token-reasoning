@@ -29,12 +29,12 @@ DEFAULT_EVAL_FILLER_LENGTHS = [0, 32, 128, 300, 600, 1000]
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Prompt format
+#
+# Structure:
+#   system: instruction + worked examples (identical for all conditions)
+#   user:   just the question
+#   assistant: CoT, filler+answer, or direct answer (varies by condition)
 # ─────────────────────────────────────────────────────────────────────────────
-
-INSTRUCTION = (
-    "You will be given a question that requires looking up two facts and "
-    "adding them. Give your final answer using the format 'Answer: [ANSWER]'."
-)
 
 
 def build_cot_response(q1: str, q2: str, a1: int, a2: int, total: int) -> str:
@@ -52,6 +52,48 @@ def build_cot_response(q1: str, q2: str, a1: int, a2: int, total: int) -> str:
     )
 
 
+def _build_worked_example(q1: str, q2: str, a1: int, a2: int, total: int) -> str:
+    """Format a single worked example for the system prompt."""
+    question_text = compose_question(q1, q2)
+    q1_inner = q1.rstrip("? \t")
+    q2_inner = q2.rstrip("? \t")
+    return (
+        f"Q: {question_text}\n"
+        f"Step 1: {q1_inner} = {a1}\n"
+        f"Step 2: {q2_inner} = {a2}\n"
+        f"Calculation: {a1} + {a2} = {total}\n"
+        f"Answer: {total}"
+    )
+
+
+def build_system_prompt(
+    fewshot_examples: List[Tuple[str, str, int, int, int]],
+) -> str:
+    """Build the system prompt with instruction and worked examples.
+
+    This system prompt is IDENTICAL for CoT, filler, and N=0 conditions.
+    Worked examples always show the CoT decomposition strategy so the model
+    learns the parallelizable fact-lookup approach.
+
+    Args:
+        fewshot_examples: List of (q1, q2, a1, a2, sum) tuples.
+    """
+    examples_text = "\n\n".join(
+        _build_worked_example(q1, q2, a1, a2, s)
+        for q1, q2, a1, a2, s in fewshot_examples
+    )
+
+    return (
+        "You answer questions that require looking up two facts and adding them.\n"
+        "\n"
+        "Here are some worked examples:\n"
+        "\n"
+        f"{examples_text}\n"
+        "\n"
+        "The user will ask a similar question. "
+        "Give your final answer as a single integer with 'Answer: [NUMBER]'."
+    )
+
 
 def compose_question(q1: str, q2: str) -> str:
     """Compose two fact questions into a single 2-hop question.
@@ -59,45 +101,88 @@ def compose_question(q1: str, q2: str) -> str:
     Produces the format: "What is ({q1_stripped}) + ({q2_stripped})?"
     E.g. "What is (the number of legs of a cat) + (the number of days in a week)?"
     """
-    # Strip trailing punctuation and whitespace from each question
     q1_inner = q1.rstrip("? \t")
     q2_inner = q2.rstrip("? \t")
-    # Lowercase the first character if it starts with "What/At/How" etc.
-    # to read naturally inside parentheses
-    if q1_inner and q1_inner[0].isupper():
-        # Only lowercase "What is", "At what", etc. — strip leading question word
-        # Actually, keep the original casing for clarity in parentheses
-        pass
     return f"What is ({q1_inner}) + ({q2_inner})?"
 
 
-def build_user_message(
-    question_text: str,
-    repeat_problem: Optional[int] = None,
-) -> str:
-    """Build the user message for a problem.
+def build_filler_response(filler_len: int, answer: int) -> str:
+    """Build assistant response for a filler example.
 
-    The user message is identical for CoT, filler, and N=0 variants —
-    only the assistant response differs. This prevents the model from
-    using instruction text as a shortcut to distinguish modes.
+    Filler tokens occupy the same position as CoT tokens (assistant turn),
+    enabling transfer of computation learned from CoT supervision.
+
+    For N=0, returns just "Answer: {answer}".
+    For N>0, returns "Filler: 1 2 3 ... N\nAnswer: {answer}".
+    """
+    if filler_len == 0:
+        return f"Answer: {answer}"
+    filler = " ".join(str(i) for i in range(1, filler_len + 1))
+    return f"Filler: {filler}\nAnswer: {answer}"
+
+
+def build_filler_prefill(filler_len: int) -> str:
+    """Build the prefill string for a filler example (everything before the answer value).
+
+    This is the text in the assistant turn that is NOT supervised — it gets
+    masked with -100 in labels. At inference time, this is provided as input
+    and the model generates only the answer token(s) after it.
+
+    For N=0, returns "Answer:".
+    For N>0, returns "Filler: 1 2 3 ... N\\nAnswer:".
+    """
+    if filler_len == 0:
+        return "Answer:"
+    filler = " ".join(str(i) for i in range(1, filler_len + 1))
+    return f"Filler: {filler}\nAnswer:"
+
+
+def build_chat_messages(
+    q1: str,
+    q2: str,
+    fewshot_examples: List[Tuple[str, str, int, int, int]],
+    sequence_type: str = "filler",
+    filler_len: int = 0,
+    answer: Optional[int] = None,
+    a1: Optional[int] = None,
+    a2: Optional[int] = None,
+) -> List[Dict[str, str]]:
+    """Build the full chat message list: system + user + assistant.
+
+    The system prompt and user message are IDENTICAL for all sequence types.
+    Only the assistant response differs:
+      - "cot":    Step 1: ... Step 2: ... Calculation: ... Answer: N
+      - "filler": Filler: 1 2 3 ... N\\nAnswer: N   (or just Answer: N if N=0)
 
     Args:
-        question_text: The question string (e.g. "What is (X) + (Y)?")
-        repeat_problem: If set, repeat the question this many times.
+        q1, q2: The two fact questions.
+        fewshot_examples: Few-shot examples as (q1, q2, a1, a2, sum) tuples.
+        sequence_type: "cot" or "filler".
+        filler_len: Number of counting filler tokens (only for sequence_type="filler").
+        answer: If provided, include the assistant's answer (for training).
+        a1, a2: Individual fact answers (required for CoT).
     """
-    def rep_text(idx):
-        if repeat_problem is None or idx == 0:
-            return ""
-        return f" (repeat #{idx + 1})"
+    messages: List[Dict[str, str]] = []
 
-    num_repeats = repeat_problem if repeat_problem is not None else 1
+    # System prompt with instruction + worked examples (identical for all conditions)
+    messages.append({
+        "role": "system",
+        "content": build_system_prompt(fewshot_examples),
+    })
 
-    problem_blocks = []
-    for idx in range(num_repeats):
-        question_line = f"Question{rep_text(idx)}: {question_text}"
-        problem_blocks.append(question_line)
+    # User question (just the question, no instruction)
+    question_text = compose_question(q1, q2)
+    messages.append({"role": "user", "content": question_text})
 
-    return f"{INSTRUCTION}\n\n" + "\n\n".join(problem_blocks)
+    # Assistant response (varies by condition)
+    if answer is not None:
+        if sequence_type == "cot" and a1 is not None and a2 is not None:
+            assistant_text = build_cot_response(q1, q2, a1, a2, answer)
+        else:
+            assistant_text = build_filler_response(filler_len, answer)
+        messages.append({"role": "assistant", "content": assistant_text})
+
+    return messages
 
 
 def select_fewshot_examples(
@@ -168,121 +253,6 @@ def select_fewshot_examples(
         )
 
     return examples, remaining
-
-
-def build_few_shot_messages(
-    few_shot_examples: List[Tuple[str, str, int, int, int]],
-    repeat_problem: Optional[int] = None,
-) -> List[Dict[str, str]]:
-    """Build the few-shot messages as user/assistant pairs.
-
-    Few-shot examples ALWAYS show CoT responses, regardless of whether the
-    actual training example uses CoT, filler, or N=0. This ensures:
-    1. The model sees the parallelizable decomposition strategy
-    2. The prompt is identical across all conditions (no shortcutting)
-    3. CoT supervision teaches computation that transfers to filler positions
-
-    Args:
-        few_shot_examples: List of (q1, q2, a1, a2, sum) tuples.
-        repeat_problem: If set, repeat the question in each example.
-    """
-    messages: List[Dict[str, str]] = []
-
-    for q1, q2, a1, a2, s in few_shot_examples:
-        question_text = compose_question(q1, q2)
-        user_text = build_user_message(
-            question_text,
-            repeat_problem=repeat_problem,
-        )
-        messages.append({"role": "user", "content": user_text})
-
-        # Always show CoT in few-shot examples
-        assistant_text = build_cot_response(q1, q2, a1, a2, s)
-        messages.append({"role": "assistant", "content": assistant_text})
-
-    return messages
-
-
-def build_filler_response(filler_len: int, answer: int) -> str:
-    """Build assistant response for a filler example.
-
-    Filler tokens occupy the same position as CoT tokens (assistant turn),
-    enabling transfer of computation learned from CoT supervision.
-
-    For N=0, returns just "Answer: {answer}".
-    For N>0, returns "Filler: 1 2 3 ... N\nAnswer: {answer}".
-    """
-    if filler_len == 0:
-        return f"Answer: {answer}"
-    filler = " ".join(str(i) for i in range(1, filler_len + 1))
-    return f"Filler: {filler}\nAnswer: {answer}"
-
-
-def build_filler_prefill(filler_len: int) -> str:
-    """Build the prefill string for a filler example (everything before the answer value).
-
-    This is the text in the assistant turn that is NOT supervised — it gets
-    masked with -100 in labels. At inference time, this is provided as input
-    and the model generates only the answer token(s) after it.
-
-    For N=0, returns "Answer:".
-    For N>0, returns "Filler: 1 2 3 ... N\nAnswer:".
-    """
-    if filler_len == 0:
-        return "Answer:"
-    filler = " ".join(str(i) for i in range(1, filler_len + 1))
-    return f"Filler: {filler}\nAnswer:"
-
-
-def build_chat_messages(
-    q1: str,
-    q2: str,
-    fewshot_examples: List[Tuple[str, str, int, int, int]],
-    repeat_problem: Optional[int] = None,
-    sequence_type: str = "filler",
-    filler_len: int = 0,
-    answer: Optional[int] = None,
-    a1: Optional[int] = None,
-    a2: Optional[int] = None,
-) -> List[Dict[str, str]]:
-    """Build the full chat message list (few-shot + test problem).
-
-    The user message and few-shot context are IDENTICAL for all sequence types.
-    Only the assistant response differs:
-      - "cot":    Step 1: ... Step 2: ... Calculation: ... Answer: N
-      - "filler": Filler: 1 2 3 ... N\nAnswer: N   (or just Answer: N if N=0)
-
-    Args:
-        q1, q2: The two fact questions.
-        fewshot_examples: Few-shot examples as (q1, q2, a1, a2, sum) tuples.
-        repeat_problem: If set, repeat the question this many times.
-        sequence_type: "cot" or "filler".
-        filler_len: Number of counting filler tokens (only used when sequence_type="filler").
-        answer: If provided, include the assistant's answer (for training).
-        a1, a2: Individual fact answers (required for CoT).
-    """
-    # Few-shot messages — always CoT, identical across all conditions
-    messages = build_few_shot_messages(
-        fewshot_examples,
-        repeat_problem=repeat_problem,
-    )
-
-    # Test question — identical user message for all conditions
-    question_text = compose_question(q1, q2)
-    user_text = build_user_message(
-        question_text,
-        repeat_problem=repeat_problem,
-    )
-    messages.append({"role": "user", "content": user_text})
-
-    if answer is not None:
-        if sequence_type == "cot" and a1 is not None and a2 is not None:
-            assistant_text = build_cot_response(q1, q2, a1, a2, answer)
-        else:
-            assistant_text = build_filler_response(filler_len, answer)
-        messages.append({"role": "assistant", "content": assistant_text})
-
-    return messages
 
 
 def load_known_facts(path: pathlib.Path) -> List[Tuple[str, int, str]]:
@@ -867,7 +837,7 @@ def main() -> None:
     # Report BOS/EOS tokens
     print(f"BOS token: {tok.bos_token!r} (id={tok.bos_token_id})")
     print(f"EOS token: {tok.eos_token!r} (id={tok.eos_token_id})")
-    print(f"Filler type: counting tokens in assistant turn (unified prompt, CoT few-shots)")
+    print(f"Filler type: counting tokens in assistant turn (system prompt with worked examples)")
 
     # Load known facts
     known_path = pathlib.Path(args.known_facts)
@@ -1044,7 +1014,7 @@ def main() -> None:
     manifest = {
         "tokenizer": args.tokenizer,
         "known_facts_source": str(args.known_facts),
-        "prompt_format": "chat_5shot_cot_fewshot_unified",
+        "prompt_format": "system_prompt_with_examples",
         "filler_type": "counting",
         "cot_mixture": args.cot_mixture,
         "seed": args.seed,

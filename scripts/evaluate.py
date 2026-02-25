@@ -414,14 +414,14 @@ def build_prompt_with_filler(
     Layout:
         system: instruction + worked examples (identical for all conditions)
         user: just the question
-        assistant: Filler: 1 2 3 ... N\nAnswer:   ← model generates from here
+        assistant: Filler: . . . (N dots)\nAnswer:   ← model generates from here
     
     For N=0:
         assistant: Answer:   ← model generates from here
     
     Args:
         example: Dataset example with "fact1" and "fact2" fields.
-        filler_len: Number of counting steps (0 = no filler).
+        filler_len: Number of dot filler items (0 = no filler).
         tokenizer: The tokenizer (must support apply_chat_template).
         fewshot_examples: Few-shot (q1, q2, a1, a2, sum) tuples loaded from
             the dataset manifest.

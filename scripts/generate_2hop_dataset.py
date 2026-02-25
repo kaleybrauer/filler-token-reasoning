@@ -9,7 +9,7 @@ Generate 2-hop arithmetic dataset for opaque reasoner experiments.
     * Same instruction + few-shot context for ALL variants
     * Few-shot examples always show CoT (parallelizable decomposition)
     * CoT training: assistant produces full CoT, loss on all tokens
-    * Filler training: assistant produces "Filler: 1 2 ... N\nAnswer: X",
+    * Filler training: assistant produces "Filler: . . . (N dots)\nAnswer: X",
       loss only on answer tokens (filler is in assistant turn, same position
       as CoT, enabling transfer of learned computation)
     * N=0 baseline: assistant produces "Answer: X", loss on answer only
@@ -106,6 +106,11 @@ def compose_question(q1: str, q2: str) -> str:
     return f"What is ({q1_inner}) + ({q2_inner})?"
 
 
+def _build_dot_filler(filler_len: int) -> str:
+    """Build dot filler text with exactly filler_len dots."""
+    return " ".join(["."] * filler_len)
+
+
 def build_filler_response(filler_len: int, answer: int) -> str:
     """Build assistant response for a filler example.
 
@@ -113,11 +118,11 @@ def build_filler_response(filler_len: int, answer: int) -> str:
     enabling transfer of computation learned from CoT supervision.
 
     For N=0, returns just "Answer: {answer}".
-    For N>0, returns "Filler: 1 2 3 ... N\nAnswer: {answer}".
+    For N>0, returns "Filler: . . . (N dots)\nAnswer: {answer}".
     """
     if filler_len == 0:
         return f"Answer: {answer}"
-    filler = " ".join(str(i) for i in range(1, filler_len + 1))
+    filler = _build_dot_filler(filler_len)
     return f"Filler: {filler}\nAnswer: {answer}"
 
 
@@ -129,11 +134,11 @@ def build_filler_prefill(filler_len: int) -> str:
     and the model generates only the answer token(s) after it.
 
     For N=0, returns "Answer:".
-    For N>0, returns "Filler: 1 2 3 ... N\\nAnswer:".
+    For N>0, returns "Filler: . . . (N dots)\\nAnswer:".
     """
     if filler_len == 0:
         return "Answer:"
-    filler = " ".join(str(i) for i in range(1, filler_len + 1))
+    filler = _build_dot_filler(filler_len)
     return f"Filler: {filler}\nAnswer:"
 
 
@@ -152,13 +157,13 @@ def build_chat_messages(
     The system prompt and user message are IDENTICAL for all sequence types.
     Only the assistant response differs:
       - "cot":    Step 1: ... Step 2: ... Calculation: ... Answer: N
-      - "filler": Filler: 1 2 3 ... N\\nAnswer: N   (or just Answer: N if N=0)
+      - "filler": Filler: . . . (N dots)\\nAnswer: N   (or just Answer: N if N=0)
 
     Args:
         q1, q2: The two fact questions.
         fewshot_examples: Few-shot examples as (q1, q2, a1, a2, sum) tuples.
         sequence_type: "cot" or "filler".
-        filler_len: Number of counting filler tokens (only for sequence_type="filler").
+        filler_len: Number of dot filler items (only for sequence_type="filler").
         answer: If provided, include the assistant's answer (for training).
         a1, a2: Individual fact answers (required for CoT).
     """
@@ -565,7 +570,7 @@ class DatasetBuilder:
             "type1": t1,
             "type2": t2,
             "filler_len": nfill,
-            "filler_type": "counting" if sequence_type != "cot" else "none",
+            "filler_type": "dots" if sequence_type != "cot" else "none",
             "prompt_ids": prompt_ids,
             "answer_ids": answer_ids,
             "input_ids": input_ids,
@@ -666,7 +671,7 @@ class DatasetBuilder:
             "type1": t1,
             "type2": t2,
             "filler_len": nfill,
-            "filler_type": "counting" if sequence_type != "cot" else "none",
+            "filler_type": "dots" if sequence_type != "cot" else "none",
             "pair_id": pair_idx,
             "prompt_ids": prompt_ids,
             "answer_ids": answer_ids,
@@ -837,7 +842,7 @@ def main() -> None:
     # Report BOS/EOS tokens
     print(f"BOS token: {tok.bos_token!r} (id={tok.bos_token_id})")
     print(f"EOS token: {tok.eos_token!r} (id={tok.eos_token_id})")
-    print(f"Filler type: counting tokens in assistant turn (system prompt with worked examples)")
+    print(f"Filler type: dot filler in assistant turn (system prompt with worked examples)")
 
     # Load known facts
     known_path = pathlib.Path(args.known_facts)
@@ -890,9 +895,9 @@ def main() -> None:
 
     print(f"\nFiller mode: {args.filler_mode}")
     if args.filler_mode == "uniform":
-        print(f"  Range: [{args.filler_min}, {args.filler_max}] counting steps")
+        print(f"  Range: [{args.filler_min}, {args.filler_max}] dot counts")
     else:
-        print(f"  Values: {eval_filler_lengths} counting steps")
+        print(f"  Values: {eval_filler_lengths} dot counts")
 
     if args.cot_mixture:
         print(f"\nCoT mixture: ENABLED (50/50 CoT + filler for same problems)")
@@ -1015,7 +1020,7 @@ def main() -> None:
         "tokenizer": args.tokenizer,
         "known_facts_source": str(args.known_facts),
         "prompt_format": "system_prompt_with_examples",
-        "filler_type": "counting",
+        "filler_type": "dots",
         "cot_mixture": args.cot_mixture,
         "seed": args.seed,
         "max_answer": args.max_answer,

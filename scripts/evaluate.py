@@ -159,9 +159,8 @@ def load_model_and_tokenizer(
             raise ImportError("peft is required to load LoRA adapters. Run: pip install peft")
         print(f"Loading LoRA adapter from {adapter_path}")
         model = PeftModel.from_pretrained(model, adapter_path)
-        # Merge for faster inference. Note: this is irreversible on this model instance.
-        model = model.merge_and_unload()
-        print("LoRA adapter merged into base weights (irreversible on this instance)")
+        # Do NOT call merge_and_unload() with quantized models
+        print("LoRA adapter loaded (unmerged, inference mode)")
     
     model.eval()
     

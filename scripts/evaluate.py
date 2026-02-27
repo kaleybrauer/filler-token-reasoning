@@ -839,6 +839,14 @@ def main():
     dataset = load_dataset("json", data_files=str(data_file), split="train")
     print(f"Loaded {len(dataset)} examples")
     
+    # Filter out any CoT examples (only meaningful for filler-based evaluation)
+    if "sequence_type" in dataset.column_names:
+        n_before = len(dataset)
+        dataset = dataset.filter(lambda ex: ex["sequence_type"] != "cot")
+        n_cot = n_before - len(dataset)
+        if n_cot > 0:
+            print(f"Filtered out {n_cot} CoT examples, {len(dataset)} filler examples remaining")
+    
     # Load manifest for metadata and few-shot examples
     manifest_file = data_dir / "manifest.json"
     manifest = {}

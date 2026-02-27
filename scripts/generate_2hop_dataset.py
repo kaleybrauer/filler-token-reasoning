@@ -728,42 +728,65 @@ class DatasetBuilder:
 
     def build_split(
         self, n: int, split: str, cot_mixture: bool = False,
+        cot_fraction: float = 0.25,
     ) -> List[Dict[str, Any]]:
         """Build n examples for a split.
 
         Args:
             n: Number of examples to generate.
             split: Split name ("train", "val", "test").
-            cot_mixture: If True, generate paired CoT + filler examples for each
-                problem. Each unique fact pair produces one CoT example and one
-                filler example. Uses n/2 pairs to produce n total examples.
-                The CoT examples have no filler and loss on the full CoT response.
-                The filler examples are the standard format with loss on answer only.
+            cot_mixture: If True, generate a mix of CoT + filler examples.
+            cot_fraction: Fraction of total examples that are CoT (default 0.25).
+                Each CoT pair produces 1 CoT + 1 paired filler example.
+                Remaining quota is filled with filler-only from additional pairs.
+                E.g. n=28000, cot_fraction=0.25 -> 7000 CoT + 7000 paired filler
+                + 14000 filler-only = 28000 total (using 21000 unique pairs).
         """
         rows = []
         if cot_mixture:
-            n_pairs = n // 2
-            if n_pairs > len(self.valid_pairs):
+            n_cot = int(n * cot_fraction)
+            # Each CoT pair produces 2 examples (1 CoT + 1 paired filler)
+            n_filler_only = n - (n_cot * 2)
+            if n_filler_only < 0:
+                # cot_fraction > 0.5: cap so paired examples don't exceed n
+                n_cot = n // 2
+                n_filler_only = 0
+            total_pairs_needed = n_cot + n_filler_only
+            if total_pairs_needed > len(self.valid_pairs):
                 raise RuntimeError(
-                    f"CoT mixture needs {n_pairs} pairs but only "
+                    f"CoT mixture needs {total_pairs_needed} unique pairs but only "
                     f"{len(self.valid_pairs)} valid pairs available."
                 )
             example_id = 0
-            for p in range(n_pairs):
-                # CoT variant for this pair
+
+            # Phase 1: paired CoT + filler (same question, both treatments)
+            for p in range(n_cot):
                 cot_row = self.make_example_from_pair(p, example_id, split, "cot")
                 rows.append(cot_row)
                 example_id += 1
 
-                # Filler variant for the same pair
                 filler_row = self.make_example_from_pair(p, example_id, split, "filler")
                 rows.append(filler_row)
                 example_id += 1
 
-                if (example_id) % 10000 == 0:
-                    print(f"  Generated {example_id}/{n} {split} examples (CoT mixture)...")
+                if example_id % 10000 == 0:
+                    print(f"  Generated {example_id}/{n} {split} examples (CoT pairs)...")
 
-            self.used_pair_count = n_pairs
+            # Phase 2: filler-only from new pairs
+            for p in range(n_cot, n_cot + n_filler_only):
+                filler_row = self.make_example_from_pair(p, example_id, split, "filler")
+                rows.append(filler_row)
+                example_id += 1
+
+                if example_id % 10000 == 0:
+                    print(f"  Generated {example_id}/{n} {split} examples (filler-only)...")
+
+            self.used_pair_count = total_pairs_needed
+            actual_cot = n_cot
+            actual_filler = n_cot + n_filler_only
+            print(f"  Mix: {actual_cot} CoT ({actual_cot/len(rows)*100:.1f}%) + "
+                  f"{actual_filler} filler ({actual_filler/len(rows)*100:.1f}%) "
+                  f"= {len(rows)} total from {total_pairs_needed} unique pairs")
             # Shuffle so CoT and filler examples are interleaved randomly
             self.rng.shuffle(rows)
         else:
@@ -821,14 +844,23 @@ def main() -> None:
                          "Must be large enough to yield --n-fewshot valid pairs.")
 
     ap.add_argument("--cot-mixture", action="store_true", default=False,
-                    help="Enable 50/50 CoT + filler mixture (Pfau et al. style). "
-                         "Each fact pair produces two training examples: one with "
-                         "chain-of-thought in assistant turn (loss on full CoT) and one "
-                         "with filler tokens in assistant turn (loss on answer only). "
-                         "Both use identical instruction + few-shot context. "
-                         "Uses n/2 pairs for n total examples.")
+                    help="Enable CoT + filler mixture (Pfau et al. style). "
+                         "The fraction of CoT examples is controlled by --cot-fraction. "
+                         "Each CoT pair produces one CoT + one paired filler example. "
+                         "Remaining quota filled with filler-only examples from new pairs.")
+    ap.add_argument("--cot-fraction", type=float, default=0.25,
+                    help="Fraction of training examples that are CoT (default: 0.25). "
+                         "Each CoT pair also produces a paired filler example, so "
+                         "e.g. 0.25 means 25%% CoT + 75%% filler. Only with --cot-mixture.")
 
     args = ap.parse_args()
+
+    if args.cot_mixture and not (0.0 < args.cot_fraction <= 0.5):
+        raise SystemExit(
+            f"--cot-fraction must be in (0, 0.5], got {args.cot_fraction}. "
+            f"Values above 0.5 are not supported because each CoT pair also "
+            f"produces a paired filler example."
+        )
 
     rng = random.Random(args.seed)
     
@@ -900,7 +932,9 @@ def main() -> None:
         print(f"  Values: {eval_filler_lengths} dot counts")
 
     if args.cot_mixture:
-        print(f"\nCoT mixture: ENABLED (50/50 CoT + filler for same problems)")
+        cot_pct = args.cot_fraction * 100
+        filler_pct = 100 - cot_pct
+        print(f"\nCoT mixture: ENABLED ({cot_pct:.0f}% CoT / {filler_pct:.0f}% filler)")
         print(f"  Same instruction + few-shots for both (Pfau et al. style)")
         print(f"  CoT examples: full CoT in assistant turn, loss on all tokens")
         print(f"  Filler examples: filler in assistant turn, loss on answer only")
@@ -925,8 +959,12 @@ def main() -> None:
     
     # Check capacity before generating
     if args.cot_mixture:
-        # CoT mixture uses n/2 pairs per n examples
-        needed_train_pairs = args.n_train // 2
+        n_cot_train = int(args.n_train * args.cot_fraction)
+        n_filler_only_train = args.n_train - (n_cot_train * 2)
+        if n_filler_only_train < 0:
+            n_cot_train = args.n_train // 2
+            n_filler_only_train = 0
+        needed_train_pairs = n_cot_train + n_filler_only_train
         if needed_train_pairs > train_builder.max_possible_pairs():
             raise SystemExit(
                 f"CoT mixture needs {needed_train_pairs} pairs but only "
@@ -941,7 +979,8 @@ def main() -> None:
                 f"from {len(train_facts)} facts. Reduce --n-train or add more facts."
             )
     
-    train_rows = train_builder.build_split(args.n_train, "train", cot_mixture=args.cot_mixture)
+    train_rows = train_builder.build_split(args.n_train, "train", cot_mixture=args.cot_mixture,
+                                          cot_fraction=args.cot_fraction)
     
     print("\nGenerating validation data...")
     val_builder = DatasetBuilder(
@@ -957,7 +996,12 @@ def main() -> None:
     )
     
     if args.cot_mixture:
-        needed_val_pairs = args.n_val // 2
+        n_cot_val = int(args.n_val * args.cot_fraction)
+        n_filler_only_val = args.n_val - (n_cot_val * 2)
+        if n_filler_only_val < 0:
+            n_cot_val = args.n_val // 2
+            n_filler_only_val = 0
+        needed_val_pairs = n_cot_val + n_filler_only_val
         if needed_val_pairs > val_builder.max_possible_pairs():
             raise SystemExit(
                 f"CoT mixture needs {needed_val_pairs} val pairs but only "
@@ -972,7 +1016,8 @@ def main() -> None:
                 f"from {len(val_facts)} facts. Reduce --n-val or add more facts."
             )
     
-    val_rows = val_builder.build_split(args.n_val, "val", cot_mixture=args.cot_mixture)
+    val_rows = val_builder.build_split(args.n_val, "val", cot_mixture=args.cot_mixture,
+                                      cot_fraction=args.cot_fraction)
     
     print("\nGenerating test data...")
     print(f"  {args.n_test} unique pairs × {len(eval_filler_lengths)} filler lengths "
@@ -1022,6 +1067,7 @@ def main() -> None:
         "prompt_format": "system_prompt_with_examples",
         "filler_type": "dots",
         "cot_mixture": args.cot_mixture,
+        "cot_fraction": args.cot_fraction if args.cot_mixture else None,
         "seed": args.seed,
         "max_answer": args.max_answer,
         "fewshot_examples": [

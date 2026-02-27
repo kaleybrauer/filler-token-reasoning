@@ -430,6 +430,7 @@ def main():
         max_grad_norm=1.0,
         group_by_length=use_length_grouping,  # Group similar lengths to minimize padding
         length_column_name="length" if use_length_grouping else None,
+        weight_decay=0.01,
     )
     
     # Configure wandb or disable reporting

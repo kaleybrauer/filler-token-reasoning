@@ -319,6 +319,10 @@ def main():
     parser.add_argument("--save-steps", type=int, default=100, help="Checkpoint frequency")
     parser.add_argument("--logging-steps", type=int, default=10, help="Logging frequency")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
+    parser.add_argument("--resume-from", type=str, default=None,
+                        help="Resume training from a checkpoint directory "
+                             "(e.g. outputs/lr_2e-5/checkpoint-300). "
+                             "Pass 'latest' to auto-detect the latest checkpoint in --outdir.")
     
     # LoRA
     parser.add_argument("--lora-r", type=int, default=64, help="LoRA rank")
@@ -550,7 +554,27 @@ def main():
         print(f"\nMemory before training: {mem_alloc:.2f} GB allocated, {mem_reserved:.2f} GB reserved")
     
     print("\nStarting training...")
-    trainer.train()
+    
+    # Resolve checkpoint for resuming
+    resume_checkpoint = None
+    if args.resume_from:
+        if args.resume_from.lower() == "latest":
+            # Auto-detect latest checkpoint in outdir
+            import glob
+            checkpoints = sorted(
+                glob.glob(str(outdir / "checkpoint-*")),
+                key=lambda x: int(x.rsplit("-", 1)[-1]),
+            )
+            if checkpoints:
+                resume_checkpoint = checkpoints[-1]
+                print(f"Resuming from latest checkpoint: {resume_checkpoint}")
+            else:
+                print(f"Warning: --resume-from=latest but no checkpoints found in {outdir}. Starting fresh.")
+        else:
+            resume_checkpoint = args.resume_from
+            print(f"Resuming from checkpoint: {resume_checkpoint}")
+    
+    trainer.train(resume_from_checkpoint=resume_checkpoint)
     
     print(f"\nSaving model to {outdir}")
     trainer.save_model(str(outdir))

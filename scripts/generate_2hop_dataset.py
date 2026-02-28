@@ -728,7 +728,7 @@ class DatasetBuilder:
 
     def build_split(
         self, n: int, split: str, cot_mixture: bool = False,
-        cot_fraction: float = 0.25,
+        cot_fraction: float = 0.5,
     ) -> List[Dict[str, Any]]:
         """Build n examples for a split.
 
@@ -736,7 +736,7 @@ class DatasetBuilder:
             n: Number of examples to generate.
             split: Split name ("train", "val", "test").
             cot_mixture: If True, generate a mix of CoT + filler examples.
-            cot_fraction: Fraction of total examples that are CoT (default 0.25).
+            cot_fraction: Fraction of total examples that are CoT (default 0.5).
                 Each CoT pair produces 1 CoT + 1 paired filler example.
                 Remaining quota is filled with filler-only from additional pairs.
                 E.g. n=28000, cot_fraction=0.25 -> 7000 CoT + 7000 paired filler
@@ -848,10 +848,8 @@ def main() -> None:
                          "The fraction of CoT examples is controlled by --cot-fraction. "
                          "Each CoT pair produces one CoT + one paired filler example. "
                          "Remaining quota filled with filler-only examples from new pairs.")
-    ap.add_argument("--cot-fraction", type=float, default=0.25,
-                    help="Fraction of training examples that are CoT (default: 0.25). "
-                         "Each CoT pair also produces a paired filler example, so "
-                         "e.g. 0.25 means 25%% CoT + 75%% filler. Only with --cot-mixture.")
+    ap.add_argument("--cot-fraction", type=float, default=0.5,
+                    help="Fraction of training examples that are CoT (default: 0.5). ")
 
     args = ap.parse_args()
 

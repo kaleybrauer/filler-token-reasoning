@@ -6,6 +6,7 @@ Supports pre-tokenized JSONL with mixed filler lengths.
 import argparse
 import inspect
 import json
+import os
 import pathlib
 from typing import Any, Dict, List, Optional
 import random
@@ -31,6 +32,11 @@ except ImportError:
 # ─────────────────────────────────────────────────────────────────────────────
 # Configuration
 # ─────────────────────────────────────────────────────────────────────────────
+
+def is_main_process() -> bool:
+    """Return True only on rank-0 process (covers single-GPU and torchrun DDP)."""
+    return int(os.environ.get("RANK", 0)) == 0
+
 
 USE_BF16 = torch.cuda.is_available() and torch.cuda.is_bf16_supported()
 DTYPE = torch.bfloat16 if USE_BF16 else torch.float16
@@ -452,30 +458,31 @@ def main():
             
             ta_kwargs["run_name"] = run_name
             
-            # Initialize wandb
-            wandb.init(
-                project=args.wandb_project,
-                entity=args.wandb_entity,
-                name=run_name,
-                config={
-                    "model": args.model,
-                    "filler_lengths": filler_lengths,
-                    "lora_r": args.lora_r,
-                    "lora_alpha": args.lora_alpha,
-                    "lora_dropout": args.lora_dropout,
-                    "learning_rate": args.lr,
-                    "batch_size": args.batch_size,
-                    "grad_accum": args.grad_accum,
-                    "effective_batch_size": args.batch_size * args.grad_accum,
-                    "epochs": args.epochs,
-                    "max_steps": args.max_steps,
-                    "train_examples": len(train_dataset),
-                    "eval_examples": len(eval_dataset) if eval_dataset else 0,
-                    "gradient_checkpointing": use_grad_ckpt,
-                    "quantization": "4bit" if args.load_in_4bit else ("8bit" if args.load_in_8bit else "none"),
-                },
-            )
-            print(f"Weights & Biases run: {run_name}")
+            # Initialize wandb on rank 0 only; other ranks must not create runs.
+            if is_main_process():
+                wandb.init(
+                    project=args.wandb_project,
+                    entity=args.wandb_entity,
+                    name=run_name,
+                    config={
+                        "model": args.model,
+                        "filler_lengths": filler_lengths,
+                        "lora_r": args.lora_r,
+                        "lora_alpha": args.lora_alpha,
+                        "lora_dropout": args.lora_dropout,
+                        "learning_rate": args.lr,
+                        "batch_size": args.batch_size,
+                        "grad_accum": args.grad_accum,
+                        "effective_batch_size": args.batch_size * args.grad_accum,
+                        "epochs": args.epochs,
+                        "max_steps": args.max_steps,
+                        "train_examples": len(train_dataset),
+                        "eval_examples": len(eval_dataset) if eval_dataset else 0,
+                        "gradient_checkpointing": use_grad_ckpt,
+                        "quantization": "4bit" if args.load_in_4bit else ("8bit" if args.load_in_8bit else "none"),
+                    },
+                )
+                print(f"Weights & Biases run: {run_name}")
     else:
         ta_kwargs["report_to"] = "none"
     
@@ -551,9 +558,8 @@ def main():
     with open(outdir / "training_config.json", "w") as f:
         json.dump(config, f, indent=2)
     
-    # Log model artifact to wandb
-    if args.wandb and WANDB_AVAILABLE:
-        # Log the adapter as an artifact
+    # Log model artifact to wandb (rank 0 only)
+    if args.wandb and WANDB_AVAILABLE and is_main_process():
         artifact = wandb.Artifact(
             name=f"lora-adapter-{wandb.run.id}",
             type="model",
@@ -563,7 +569,6 @@ def main():
         artifact.add_dir(str(outdir))
         wandb.log_artifact(artifact)
         
-        # Finish the run
         wandb.finish()
         print("Weights & Biases run finished and artifact uploaded.")
     

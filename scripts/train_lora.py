@@ -194,8 +194,16 @@ def load_model_and_tokenizer(
         trust_remote_code=trust_remote_code,
     )
     
-    # Always use device_map for proper Flash Attention and multi-GPU support
-    model_kwargs["device_map"] = "auto"
+    # Use device_map for proper Flash Attention and multi-GPU support.
+    # "balanced" distributes layers evenly across GPUs (unlike "auto" which
+    # greedily fills GPU 0 first — problematic when the 4-bit model fits on
+    # one GPU but training overhead doesn't).
+    n_gpus = torch.cuda.device_count()
+    if n_gpus > 1:
+        model_kwargs["device_map"] = "balanced"
+        print(f"  Multi-GPU: balanced distribution across {n_gpus} GPUs")
+    else:
+        model_kwargs["device_map"] = "auto"
     
     # Determine attention implementation before loading (don't load multiple times)
     attn_impl = None

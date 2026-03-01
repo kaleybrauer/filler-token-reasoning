@@ -111,22 +111,34 @@ def _build_dot_filler(filler_len: int) -> str:
     return " ".join(["."] * filler_len)
 
 
-def build_filler_response(filler_len: int, answer: int) -> str:
+def _build_counting_filler(filler_len: int) -> str:
+    """Build counting filler text: '1 2 3 ... N'."""
+    return " ".join(str(i) for i in range(1, filler_len + 1))
+
+
+def _build_filler(filler_len: int, filler_type: str = "dots") -> str:
+    """Build filler text of the given type."""
+    if filler_type == "counting":
+        return _build_counting_filler(filler_len)
+    return _build_dot_filler(filler_len)
+
+
+def build_filler_response(filler_len: int, answer: int, filler_type: str = "dots") -> str:
     """Build assistant response for a filler example.
 
     Filler tokens occupy the same position as CoT tokens (assistant turn),
     enabling transfer of computation learned from CoT supervision.
 
     For N=0, returns just "Answer: {answer}".
-    For N>0, returns "Filler: . . . (N dots)\nAnswer: {answer}".
+    For N>0, returns "Filler: <filler tokens>\nAnswer: {answer}".
     """
     if filler_len == 0:
         return f"Answer: {answer}"
-    filler = _build_dot_filler(filler_len)
+    filler = _build_filler(filler_len, filler_type)
     return f"Filler: {filler}\nAnswer: {answer}"
 
 
-def build_filler_prefill(filler_len: int) -> str:
+def build_filler_prefill(filler_len: int, filler_type: str = "dots") -> str:
     """Build the prefill string for a filler example (everything before the answer value).
 
     This is the text in the assistant turn that is NOT supervised — it gets
@@ -134,11 +146,11 @@ def build_filler_prefill(filler_len: int) -> str:
     and the model generates only the answer token(s) after it.
 
     For N=0, returns "Answer:".
-    For N>0, returns "Filler: . . . (N dots)\\nAnswer:".
+    For N>0, returns "Filler: <filler tokens>\\nAnswer:".
     """
     if filler_len == 0:
         return "Answer:"
-    filler = _build_dot_filler(filler_len)
+    filler = _build_filler(filler_len, filler_type)
     return f"Filler: {filler}\nAnswer:"
 
 
@@ -151,6 +163,7 @@ def build_chat_messages(
     answer: Optional[int] = None,
     a1: Optional[int] = None,
     a2: Optional[int] = None,
+    filler_type: str = "dots",
 ) -> List[Dict[str, str]]:
     """Build the full chat message list: system + user + assistant.
 
@@ -184,7 +197,7 @@ def build_chat_messages(
         if sequence_type == "cot" and a1 is not None and a2 is not None:
             assistant_text = build_cot_response(q1, q2, a1, a2, answer)
         else:
-            assistant_text = build_filler_response(filler_len, answer)
+            assistant_text = build_filler_response(filler_len, answer, filler_type)
         messages.append({"role": "assistant", "content": assistant_text})
 
     return messages
@@ -452,6 +465,7 @@ class DatasetBuilder:
         filler_max: int,
         eval_filler_lengths: List[int],
         rng: random.Random,
+        filler_type: str = "dots",
     ):
         self.facts = facts
         self.tok = tok
@@ -462,6 +476,7 @@ class DatasetBuilder:
         self.filler_max = filler_max
         self.eval_filler_lengths = eval_filler_lengths
         self.rng = rng
+        self.filler_type = filler_type
         
         # Pre-generate all valid pairs
         print(f"  Pre-generating valid pairs from {len(facts)} facts...")
@@ -528,6 +543,7 @@ class DatasetBuilder:
             answer=s,
             a1=a1,
             a2=a2,
+            filler_type=self.filler_type,
         )
         
         # Build chat messages WITHOUT answer (for prompt / generation)
@@ -537,6 +553,7 @@ class DatasetBuilder:
             sequence_type=sequence_type,
             filler_len=nfill,
             answer=None,
+            filler_type=self.filler_type,
         )
         
         # Determine the prefill (masked portion of assistant turn)
@@ -545,7 +562,7 @@ class DatasetBuilder:
             prefill = ""
         else:
             # Filler: prefill includes filler tokens + "Answer:", loss on answer only
-            prefill = build_filler_prefill(nfill)
+            prefill = build_filler_prefill(nfill, self.filler_type)
         
         # Robust tokenization (handles BPE alignment issues)
         input_ids, labels, prompt_ids, prompt_text = _tokenize_example(
@@ -570,7 +587,7 @@ class DatasetBuilder:
             "type1": t1,
             "type2": t2,
             "filler_len": nfill,
-            "filler_type": "dots" if sequence_type != "cot" else "none",
+            "filler_type": self.filler_type if sequence_type != "cot" else "none",
             "prompt_ids": prompt_ids,
             "answer_ids": answer_ids,
             "input_ids": input_ids,
@@ -632,6 +649,7 @@ class DatasetBuilder:
             answer=s,
             a1=a1,
             a2=a2,
+            filler_type=self.filler_type,
         )
 
         prompt_messages = build_chat_messages(
@@ -640,13 +658,14 @@ class DatasetBuilder:
             sequence_type=sequence_type,
             filler_len=nfill,
             answer=None,
+            filler_type=self.filler_type,
         )
 
         # Determine the prefill (masked portion of assistant turn)
         if sequence_type == "cot":
             prefill = ""
         else:
-            prefill = build_filler_prefill(nfill)
+            prefill = build_filler_prefill(nfill, self.filler_type)
 
         # Robust tokenization (handles BPE alignment issues)
         input_ids, labels, prompt_ids, prompt_text = _tokenize_example(
@@ -671,7 +690,7 @@ class DatasetBuilder:
             "type1": t1,
             "type2": t2,
             "filler_len": nfill,
-            "filler_type": "dots" if sequence_type != "cot" else "none",
+            "filler_type": self.filler_type if sequence_type != "cot" else "none",
             "pair_id": pair_idx,
             "prompt_ids": prompt_ids,
             "answer_ids": answer_ids,
@@ -831,6 +850,9 @@ def main() -> None:
                     help="Max filler length (for uniform mode)")
     ap.add_argument("--eval-filler-lengths", type=str, default="0,32,128,300,600",
                     help="Comma-separated filler lengths for eval mode and test set generation")
+    ap.add_argument("--filler-type", type=str, default="dots", choices=["dots", "counting"],
+                    help="Type of filler tokens: 'dots' uses '. . . ...' (Pfau et al.), "
+                         "'counting' uses '1 2 3 ... N' (Greenblatt style)")
 
     ap.add_argument("--fact-split-train", type=float, default=0.75,
                     help="Fraction of facts for training pool (default: 0.75)")
@@ -872,7 +894,7 @@ def main() -> None:
     # Report BOS/EOS tokens
     print(f"BOS token: {tok.bos_token!r} (id={tok.bos_token_id})")
     print(f"EOS token: {tok.eos_token!r} (id={tok.eos_token_id})")
-    print(f"Filler type: dot filler in assistant turn (system prompt with worked examples)")
+    print(f"Filler type: {args.filler_type} filler in assistant turn (system prompt with worked examples)")
 
     # Load known facts
     known_path = pathlib.Path(args.known_facts)
@@ -953,6 +975,7 @@ def main() -> None:
         filler_max=args.filler_max,
         eval_filler_lengths=eval_filler_lengths,
         rng=rng,
+        filler_type=args.filler_type,
     )
     
     # Check capacity before generating
@@ -991,6 +1014,7 @@ def main() -> None:
         filler_max=args.filler_max,
         eval_filler_lengths=eval_filler_lengths,
         rng=rng,
+        filler_type=args.filler_type,
     )
     
     if args.cot_mixture:
@@ -1031,6 +1055,7 @@ def main() -> None:
         filler_max=args.filler_max,
         eval_filler_lengths=eval_filler_lengths,
         rng=rng,
+        filler_type=args.filler_type,
     )
     
     if args.n_test > test_builder.max_possible_pairs():
@@ -1063,7 +1088,7 @@ def main() -> None:
         "tokenizer": args.tokenizer,
         "known_facts_source": str(args.known_facts),
         "prompt_format": "system_prompt_with_examples",
-        "filler_type": "dots",
+        "filler_type": args.filler_type,
         "cot_mixture": args.cot_mixture,
         "cot_fraction": args.cot_fraction if args.cot_mixture else None,
         "seed": args.seed,

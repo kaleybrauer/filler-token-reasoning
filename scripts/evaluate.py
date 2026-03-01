@@ -407,23 +407,25 @@ def build_prompt_with_filler(
     filler_len: int,
     tokenizer: Any,
     fewshot_examples: List[Tuple[str, str, int, int, int]],
+    filler_type: str = "dots",
 ) -> Tuple[List[int], int]:
     """Build input_ids using chat template with system prompt format.
     
     Layout:
         system: instruction + worked examples (identical for all conditions)
         user: just the question
-        assistant: Filler: . . . (N dots)\nAnswer:   ← model generates from here
+        assistant: Filler: <filler tokens>\nAnswer:   ← model generates from here
     
     For N=0:
         assistant: Answer:   ← model generates from here
     
     Args:
         example: Dataset example with "fact1" and "fact2" fields.
-        filler_len: Number of dot filler items (0 = no filler).
+        filler_len: Number of filler items (0 = no filler).
         tokenizer: The tokenizer (must support apply_chat_template).
         fewshot_examples: Few-shot (q1, q2, a1, a2, sum) tuples loaded from
             the dataset manifest.
+        filler_type: "dots" or "counting".
     
     Returns:
         (input_ids, total_length)
@@ -440,7 +442,7 @@ def build_prompt_with_filler(
     prompt_text = tokenizer.apply_chat_template(
         messages, tokenize=False, add_generation_prompt=True
     )
-    prompt_text += build_filler_prefill(filler_len)
+    prompt_text += build_filler_prefill(filler_len, filler_type)
     
     input_ids = tokenizer.encode(prompt_text, add_special_tokens=False)
     
@@ -469,6 +471,7 @@ def evaluate_batch(
     fewshot_examples: List[Tuple[str, str, int, int, int]],
     max_new_tokens: int = 10,
     temperature: float = 0.0,
+    filler_type: str = "dots",
 ) -> List[Dict[str, Any]]:
     """
     Evaluate a batch of examples simultaneously.
@@ -480,6 +483,7 @@ def evaluate_batch(
             the dataset manifest.
         max_new_tokens: Max tokens to generate.
         temperature: Sampling temperature (0 = greedy).
+        filler_type: "dots" or "counting".
     
     Returns:
         List of result dicts, one per example.
@@ -494,6 +498,7 @@ def evaluate_batch(
             filler_len=n,
             tokenizer=tokenizer,
             fewshot_examples=fewshot_examples,
+            filler_type=filler_type,
         )
         all_input_ids.append(ids)
     
@@ -574,6 +579,7 @@ def evaluate_single(
     fewshot_examples: List[Tuple[str, str, int, int, int]],
     max_new_tokens: int = 10,
     temperature: float = 0.0,
+    filler_type: str = "dots",
 ) -> Dict[str, Any]:
     """Evaluate a single example. Delegates to evaluate_batch with batch_size=1."""
     results = evaluate_batch(
@@ -583,6 +589,7 @@ def evaluate_single(
         fewshot_examples=fewshot_examples,
         max_new_tokens=max_new_tokens,
         temperature=temperature,
+        filler_type=filler_type,
     )
     return results[0]
 
@@ -598,6 +605,7 @@ def evaluate_dataset(
     temperature: float = 0.0,
     max_examples: Optional[int] = None,
     batch_size: int = 8,
+    filler_type: str = "dots",
 ) -> Dict[str, Any]:
     """
     Evaluate a dataset with batched inference.
@@ -605,6 +613,7 @@ def evaluate_dataset(
     Args:
         fewshot_examples: Few-shot (q1, q2, a1, a2, sum) tuples from the manifest.
         batch_size: Number of examples per batch for generation.
+        filler_type: "dots" or "counting".
     """
     n_total = min(len(dataset), max_examples) if max_examples else len(dataset)
     
@@ -642,6 +651,7 @@ def evaluate_dataset(
                     fewshot_examples=fewshot_examples,
                     max_new_tokens=max_new_tokens,
                     temperature=temperature,
+                    filler_type=filler_type,
                 )
                 tracker.add_results_batch(results)
                 pbar.update(len(batch))
@@ -683,6 +693,7 @@ def evaluate_dataset(
                     fewshot_examples=fewshot_examples,
                     max_new_tokens=max_new_tokens,
                     temperature=temperature,
+                    filler_type=filler_type,
                 )
                 tracker.add_results_batch(results)
                 pbar.update(len(batch))
@@ -776,6 +787,9 @@ def main():
     # Evaluation settings
     parser.add_argument("--filler-lengths", type=str, default=None,
                         help="Comma-separated filler lengths to evaluate at.")
+    parser.add_argument("--filler-type", type=str, default=None,
+                        choices=["dots", "counting"],
+                        help="Override filler type (default: read from dataset manifest)")
     parser.add_argument("--max-new-tokens", type=int, default=10,
                         help="Max tokens to generate")
     parser.add_argument("--temperature", type=float, default=0.0,
@@ -851,8 +865,17 @@ def main():
     manifest = {}
     if manifest_file.exists():
         manifest = json.loads(manifest_file.read_text())
-        filler_type = manifest.get("filler_type", "unknown")
-        print(f"Filler type from manifest: {filler_type}")
+        manifest_filler_type = manifest.get("filler_type", "dots")
+        print(f"Filler type from manifest: {manifest_filler_type}")
+    
+    # Resolve filler type: CLI override > manifest > default
+    if args.filler_type:
+        filler_type = args.filler_type
+    elif manifest:
+        filler_type = manifest_filler_type
+    else:
+        filler_type = "dots"
+    print(f"Using filler type: {filler_type}")
     
     if not manifest_file.exists():
         raise FileNotFoundError(
@@ -889,6 +912,7 @@ def main():
                     "model": args.model,
                     "adapter": args.adapter,
                     "filler_lengths": filler_lengths,
+                    "filler_type": filler_type,
                     "split": args.split,
                     "max_examples": args.max_examples,
                     "temperature": args.temperature,
@@ -910,6 +934,7 @@ def main():
         temperature=args.temperature,
         max_examples=args.max_examples,
         batch_size=args.batch_size,
+        filler_type=filler_type,
     )
     
     tracker.finalize()

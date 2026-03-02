@@ -68,9 +68,9 @@ def main() -> None:
         help="Number of unique unused pairs to use (default: all available unused pairs)",
     )
     ap.add_argument(
-        "--pools", type=str, default="test,val",
+        "--pools", type=str, default="test",
         help="Comma-separated fact pools to draw unused pairs from: test, val, train "
-             "(default: test,val). Avoid 'train' for clean held-out evaluation.",
+             "(default: test). Avoid 'train' for clean held-out evaluation.",
     )
     ap.add_argument(
         "--eval-filler-lengths", type=str, default=None,

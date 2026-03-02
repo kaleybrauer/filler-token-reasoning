@@ -6,11 +6,6 @@ test.jsonl and extra_test.jsonl (if it exists).
 By default samples all available unique pairs. Pass --n-pairs to limit.
 Pass --seed to make sampling deterministic and comparable across runs.
 
-NOTE on robustness: sampling test pairs with different seeds measures
-estimation variance (how stable is accuracy with N pairs?). If you want
-to check whether the *training effect* is robust, train multiple models
-with different seeds and evaluate each on the full test set instead.
-
 Usage:
     # All pairs, default seed
     python dev/sample_and_evaluate.py \

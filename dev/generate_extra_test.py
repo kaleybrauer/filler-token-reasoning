@@ -5,22 +5,19 @@ Generate additional test data from unused pairs within an existing fact pool.
 Not all valid (fact1, fact2) pairs in a split's fact pool are necessarily
 used when generating the original dataset. This script identifies which pairs
 have already been generated (by scanning existing JSONL files), then generates
-new test examples exclusively from the remaining unused pairs.
-
-Facts never leak across pools: by default only the test fact pool is used,
-so the extra examples draw from facts the model never trained on.
+new test examples exclusively from the remaining unused pairs. 
+Facts never leak across pools.
 
 Usage:
+    # Generate all available unused pairs (default)
+    python dev/generate_extra_test.py \
+        --data-dir data/datasets/2hop_add \
+        --outfile extra_test.jsonl
+
+    # Limit to a specific number of pairs
     python dev/generate_extra_test.py \
         --data-dir data/datasets/2hop_add \
         --n-test 200 \
-        --outfile extra_test.jsonl
-
-    # To also draw from the val fact pool:
-    python dev/generate_extra_test.py \
-        --data-dir data/datasets/2hop_add \
-        --pools test,val \
-        --n-test 500 \
         --outfile extra_test.jsonl
 """
 import argparse
@@ -67,14 +64,13 @@ def main() -> None:
              "and the existing *.jsonl splits)",
     )
     ap.add_argument(
-        "--n-test", type=int, default=200,
-        help="Number of unique unused pairs to use (total examples = n_test × len(filler_lengths))",
+        "--n-test", type=int, default=None,
+        help="Number of unique unused pairs to use (default: all available unused pairs)",
     )
     ap.add_argument(
-        "--pools", type=str, default="test",
+        "--pools", type=str, default="test,val",
         help="Comma-separated fact pools to draw unused pairs from: test, val, train "
-             "(default: test). Using only 'test' is safest — those facts were never "
-             "seen during training.",
+             "(default: test,val). Avoid 'train' for clean held-out evaluation.",
     )
     ap.add_argument(
         "--eval-filler-lengths", type=str, default=None,
@@ -188,17 +184,18 @@ def main() -> None:
     print(f"Already used:         {len(all_valid) - len(unused_pairs)}")
     print(f"Unused pairs available: {len(unused_pairs)}")
 
-    if args.n_test > len(unused_pairs):
+    n_test = args.n_test if args.n_test is not None else len(unused_pairs)
+    if n_test > len(unused_pairs):
         raise SystemExit(
-            f"Requested {args.n_test} pairs but only {len(unused_pairs)} unused pairs "
+            f"Requested {n_test} pairs but only {len(unused_pairs)} unused pairs "
             f"available in pool(s) {pools}. Reduce --n-test or add more pools with --pools."
         )
 
-    print(f"\nGenerating {args.n_test} pairs × {len(eval_filler_lengths)} filler lengths "
-          f"= {args.n_test * len(eval_filler_lengths)} examples...")
+    print(f"\nGenerating {n_test} pairs × {len(eval_filler_lengths)} filler lengths "
+          f"= {n_test * len(eval_filler_lengths)} examples...")
 
     rows = builder.build_test_split(
-        n_pairs=args.n_test,
+        n_pairs=n_test,
         filler_lengths=eval_filler_lengths,
         split="extra_test",
     )
@@ -219,7 +216,7 @@ def main() -> None:
         "eval_filler_lengths": eval_filler_lengths,
         "seed": args.seed,
         "max_answer": max_answer,
-        "n_pairs": args.n_test,
+        "n_pairs": n_test,
         "total_examples": len(rows),
         "pair_counts": {
             "valid_in_pool": len(all_valid),

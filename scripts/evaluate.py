@@ -779,7 +779,7 @@ def main():
     parser.add_argument("--data-dir", type=str, required=True,
                         help="Directory containing test.jsonl")
     parser.add_argument("--split", type=str, default="test",
-                        choices=["train", "val", "test"],
+                        choices=["train", "val", "val_eval", "test"],
                         help="Which split to evaluate")
     parser.add_argument("--max-examples", type=int, default=None,
                         help="Max examples to evaluate (for quick testing)")

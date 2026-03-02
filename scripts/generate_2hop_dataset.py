@@ -833,6 +833,12 @@ def main() -> None:
 
     ap.add_argument("--n-train", type=int, default=28000)
     ap.add_argument("--n-val", type=int, default=600)
+    ap.add_argument("--n-val-eval", type=int, default=600,
+                    help="Number of unique pairs for val_eval.jsonl, the filler-only accuracy "
+                         "split used for hyperparameter selection. Each pair is repeated at "
+                         "every eval filler length (like the test set). Pairs are drawn from "
+                         "the val fact pool and may overlap with val.jsonl since the two files "
+                         "serve different purposes (loss tracking vs. accuracy eval).")
     ap.add_argument("--n-test", type=int, default=200,
                     help="Number of unique test pairs. Each pair is repeated at every "
                          "eval filler length, so total test examples = n_test × len(eval_filler_lengths).")
@@ -1040,7 +1046,36 @@ def main() -> None:
     
     val_rows = val_builder.build_split(args.n_val, "val", cot_mixture=args.cot_mixture,
                                       cot_fraction=args.cot_fraction)
-    
+
+    print("\nGenerating val_eval data (filler-only accuracy eval for hyperparameter selection)...")
+    print(f"  {args.n_val_eval} unique pairs × {len(eval_filler_lengths)} filler lengths "
+          f"= {args.n_val_eval * len(eval_filler_lengths)} total val_eval examples")
+    val_eval_builder = DatasetBuilder(
+        facts=val_facts,
+        tok=tok,
+        fewshot_examples=fewshot_examples,
+        max_answer=args.max_answer,
+        filler_mode="eval",
+        filler_min=args.filler_min,
+        filler_max=args.filler_max,
+        eval_filler_lengths=eval_filler_lengths,
+        rng=rng,
+        filler_type=args.filler_type,
+    )
+
+    if args.n_val_eval > val_eval_builder.max_possible_pairs():
+        raise SystemExit(
+            f"Cannot generate {args.n_val_eval} val_eval pairs: only "
+            f"{val_eval_builder.max_possible_pairs()} valid unique pairs possible "
+            f"from {len(val_facts)} facts. Reduce --n-val-eval or add more facts."
+        )
+
+    val_eval_rows = val_eval_builder.build_test_split(
+        n_pairs=args.n_val_eval,
+        filler_lengths=eval_filler_lengths,
+        split="val_eval",
+    )
+
     print("\nGenerating test data...")
     print(f"  {args.n_test} unique pairs × {len(eval_filler_lengths)} filler lengths "
           f"= {args.n_test * len(eval_filler_lengths)} total test examples")
@@ -1073,6 +1108,7 @@ def main() -> None:
     # Write datasets
     write_jsonl(train_rows, outdir / "train.jsonl")
     write_jsonl(val_rows, outdir / "val.jsonl")
+    write_jsonl(val_eval_rows, outdir / "val_eval.jsonl")
     write_jsonl(test_rows, outdir / "test.jsonl")
 
     # Save fact pools for reproducibility and analysis
@@ -1116,6 +1152,7 @@ def main() -> None:
         "example_counts": {
             "train": len(train_rows),
             "val": len(val_rows),
+            "val_eval": len(val_eval_rows),
             "test": len(test_rows),
         },
         "test_design": {
@@ -1124,14 +1161,23 @@ def main() -> None:
             "total_examples": len(test_rows),
             "note": "Every pair repeated at every filler length for paired comparison",
         },
+        "val_eval_design": {
+            "n_pairs": args.n_val_eval,
+            "filler_lengths": eval_filler_lengths,
+            "total_examples": len(val_eval_rows),
+            "note": "Filler-only accuracy eval for hyperparameter selection. "
+                    "Pairs drawn from val fact pool; may overlap with val.jsonl.",
+        },
         "valid_pairs": {
             "train": train_builder.max_possible_pairs(),
             "val": val_builder.max_possible_pairs(),
+            "val_eval": val_eval_builder.max_possible_pairs(),
             "test": test_builder.max_possible_pairs(),
         },
         "unique_pairs_used": {
             "train": train_builder.used_pair_count,
             "val": val_builder.used_pair_count,
+            "val_eval": val_eval_builder.used_pair_count,
             "test": test_builder.used_pair_count,
         },
         "bos_token_id": tok.bos_token_id,
@@ -1143,9 +1189,11 @@ def main() -> None:
     print(f"\n{'='*60}")
     print(f"Done. Wrote dataset to: {outdir}")
     print(f"{'='*60}")
-    print(f"  train.jsonl: {len(train_rows)} examples")
-    print(f"  val.jsonl:   {len(val_rows)} examples")
-    print(f"  test.jsonl:  {len(test_rows)} examples "
+    print(f"  train.jsonl:    {len(train_rows)} examples")
+    print(f"  val.jsonl:      {len(val_rows)} examples")
+    print(f"  val_eval.jsonl: {len(val_eval_rows)} examples "
+          f"({args.n_val_eval} pairs × {len(eval_filler_lengths)} filler lengths)")
+    print(f"  test.jsonl:     {len(test_rows)} examples "
           f"({args.n_test} pairs × {len(eval_filler_lengths)} filler lengths)")
     print(f"\nFact isolation verified:")
     print(f"  - Train/val/test use completely separate fact pools")

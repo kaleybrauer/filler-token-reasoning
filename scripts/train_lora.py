@@ -436,7 +436,7 @@ def main():
         logging_steps=args.logging_steps,
         save_steps=args.save_steps,
         save_strategy="steps",
-        save_total_limit=3,
+        save_total_limit=4,
         bf16=USE_BF16,
         fp16=not USE_BF16,
         gradient_checkpointing=use_grad_ckpt,

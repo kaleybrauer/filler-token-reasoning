@@ -841,7 +841,7 @@ def main() -> None:
                          "serve different purposes (loss tracking vs. accuracy eval).")
     ap.add_argument("--n-test", type=int, default=200,
                     help="Number of unique test pairs. Each pair is repeated at every "
-                         "eval filler length, so total test examples = n_test × len(eval_filler_lengths).")
+                         "eval filler length, so total test examples = n_test x len(eval_filler_lengths).")
     ap.add_argument("--seed", type=int, default=0)
 
     ap.add_argument("--max-answer", type=int, default=1000, 
@@ -856,7 +856,7 @@ def main() -> None:
                     help="Max filler length (for uniform mode)")
     ap.add_argument("--eval-filler-lengths", type=str, default="0,32,128,300,600",
                     help="Comma-separated filler lengths for eval mode and test set generation")
-    ap.add_argument("--filler-type", type=str, default="dots", choices=["dots", "counting"],
+    ap.add_argument("--filler-type", type=str, default="counting", choices=["dots", "counting"],
                     help="Type of filler tokens: 'dots' uses '. . . ...' (Pfau et al.), "
                          "'counting' uses '1 2 3 ... N' (Greenblatt style)")
 

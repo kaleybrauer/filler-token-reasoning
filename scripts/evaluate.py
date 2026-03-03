@@ -194,8 +194,15 @@ def parse_integer_answer(text: str) -> Tuple[Optional[int], bool]:
     except ValueError:
         pass
     
-    # Regex fallback — look for LAST integer in the text.
-    # This handles CoT bleed-through like "45 + 14 = 59" → 59 (not 45).
+    # Regex fallback — first check the first line, then fall back to last integer.
+    # First-line check handles pre-trained models that output the answer then explain
+    # (e.g. " 76\n\nStep 1: What is" → 76).
+    # Last-integer fallback handles CoT bleed-through like "45 + 14 = 59" → 59.
+    first_line = text.split("\n")[0]
+    first_line_matches = re.findall(r'-?\d+', first_line)
+    if first_line_matches:
+        return int(first_line_matches[0]), False
+
     matches = re.findall(r'-?\d+', text)
     if matches:
         return int(matches[-1]), False

@@ -222,7 +222,7 @@ class ResultsTracker:
         self.report_every = report_every
         self.results: List[Dict[str, Any]] = []
         self.completed_keys: Set[str] = set()
-        self.stats_by_n: Dict[int, Dict[str, int]] = defaultdict(lambda: {"correct": 0, "total": 0, "showed_work": 0})
+        self.stats_by_n: Dict[int, Dict[str, int]] = defaultdict(lambda: {"correct": 0, "total": 0})
         self.regex_fallback_count = 0
         self.parse_failure_count = 0
         
@@ -249,8 +249,6 @@ class ResultsTracker:
                         self.stats_by_n[n]["total"] += 1
                         if r.get("correct", False):
                             self.stats_by_n[n]["correct"] += 1
-                        if r.get("correct_if_regex", False) and not r.get("correct", False):
-                            self.stats_by_n[n]["showed_work"] += 1
                         count += 1
                     except json.JSONDecodeError:
                         continue
@@ -266,8 +264,6 @@ class ResultsTracker:
         self.stats_by_n[n]["total"] += 1
         if result.get("correct", False):
             self.stats_by_n[n]["correct"] += 1
-        if result.get("correct_if_regex", False) and not result.get("correct", False):
-            self.stats_by_n[n]["showed_work"] += 1
         if result.get("regex_fallback", False):
             self.regex_fallback_count += 1
         if result.get("predicted") is None:
@@ -295,8 +291,6 @@ class ResultsTracker:
                 self.stats_by_n[n]["total"] += 1
                 if result.get("correct", False):
                     self.stats_by_n[n]["correct"] += 1
-                if result.get("correct_if_regex", False) and not result.get("correct", False):
-                    self.stats_by_n[n]["showed_work"] += 1
                 if result.get("regex_fallback", False):
                     self.regex_fallback_count += 1
                 if result.get("predicted") is None:
@@ -320,16 +314,13 @@ class ResultsTracker:
     
     def _print_current_stats(self) -> None:
         total_correct = sum(s["correct"] for s in self.stats_by_n.values())
-        total_showed_work = sum(s["showed_work"] for s in self.stats_by_n.values())
         total_count = sum(s["total"] for s in self.stats_by_n.values())
         if total_count == 0:
             return
-        
+
         overall_acc = total_correct / total_count * 100
         print(f"\n{'─'*70}")
-        print(f"Progress: {total_count} examples | Strict accuracy: {overall_acc:.2f}%")
-        if total_showed_work > 0:
-            print(f"  (showed work but correct: {total_showed_work} — not counted)")
+        print(f"Progress: {total_count} examples | Accuracy: {overall_acc:.2f}%")
         if self.parse_failure_count > 0:
             print(f"  (parse failures: {self.parse_failure_count})")
         print(f"{'─'*70}")
@@ -337,9 +328,7 @@ class ResultsTracker:
             stats = self.stats_by_n[n]
             if stats["total"] > 0:
                 acc = stats["correct"] / stats["total"] * 100
-                sw = stats["showed_work"]
-                sw_str = f"  +{sw} showed work" if sw > 0 else ""
-                print(f"  N={n:4d}: {stats['correct']:4d}/{stats['total']:4d} ({acc:6.2f}%){sw_str}")
+                print(f"  N={n:4d}: {stats['correct']:4d}/{stats['total']:4d} ({acc:6.2f}%)")
         print(f"{'─'*70}\n")
     
     def finalize(self) -> None:
@@ -352,25 +341,21 @@ class ResultsTracker:
     
     def _save_summary(self) -> None:
         total_correct = sum(s["correct"] for s in self.stats_by_n.values())
-        total_showed_work = sum(s["showed_work"] for s in self.stats_by_n.values())
         total_count = sum(s["total"] for s in self.stats_by_n.values())
-        
+
         accuracy_by_n = {}
         for n, stats in self.stats_by_n.items():
             if stats["total"] > 0:
                 accuracy_by_n[n] = {
                     "accuracy": stats["correct"] / stats["total"],
                     "correct": stats["correct"],
-                    "showed_work": stats["showed_work"],
                     "total": stats["total"],
                 }
-        
+
         summary = {
             "overall_accuracy": total_correct / total_count if total_count > 0 else 0.0,
             "overall_correct": total_correct,
-            "overall_showed_work": total_showed_work,
             "overall_total": total_count,
-            "scoring": "strict (only bare integers count, visible reasoning rejected)",
             "regex_fallback_count": self.regex_fallback_count,
             "parse_failure_count": self.parse_failure_count,
             "accuracy_by_filler_len": accuracy_by_n,
@@ -382,23 +367,20 @@ class ResultsTracker:
     
     def get_aggregated_results(self) -> Dict[str, Any]:
         total_correct = sum(s["correct"] for s in self.stats_by_n.values())
-        total_showed_work = sum(s["showed_work"] for s in self.stats_by_n.values())
         total_count = sum(s["total"] for s in self.stats_by_n.values())
-        
+
         accuracy_by_n = {}
         for n, stats in self.stats_by_n.items():
             if stats["total"] > 0:
                 accuracy_by_n[n] = {
                     "accuracy": stats["correct"] / stats["total"],
                     "correct": stats["correct"],
-                    "showed_work": stats["showed_work"],
                     "total": stats["total"],
                 }
-        
+
         return {
             "overall_accuracy": total_correct / total_count if total_count > 0 else 0.0,
             "overall_correct": total_correct,
-            "overall_showed_work": total_showed_work,
             "overall_total": total_count,
             "accuracy_by_filler_len": accuracy_by_n,
             "detailed_results": self.results,
@@ -554,10 +536,10 @@ def evaluate_batch(
         
         predicted, was_direct = parse_integer_answer(generated_text)
         expected = ex["answer"]
-        # Only count as correct if the model output was JUST the number.
-        # If it showed work (e.g. "45 + 14 = 59"), that's visible reasoning,
-        # not hidden computation in filler tokens — don't reward it.
-        correct = (was_direct and predicted == expected)
+        # Count as correct if the first integer in the output is the right answer.
+        # This rewards "53\n\nStep 1:..." (answer first, then explanation) while
+        # correctly rejecting "37 + 16 = 53" (the first integer there is 37, not 53).
+        correct = (predicted == expected)
         
         results.append({
             "id": ex.get("id", ""),
@@ -571,7 +553,6 @@ def evaluate_batch(
             "a1": ex.get("a1", 0),
             "a2": ex.get("a2", 0),
             "regex_fallback": predicted is not None and not was_direct,
-            "correct_if_regex": (predicted == expected) if predicted is not None else False,
         })
     
     return results

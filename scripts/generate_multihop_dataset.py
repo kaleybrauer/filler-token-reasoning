@@ -193,7 +193,7 @@ def _base_row(
         "answer": str(problem["answer"]),
         "hops": problem["hops"],
         "problem_type": problem["type"],
-        "chain": problem["chain"],
+        "chain": [{"fact": s["fact"], "value": str(s["value"])} for s in problem["chain"]],
         "filler_len": filler_len,
         "filler_type": filler_type,
     }

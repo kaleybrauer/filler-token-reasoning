@@ -40,7 +40,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 
 # Add scripts directory to path for imports
 sys.path.insert(0, str(pathlib.Path(__file__).parent.parent / "scripts"))
-from generate_2hop_dataset import build_user_message
+from generate_addition_dataset import build_user_message
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Fact loading
@@ -257,6 +257,97 @@ def build_prompt_base(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Multihop Prompt Builders
+# ─────────────────────────────────────────────────────────────────────────────
+
+MULTIHOP_DIR = pathlib.Path(__file__).resolve().parent / "multihop"
+
+MULTIHOP_INSTRUCTION = (
+    "You will be given a question. Answer immediately using the format "
+    "'Answer: [ANSWER]' where [ANSWER] is just the answer, nothing else. "
+    "No explanation, no words, no reasoning, just the answer."
+)
+
+# Few-shot examples for multihop integer (hop1) facts.
+MULTIHOP_INTEGER_FEWSHOT = [
+    ("How many legs does an octopus have?", 8),
+    ("How many sides does a hexagon have?", 6),
+    ("How many hours are in a day?", 24),
+    ("How many days are in a week?", 7),
+    ("How many teeth do adult humans typically have?", 32),
+]
+
+# Few-shot examples for multihop string (hop2) facts.
+MULTIHOP_STRING_FEWSHOT = [
+    ("What is the capital of France?", "Paris"),
+    ("What is the largest planet in the solar system?", "Jupiter"),
+    ("What is the chemical symbol for gold?", "Au"),
+    ("What country has the largest population?", "China"),
+    ("What is the official language of Brazil?", "Portuguese"),
+]
+
+
+def normalize_answer(s: str) -> str:
+    """Normalize string for case-insensitive, punctuation-insensitive comparison."""
+    s = s.lower().strip()
+    s = re.sub(r"[^\w\s]", "", s)
+    s = re.sub(r"\s+", " ", s).strip()
+    return s
+
+
+def _fact_to_question(fact_str: str) -> str:
+    """Convert a chain fact description to a question.
+
+    If the fact string already contains '?', use it as-is.
+    Otherwise, wrap it: 'What is the {fact}?'
+    """
+    if "?" in fact_str:
+        return fact_str.strip()
+    lowered = fact_str[0].lower() + fact_str[1:]
+    return f"What is the {lowered}?"
+
+
+def build_prompt_instruct_multihop(
+    question: str,
+    tokenizer: Any,
+    fewshot: List[Tuple],
+    num_shots: int = 5,
+) -> Tuple[List[int], str]:
+    """Build instruct prompt using MULTIHOP_INSTRUCTION and given few-shot examples."""
+    messages: list = [{"role": "system", "content": MULTIHOP_INSTRUCTION}]
+    for q, a in fewshot[:num_shots]:
+        messages.append({"role": "user", "content": f"Question: {q}"})
+        messages.append({"role": "assistant", "content": f"Answer: {a}"})
+    messages.append({"role": "user", "content": f"Question: {question}"})
+    prompt_text = tokenizer.apply_chat_template(
+        messages, tokenize=False, add_generation_prompt=True
+    )
+    prompt_text += "Answer:"
+    input_ids = tokenizer.encode(prompt_text, add_special_tokens=False)
+    return input_ids, prompt_text
+
+
+def build_prompt_base_multihop(
+    question: str,
+    tokenizer: Any,
+    fewshot: List[Tuple],
+    num_shots: int = 5,
+) -> Tuple[List[int], str]:
+    """Build base model prompt using MULTIHOP_INSTRUCTION and given few-shot examples."""
+    lines = [MULTIHOP_INSTRUCTION, ""]
+    for q, a in fewshot[:num_shots]:
+        lines.append(f"Question: {q}")
+        lines.append(f"Answer: {a}")
+        lines.append("")
+    lines.append(f"Question: {question}")
+    lines.append("Answer:")
+    prompt_text = "\n".join(lines)
+    bos_ids = [tokenizer.bos_token_id] if tokenizer.bos_token_id else []
+    prompt_ids = tokenizer.encode(prompt_text, add_special_tokens=False)
+    return bos_ids + prompt_ids, prompt_text
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Evaluation
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -297,6 +388,7 @@ def evaluate_fact(
     max_new_tokens: int = 20,
     num_trials: int = 1,
     temperature: float = 0.0,
+    build_prompt: Optional[Any] = None,
 ) -> Dict[str, Any]:
     """Ask the model a factual question one or more times and check the answer.
 
@@ -304,13 +396,17 @@ def evaluate_fact(
         num_trials: Number of times to ask (>=2 enables sampling-based eval).
         temperature: Sampling temperature for trials. If 0.0 and num_trials > 1,
             a default of 0.5 is used so that trials are not all identical.
+        build_prompt: Optional callable(question, tokenizer, num_shots) -> (ids, text).
+            If None, uses build_prompt_instruct/base based on mode.
 
     Returns:
         Dict with per-trial details and aggregate correct_count / trial_count.
     """
     device = _get_model_device(model)
 
-    if mode == "instruct":
+    if build_prompt is not None:
+        input_ids, prompt_text = build_prompt(question, tokenizer, num_shots)
+    elif mode == "instruct":
         input_ids, prompt_text = build_prompt_instruct(question, tokenizer, num_shots=num_shots)
     else:
         input_ids, prompt_text = build_prompt_base(question, tokenizer, num_shots=num_shots)
@@ -383,12 +479,295 @@ def evaluate_fact(
     }
 
 
+def parse_string_answer(text: str) -> str:
+    """Extract first-line answer from generated text."""
+    return text.strip().split("\n")[0].strip()
+
+
+@torch.no_grad()
+def evaluate_fact_string(
+    model: Any,
+    tokenizer: Any,
+    question: str,
+    expected: str,
+    build_prompt: Any,
+    mode: str = "instruct",
+    num_shots: int = 5,
+    max_new_tokens: int = 30,
+    num_trials: int = 1,
+    temperature: float = 0.0,
+) -> Dict[str, Any]:
+    """Ask the model a string-answer factual question one or more times."""
+    device = _get_model_device(model)
+    input_ids, prompt_text = build_prompt(question, tokenizer, num_shots)
+    input_tensor = torch.tensor([input_ids], dtype=torch.long, device=device)
+
+    eos_token_id = tokenizer.eos_token_id
+    if mode == "base":
+        newline_ids = tokenizer.encode("\n", add_special_tokens=False)
+        if len(newline_ids) == 1:
+            eos_token_id = [tokenizer.eos_token_id, newline_ids[0]]
+
+    use_temp = temperature
+    if num_trials > 1 and use_temp == 0.0:
+        use_temp = 0.5
+
+    expected_norm = normalize_answer(expected)
+    trial_results = []
+    correct_count = 0
+
+    for trial_idx in range(num_trials):
+        do_sample = trial_idx > 0
+        gen_kwargs = dict(
+            input_ids=input_tensor,
+            attention_mask=torch.ones_like(input_tensor),
+            max_new_tokens=max_new_tokens,
+            do_sample=do_sample,
+            pad_token_id=tokenizer.pad_token_id,
+            eos_token_id=eos_token_id,
+            use_cache=True,
+        )
+        if do_sample:
+            gen_kwargs["temperature"] = use_temp
+
+        outputs = model.generate(**gen_kwargs)
+        generated_ids = outputs[0, len(input_ids):].tolist()
+        generated_text = tokenizer.decode(generated_ids, skip_special_tokens=True)
+        predicted = parse_string_answer(generated_text)
+        is_correct = normalize_answer(predicted) == expected_norm
+
+        if is_correct:
+            correct_count += 1
+        trial_results.append({
+            "trial": trial_idx,
+            "predicted": predicted,
+            "correct": is_correct,
+            "generated_text": generated_text,
+        })
+
+    return {
+        "question": question,
+        "expected": expected,
+        "correct_count": correct_count,
+        "trial_count": num_trials,
+        "correct_frac": correct_count / num_trials,
+        "trials": trial_results,
+        "predicted": trial_results[0]["predicted"],
+        "generated_text": trial_results[0]["generated_text"],
+    }
+
+
+def load_multihop_facts() -> Tuple[Dict, Dict, List]:
+    """Load unique hop1 (integer) and hop2 facts from 2-hop problems.
+
+    Returns:
+        hop1_facts: {fact_key: (question, value)} for hop1 (integer values)
+        hop2_facts: {fact_key: (question, value)} for hop2 (string or integer values)
+        problems_2hop: full list of 2-hop problem dicts
+    """
+    sys.path.insert(0, str(MULTIHOP_DIR))
+    from generate_dataset import generate_all_problems  # type: ignore
+
+    _, problems_2hop, _, _ = generate_all_problems()
+
+    hop1_facts: Dict[str, Tuple[str, Any]] = {}
+    hop2_facts: Dict[str, Tuple[str, Any]] = {}
+
+    for p in problems_2hop:
+        chain = p.get("chain", [])
+        if len(chain) >= 1:
+            step = chain[0]
+            key = step["fact"]
+            if key not in hop1_facts:
+                hop1_facts[key] = (_fact_to_question(key), step["value"])
+        if len(chain) >= 2:
+            step = chain[1]
+            key = step["fact"]
+            if key not in hop2_facts:
+                hop2_facts[key] = (_fact_to_question(key), step["value"])
+
+    return hop1_facts, hop2_facts, problems_2hop
+
+
+def run_multihop(args: Any, model: Any, tokenizer: Any, mode: str) -> None:
+    """Evaluate individual hop1 and hop2 facts for the multihop 2-hop dataset."""
+    print("\nLoading multihop 2-hop problems...")
+    hop1_facts, hop2_facts, problems_2hop = load_multihop_facts()
+    print(f"  {len(problems_2hop)} total 2-hop problems")
+    print(f"  {len(hop1_facts)} unique hop1 facts")
+    print(f"  {len(hop2_facts)} unique hop2 facts")
+
+    outdir = pathlib.Path(args.outdir)
+    outdir.mkdir(parents=True, exist_ok=True)
+
+    # Build prompt builder functions matching (question, tokenizer, num_shots) signature
+    if mode == "instruct":
+        def int_prompt(q, tok, ns):
+            return build_prompt_instruct_multihop(q, tok, MULTIHOP_INTEGER_FEWSHOT, ns)
+        def str_prompt(q, tok, ns):
+            return build_prompt_instruct_multihop(q, tok, MULTIHOP_STRING_FEWSHOT, ns)
+    else:
+        def int_prompt(q, tok, ns):
+            return build_prompt_base_multihop(q, tok, MULTIHOP_INTEGER_FEWSHOT, ns)
+        def str_prompt(q, tok, ns):
+            return build_prompt_base_multihop(q, tok, MULTIHOP_STRING_FEWSHOT, ns)
+
+    # Show example prompts
+    first_hop1_q = next(iter(hop1_facts.values()))[0]
+    _, ex_prompt = int_prompt(first_hop1_q, tokenizer, args.num_shots)
+    print(f"\nExample hop1 prompt:")
+    print("-" * 40)
+    print(ex_prompt)
+    print("-" * 40)
+
+    # ── Evaluate hop1 facts (integer or string, but typically integer) ────────
+    print(f"\nEvaluating {len(hop1_facts)} hop1 facts...")
+    hop1_results: Dict[str, Dict] = {}
+    start = time.time()
+    for i, (key, (question, expected)) in enumerate(tqdm(hop1_facts.items(), desc="Hop1")):
+        if isinstance(expected, int):
+            result = evaluate_fact(
+                model, tokenizer, question, expected,
+                mode=mode, num_shots=args.num_shots,
+                num_trials=args.num_trials, temperature=args.temperature,
+                build_prompt=int_prompt,
+            )
+        else:
+            result = evaluate_fact_string(
+                model, tokenizer, question, str(expected),
+                build_prompt=int_prompt,
+                mode=mode, num_shots=args.num_shots,
+                num_trials=args.num_trials, temperature=args.temperature,
+            )
+        result["kind"] = "multihop_hop1"
+        result["fact_key"] = key
+        result["known"] = result["correct_frac"] >= args.pass_threshold
+        hop1_results[key] = result
+
+        if args.report_every > 0 and (i + 1) % args.report_every == 0:
+            n_known = sum(1 for r in hop1_results.values() if r["known"])
+            tqdm.write(f"  [{i+1}/{len(hop1_facts)}] {n_known} known so far")
+
+    hop1_known_count = sum(1 for r in hop1_results.values() if r["known"])
+    print(f"Hop1: {hop1_known_count}/{len(hop1_results)} known "
+          f"({hop1_known_count/len(hop1_results)*100:.1f}%)")
+
+    # ── Evaluate hop2 facts (string or integer) ───────────────────────────────
+    print(f"\nEvaluating {len(hop2_facts)} hop2 facts...")
+    hop2_results: Dict[str, Dict] = {}
+    for i, (key, (question, expected)) in enumerate(tqdm(hop2_facts.items(), desc="Hop2")):
+        if isinstance(expected, int):
+            result = evaluate_fact(
+                model, tokenizer, question, expected,
+                mode=mode, num_shots=args.num_shots,
+                num_trials=args.num_trials, temperature=args.temperature,
+                build_prompt=str_prompt,
+            )
+        else:
+            result = evaluate_fact_string(
+                model, tokenizer, question, str(expected),
+                build_prompt=str_prompt,
+                mode=mode, num_shots=args.num_shots,
+                num_trials=args.num_trials, temperature=args.temperature,
+            )
+        result["kind"] = "multihop_hop2"
+        result["fact_key"] = key
+        result["known"] = result["correct_frac"] >= args.pass_threshold
+        hop2_results[key] = result
+
+        if args.report_every > 0 and (i + 1) % args.report_every == 0:
+            n_known = sum(1 for r in hop2_results.values() if r["known"])
+            tqdm.write(f"  [{i+1}/{len(hop2_facts)}] {n_known} known so far")
+
+    hop2_known_count = sum(1 for r in hop2_results.values() if r["known"])
+    print(f"Hop2: {hop2_known_count}/{len(hop2_results)} known "
+          f"({hop2_known_count/len(hop2_results)*100:.1f}%)")
+
+    elapsed = time.time() - start
+
+    # ── Determine known problems ──────────────────────────────────────────────
+    known_problems = []
+    unknown_problems = []
+    for p in problems_2hop:
+        chain = p.get("chain", [])
+        h1_key = chain[0]["fact"] if len(chain) >= 1 else None
+        h2_key = chain[1]["fact"] if len(chain) >= 2 else None
+        h1_known = hop1_results.get(h1_key, {}).get("known", False) if h1_key else False
+        h2_known = hop2_results.get(h2_key, {}).get("known", False) if h2_key else False
+        if h1_known and h2_known:
+            known_problems.append(p)
+        else:
+            unknown_problems.append(p)
+
+    print(f"\nProblems where both hops known: {len(known_problems)}/{len(problems_2hop)} "
+          f"({len(known_problems)/len(problems_2hop)*100:.1f}%)")
+
+    # ── Save outputs ──────────────────────────────────────────────────────────
+    (outdir / "known_problems.json").write_text(
+        json.dumps(known_problems, indent=2, ensure_ascii=False)
+    )
+    (outdir / "known_hop1_facts.json").write_text(
+        json.dumps(
+            [{"question": r["question"], "answer": r["expected"],
+              "fact_key": r["fact_key"]}
+             for r in hop1_results.values() if r["known"]],
+            indent=2, ensure_ascii=False,
+        )
+    )
+    (outdir / "known_hop2_facts.json").write_text(
+        json.dumps(
+            [{"question": r["question"], "answer": r["expected"],
+              "fact_key": r["fact_key"]}
+             for r in hop2_results.values() if r["known"]],
+            indent=2, ensure_ascii=False,
+        )
+    )
+
+    total_facts = len(hop1_results) + len(hop2_results)
+    with (outdir / "fact_eval_full.jsonl").open("w") as f:
+        for r in hop1_results.values():
+            f.write(json.dumps(r, ensure_ascii=False) + "\n")
+        for r in hop2_results.values():
+            f.write(json.dumps(r, ensure_ascii=False) + "\n")
+
+    summary = {
+        "model": args.model,
+        "mode": mode,
+        "task": "multihop",
+        "num_shots": args.num_shots,
+        "num_trials": args.num_trials,
+        "pass_threshold": args.pass_threshold,
+        "total_problems_2hop": len(problems_2hop),
+        "known_problems": len(known_problems),
+        "known_problems_frac": len(known_problems) / len(problems_2hop) if problems_2hop else 0,
+        "hop1_facts": len(hop1_results),
+        "hop1_known": hop1_known_count,
+        "hop1_accuracy": hop1_known_count / len(hop1_results) if hop1_results else 0,
+        "hop2_facts": len(hop2_results),
+        "hop2_known": hop2_known_count,
+        "hop2_accuracy": hop2_known_count / len(hop2_results) if hop2_results else 0,
+        "elapsed_seconds": elapsed,
+    }
+    (outdir / "fact_eval_summary.json").write_text(json.dumps(summary, indent=2))
+
+    print(f"\nSaved to {outdir}/:")
+    print(f"  known_problems.json     ({len(known_problems)} problems)")
+    print(f"  known_hop1_facts.json   ({hop1_known_count} facts)")
+    print(f"  known_hop2_facts.json   ({hop2_known_count} facts)")
+    print(f"  fact_eval_full.jsonl    ({total_facts} results)")
+    print(f"  fact_eval_summary.json")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Evaluate which individual facts the model knows"
     )
     parser.add_argument("--model", type=str, required=True,
                         help="Model name or path")
+    parser.add_argument("--task", type=str, default="addition",
+                        choices=["addition", "multihop"],
+                        help="Which fact set to evaluate: 'addition' uses --sources JSON files; "
+                             "'multihop' loads 2-hop problems from scripts/multihop/ (default: addition)")
     parser.add_argument("--load-in-4bit", action="store_true")
     parser.add_argument("--load-in-8bit", action="store_true")
     parser.add_argument("--mode", type=str, default="auto",
@@ -398,8 +777,8 @@ def main():
                              "'auto' detects from model name (default: auto)")
     parser.add_argument("--num-shots", type=int, default=5,
                         help="Number of few-shot examples for base mode (default: 5)")
-    parser.add_argument("--sources", type=str, required=True,
-                        help="Directory containing fact JSON files")
+    parser.add_argument("--sources", type=str, default=None,
+                        help="Directory containing fact JSON files (required for --task addition)")
     parser.add_argument("--outdir", type=str, required=True,
                         help="Output directory")
     parser.add_argument("--max-answer", type=int, default=1000,
@@ -420,15 +799,8 @@ def main():
 
     args = parser.parse_args()
 
-    # Load facts
-    srcdir = pathlib.Path(args.sources)
-    age = load_facts(srcdir / "age_facts.json", "age") if (srcdir / "age_facts.json").exists() else []
-    atomic = load_facts(srcdir / "atomic_facts.json", "atomic") if (srcdir / "atomic_facts.json").exists() else []
-    static = load_facts(srcdir / "static_facts.json", "static") if (srcdir / "static_facts.json").exists() else []
-
-    all_facts = [(q, a, k) for (q, a, k) in (age + atomic + static) if 0 <= a < args.max_answer]
-    print(f"Loaded {len(all_facts)} facts "
-          f"(age={len(age)}, atomic={len(atomic)}, static={len(static)})")
+    if args.task == "addition" and args.sources is None:
+        parser.error("--sources is required for --task addition")
 
     # Load model
     print()
@@ -445,6 +817,21 @@ def main():
     else:
         mode = args.mode
         print(f"\nUsing mode: {mode}")
+
+    # ── Multihop task ─────────────────────────────────────────────────────────
+    if args.task == "multihop":
+        run_multihop(args, model, tokenizer, mode)
+        return
+
+    # ── Addition task (default) ───────────────────────────────────────────────
+    srcdir = pathlib.Path(args.sources)
+    age = load_facts(srcdir / "age_facts.json", "age") if (srcdir / "age_facts.json").exists() else []
+    atomic = load_facts(srcdir / "atomic_facts.json", "atomic") if (srcdir / "atomic_facts.json").exists() else []
+    static = load_facts(srcdir / "static_facts.json", "static") if (srcdir / "static_facts.json").exists() else []
+
+    all_facts = [(q, a, k) for (q, a, k) in (age + atomic + static) if 0 <= a < args.max_answer]
+    print(f"Loaded {len(all_facts)} facts "
+          f"(age={len(age)}, atomic={len(atomic)}, static={len(static)})")
 
     # Show example prompt so user can verify it looks right
     example_q = all_facts[0][0] if all_facts else "What is the atomic number of Helium?"

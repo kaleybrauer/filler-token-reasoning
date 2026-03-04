@@ -12,7 +12,7 @@ This repository tests whether language models can learn to use filler tokens as 
 - [Scripts Reference](#scripts-reference)
 - [Data Format](#data-format)
 - [Directory Structure](#directory-structure)
-- [Acknowledgments](#acknowledgments)
+- [Citations](#citations)
 
 ## Overview
 
@@ -88,7 +88,7 @@ Downloads `age_facts.json`, `atomic_facts.json`, and `static_facts.json` from [R
 Before building the dataset, filter to only facts the model reliably knows. This prevents training on facts the model cannot recall, which would add noise without signal.
 
 ```bash
-python scripts/evaluate_individual_facts.py \
+python scripts/knowledge_check.py \
   --model Qwen/Qwen2.5-72B-Instruct \
   --sources data/sources \
   --outdir data/known_facts \
@@ -103,16 +103,16 @@ Outputs `known_facts.json` (facts answered correctly on ≥ threshold of trials)
 ### Step 3: Generate Dataset
 
 ```bash
-python scripts/generate_2hop_dataset.py \
+python scripts/generate_addition_dataset.py \
   --tokenizer Qwen/Qwen2.5-72B-Instruct \
   --known-facts data/known_facts/known_facts.json \
   --outdir data/datasets/2hop_add \
   --n-train 30000 \
   --n-val 600 \
   --n-test 600 \
-  --filler-mode eval \
+  --filler-type counting \
   --cot-mixture \
-  --eval-filler-lengths 0,32,64,128,256
+  --eval-filler-lengths 0,64,128,256
 ```
 
 Key behaviors:
@@ -130,7 +130,7 @@ Key behaviors:
 python scripts/evaluate.py \
   --model Qwen/Qwen2.5-72B-Instruct \
   --data-dir data/datasets/2hop_add \
-  --filler-lengths 0,32,64,128,256 \
+  --filler-lengths 0,64,128,256 \
   --outdir results/baseline_72b \
   --load-in-4bit \
   --batch-size 8
@@ -162,8 +162,8 @@ python scripts/evaluate.py \
   --model Qwen/Qwen2.5-72B-Instruct \
   --adapter outputs/qwen2p5-72b-lora \
   --data-dir data/datasets/2hop_add \
-  --filler-lengths 0,32,64,128,256 \
-  --outdir results/finetuned_7b \
+  --filler-lengths 0,64,128,256 \
+  --outdir results/finetuned_72b \
   --batch-size 8 \
   --show-errors
 ```
@@ -175,8 +175,8 @@ python scripts/evaluate.py \
 | Script | Purpose | Key Arguments |
 |--------|---------|---------------|
 | `scripts/fetch_facts.py` | Download raw fact sources | `--outdir` |
-| `scripts/evaluate_individual_facts.py` | Filter to model-known facts → `known_facts.json` | `--model`, `--sources`, `--outdir`, `--pass-threshold` |
-| `scripts/generate_2hop_dataset.py` | Build pre-tokenized JSONL dataset | `--tokenizer`, `--known-facts`, `--outdir`, `--cot-mixture`, `--filler-mode` |
+| `scripts/knowledge_check.py` | Filter to model-known facts → `known_facts.json` | `--model`, `--sources`, `--outdir`, `--pass-threshold` |
+| `scripts/generate_addition_dataset.py` | Build pre-tokenized JSONL dataset | `--tokenizer`, `--known-facts`, `--outdir`, `--cot-mixture`, `--filler-mode` |
 | `scripts/train_lora.py` | LoRA/QLoRA fine-tuning | `--model`, `--data-dir`, `--outdir`, `--load-in-4bit` |
 | `scripts/evaluate.py` | Accuracy evaluation per filler length | `--model`, `--adapter`, `--data-dir`, `--filler-lengths`, `--outdir` |
 
@@ -246,7 +246,7 @@ Each line in `train.jsonl`/`val.jsonl`/`test.jsonl`:
   "n_fewshot": 5,
   "n_fewshot_facts": 10,
   "filler_mode": "eval",
-  "eval_filler_lengths": [0, 32, 128, 300, 600],
+  "eval_filler_lengths": [0, 128, 300, 600],
   "fact_counts": {"train": 228, "val": 38, "test": 39},
   "example_counts": {"train": 28000, "val": 600, "test": 600}
 }
@@ -258,15 +258,15 @@ Each line in `train.jsonl`/`val.jsonl`/`test.jsonl`:
 filler-token-reasoning/
 ├── scripts/                        # Main pipeline scripts
 │   ├── fetch_facts.py
-│   ├── generate_2hop_dataset.py
+│   ├── generate_addition_dataset.py
 │   ├── train_lora.py
 │   ├── evaluate.py
-│   └── evaluate_individual_facts.py 
+│   └── knowledge_check.py 
 ├── dev/                            # Development/experimental scripts
 │   └── ...
 ├── data/                           # Created by scripts (gitignored)
 │   ├── sources/                    # Raw fact JSON files
-│   ├── known_facts_7b/             # Output of evaluate_individual_facts.py
+│   ├── known_facts/                # Output of knowledge_check.py
 │   │   ├── known_facts.json
 │   │   ├── unknown_facts.json
 │   │   └── fact_eval_summary.json
@@ -283,7 +283,7 @@ filler-token-reasoning/
 └── README.md
 ```
 
-## Acknowledgments
+## Citations
 
 - Fact sources: [Ryan Greenblatt's compose_facts](https://github.com/rgreenblatt/compose_facts)
 - Models: [Qwen Team](https://github.com/QwenLM/Qwen2.5)

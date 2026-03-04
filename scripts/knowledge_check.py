@@ -7,7 +7,7 @@ whether it returns the correct integer reliably. A fact is considered
 "known" if the model answers correctly on at least --pass-threshold
 fraction of trials.
 
-Prompt format matches generate_2hop_dataset.py:
+Prompt format matches generate_addition_dataset.py:
   instruction + "Question: ..." in user message, "Answer:" prefill.
 
 Outputs:

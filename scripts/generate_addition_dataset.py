@@ -5,7 +5,7 @@ Generate 2-hop arithmetic dataset for opaque reasoner experiments.
 - Loads only model-verified known facts (from evaluate_individual_facts.py)
 - Facts are split into train/val/test pools first, then pairs are composed
   only from facts within each pool. This prevents any fact leakage.
-- Uses a unified chat-format prompt (Pfau et al. 2024 style):
+- Uses a unified chat-format prompt:
     * Same instruction + few-shot context for ALL variants
     * Few-shot examples always show CoT (parallelizable decomposition)
     * CoT training: assistant produces full CoT, loss on all tokens

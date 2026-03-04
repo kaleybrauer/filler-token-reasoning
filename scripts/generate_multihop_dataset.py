@@ -313,7 +313,7 @@ def main() -> None:
     ap.add_argument("--n-fewshot", type=int, default=5,
                     help="Few-shot examples reserved for system prompt (default: 5)")
     ap.add_argument("--n-train", type=int, default=None,
-                    help="Training examples to generate (default: 1× all remaining problems). "
+                    help="Training examples to generate (default: 1x all remaining problems). "
                          "If larger than the pool, problems are reused with different N values.")
     ap.add_argument("--n-val", type=int, default=200,
                     help="Problems for val.jsonl and val_eval.jsonl (same pool, default: 200)")

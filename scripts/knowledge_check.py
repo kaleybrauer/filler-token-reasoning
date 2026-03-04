@@ -38,9 +38,8 @@ import torch
 from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 
-# Add scripts directory to path for imports
-sys.path.insert(0, str(pathlib.Path(__file__).parent.parent / "scripts"))
-from generate_addition_dataset import build_user_message
+def build_user_message(question: str) -> str:
+    return f"Question: {question}"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Fact loading

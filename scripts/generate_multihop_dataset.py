@@ -25,7 +25,8 @@ Usage:
         --outdir data/datasets/multihop_2hop \\
         --n-val 200 --n-val-eval 200 --n-test 200 \\
         --eval-filler-lengths 0,64,128,256 \\
-        --cot-mixture
+        --cot-mixture \\
+        --known-problems data/known_facts/multihop/known_problems.json
 """
 import argparse
 import json
@@ -327,6 +328,9 @@ def main() -> None:
                     help="Add a CoT example alongside every filler training example (50/50)")
     ap.add_argument("--only-salient-facts", action="store_true",
                     help="Use only salient-facts subset (fewer but more prominent problems)")
+    ap.add_argument("--known-problems", type=str, default=None,
+                    help="Path to known_problems.json from knowledge_check.py. "
+                         "If given, only problems whose questions appear in this file are used.")
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--cache-dir", default=None,
                     help="HuggingFace cache directory")
@@ -351,8 +355,16 @@ def main() -> None:
     _, all_2hop, _, _ = generate_all_problems(
         only_salient_facts=args.only_salient_facts
     )
-    rng.shuffle(all_2hop)
     print(f"  Total 2-hop problems available: {len(all_2hop)}")
+
+    if args.known_problems:
+        known_path = pathlib.Path(args.known_problems)
+        known_questions = {p["question"] for p in json.loads(known_path.read_text())}
+        before = len(all_2hop)
+        all_2hop = [p for p in all_2hop if p["question"] in known_questions]
+        print(f"  After filtering to known problems: {len(all_2hop)} ({before - len(all_2hop)} removed)")
+
+    rng.shuffle(all_2hop)
 
     # ── Validate split sizes ───────────────────────────────────────────────────
     # val and val_eval share the same problem pool (different file formats only)
@@ -438,6 +450,7 @@ def main() -> None:
         "n_fewshot":           args.n_fewshot,
         "cot_mixture":         args.cot_mixture,
         "only_salient_facts":  args.only_salient_facts,
+        "known_problems_filter": args.known_problems,
         "seed":                args.seed,
         "fewshot_examples":    fewshot_raw,
         "example_counts": {

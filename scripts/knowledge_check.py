@@ -588,6 +588,19 @@ def load_multihop_facts() -> Tuple[Dict, Dict, List]:
     return hop1_facts, hop2_facts, problems_2hop
 
 
+def _load_progress(path: pathlib.Path) -> Dict[str, Dict]:
+    """Load previously saved results from a JSONL progress file."""
+    results: Dict[str, Dict] = {}
+    if path.exists():
+        with path.open() as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    r = json.loads(line)
+                    results[r["fact_key"]] = r
+    return results
+
+
 def run_multihop(args: Any, model: Any, tokenizer: Any, mode: str) -> None:
     """Evaluate individual hop1 and hop2 facts for the multihop 2-hop dataset."""
     print("\nLoading multihop 2-hop problems...")
@@ -598,6 +611,9 @@ def run_multihop(args: Any, model: Any, tokenizer: Any, mode: str) -> None:
 
     outdir = pathlib.Path(args.outdir)
     outdir.mkdir(parents=True, exist_ok=True)
+
+    hop1_progress_path = outdir / "hop1_progress.jsonl"
+    hop2_progress_path = outdir / "hop2_progress.jsonl"
 
     # Build prompt builder functions matching (question, tokenizer, num_shots) signature
     if mode == "instruct":
@@ -620,63 +636,79 @@ def run_multihop(args: Any, model: Any, tokenizer: Any, mode: str) -> None:
     print("-" * 40)
 
     # ── Evaluate hop1 facts (integer or string, but typically integer) ────────
-    print(f"\nEvaluating {len(hop1_facts)} hop1 facts...")
-    hop1_results: Dict[str, Dict] = {}
+    hop1_results = _load_progress(hop1_progress_path)
+    n_hop1_skip = len(hop1_results)
+    if n_hop1_skip:
+        print(f"\nResuming hop1: {n_hop1_skip}/{len(hop1_facts)} already done")
+    print(f"\nEvaluating {len(hop1_facts) - n_hop1_skip} hop1 facts...")
     start = time.time()
-    for i, (key, (question, expected)) in enumerate(tqdm(hop1_facts.items(), desc="Hop1")):
-        if isinstance(expected, int):
-            result = evaluate_fact(
-                model, tokenizer, question, expected,
-                mode=mode, num_shots=args.num_shots,
-                num_trials=args.num_trials, temperature=args.temperature,
-                build_prompt=int_prompt,
-            )
-        else:
-            result = evaluate_fact_string(
-                model, tokenizer, question, str(expected),
-                build_prompt=int_prompt,
-                mode=mode, num_shots=args.num_shots,
-                num_trials=args.num_trials, temperature=args.temperature,
-            )
-        result["kind"] = "multihop_hop1"
-        result["fact_key"] = key
-        result["known"] = result["correct_frac"] >= args.pass_threshold
-        hop1_results[key] = result
+    with hop1_progress_path.open("a") as hop1_f:
+        for i, (key, (question, expected)) in enumerate(tqdm(hop1_facts.items(), desc="Hop1")):
+            if key in hop1_results:
+                continue
+            if isinstance(expected, int):
+                result = evaluate_fact(
+                    model, tokenizer, question, expected,
+                    mode=mode, num_shots=args.num_shots,
+                    num_trials=args.num_trials, temperature=args.temperature,
+                    build_prompt=int_prompt,
+                )
+            else:
+                result = evaluate_fact_string(
+                    model, tokenizer, question, str(expected),
+                    build_prompt=int_prompt,
+                    mode=mode, num_shots=args.num_shots,
+                    num_trials=args.num_trials, temperature=args.temperature,
+                )
+            result["kind"] = "multihop_hop1"
+            result["fact_key"] = key
+            result["known"] = result["correct_frac"] >= args.pass_threshold
+            hop1_results[key] = result
+            hop1_f.write(json.dumps(result, ensure_ascii=False) + "\n")
+            hop1_f.flush()
 
-        if args.report_every > 0 and (i + 1) % args.report_every == 0:
-            n_known = sum(1 for r in hop1_results.values() if r["known"])
-            tqdm.write(f"  [{i+1}/{len(hop1_facts)}] {n_known} known so far")
+            if args.report_every > 0 and (i + 1) % args.report_every == 0:
+                n_known = sum(1 for r in hop1_results.values() if r["known"])
+                tqdm.write(f"  [{i+1}/{len(hop1_facts)}] {n_known} known so far")
 
     hop1_known_count = sum(1 for r in hop1_results.values() if r["known"])
     print(f"Hop1: {hop1_known_count}/{len(hop1_results)} known "
           f"({hop1_known_count/len(hop1_results)*100:.1f}%)")
 
     # ── Evaluate hop2 facts (string or integer) ───────────────────────────────
-    print(f"\nEvaluating {len(hop2_facts)} hop2 facts...")
-    hop2_results: Dict[str, Dict] = {}
-    for i, (key, (question, expected)) in enumerate(tqdm(hop2_facts.items(), desc="Hop2")):
-        if isinstance(expected, int):
-            result = evaluate_fact(
-                model, tokenizer, question, expected,
-                mode=mode, num_shots=args.num_shots,
-                num_trials=args.num_trials, temperature=args.temperature,
-                build_prompt=str_prompt,
-            )
-        else:
-            result = evaluate_fact_string(
-                model, tokenizer, question, str(expected),
-                build_prompt=str_prompt,
-                mode=mode, num_shots=args.num_shots,
-                num_trials=args.num_trials, temperature=args.temperature,
-            )
-        result["kind"] = "multihop_hop2"
-        result["fact_key"] = key
-        result["known"] = result["correct_frac"] >= args.pass_threshold
-        hop2_results[key] = result
+    hop2_results = _load_progress(hop2_progress_path)
+    n_hop2_skip = len(hop2_results)
+    if n_hop2_skip:
+        print(f"\nResuming hop2: {n_hop2_skip}/{len(hop2_facts)} already done")
+    print(f"\nEvaluating {len(hop2_facts) - n_hop2_skip} hop2 facts...")
+    with hop2_progress_path.open("a") as hop2_f:
+        for i, (key, (question, expected)) in enumerate(tqdm(hop2_facts.items(), desc="Hop2")):
+            if key in hop2_results:
+                continue
+            if isinstance(expected, int):
+                result = evaluate_fact(
+                    model, tokenizer, question, expected,
+                    mode=mode, num_shots=args.num_shots,
+                    num_trials=args.num_trials, temperature=args.temperature,
+                    build_prompt=str_prompt,
+                )
+            else:
+                result = evaluate_fact_string(
+                    model, tokenizer, question, str(expected),
+                    build_prompt=str_prompt,
+                    mode=mode, num_shots=args.num_shots,
+                    num_trials=args.num_trials, temperature=args.temperature,
+                )
+            result["kind"] = "multihop_hop2"
+            result["fact_key"] = key
+            result["known"] = result["correct_frac"] >= args.pass_threshold
+            hop2_results[key] = result
+            hop2_f.write(json.dumps(result, ensure_ascii=False) + "\n")
+            hop2_f.flush()
 
-        if args.report_every > 0 and (i + 1) % args.report_every == 0:
-            n_known = sum(1 for r in hop2_results.values() if r["known"])
-            tqdm.write(f"  [{i+1}/{len(hop2_facts)}] {n_known} known so far")
+            if args.report_every > 0 and (i + 1) % args.report_every == 0:
+                n_known = sum(1 for r in hop2_results.values() if r["known"])
+                tqdm.write(f"  [{i+1}/{len(hop2_facts)}] {n_known} known so far")
 
     hop2_known_count = sum(1 for r in hop2_results.values() if r["known"])
     print(f"Hop2: {hop2_known_count}/{len(hop2_results)} known "

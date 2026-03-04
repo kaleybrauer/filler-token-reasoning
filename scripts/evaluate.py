@@ -28,7 +28,7 @@ from datasets import load_dataset
 from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 
-from generate_2hop_dataset import (
+from generate_addition_dataset import (
     build_filler_prefill,
     build_system_prompt,
     compose_question,

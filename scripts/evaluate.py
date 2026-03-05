@@ -33,6 +33,10 @@ from generate_addition_dataset import (
     build_system_prompt,
     compose_question,
 )
+from generate_multihop_dataset import (
+    build_system_prompt as build_system_prompt_multihop,
+    build_filler_prefill as build_filler_prefill_multihop,
+)
 
 # Optional imports
 try:
@@ -208,6 +212,22 @@ def parse_integer_answer(text: str) -> Tuple[Optional[int], bool]:
         return int(matches[-1]), False
     
     return None, False
+
+
+def normalize_answer(s: str) -> str:
+    """Lowercase, strip punctuation, collapse whitespace for fuzzy string matching."""
+    import string
+    s = s.lower().translate(str.maketrans("", "", string.punctuation))
+    return " ".join(s.split())
+
+
+def parse_string_answer(text: str) -> Optional[str]:
+    """Extract a string answer from generated text (first non-empty line)."""
+    text = text.strip()
+    if not text:
+        return None
+    first_line = text.split("\n")[0].strip()
+    return first_line if first_line else text
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -395,46 +415,40 @@ def build_prompt_with_filler(
     example: Dict[str, Any],
     filler_len: int,
     tokenizer: Any,
-    fewshot_examples: List[Tuple[str, str, int, int, int]],
+    fewshot_examples: Any,
     filler_type: str = "dots",
+    dataset_type: str = "addition",
 ) -> Tuple[List[int], int]:
     """Build input_ids using chat template with system prompt format.
-    
-    Layout:
-        system: instruction + worked examples (identical for all conditions)
-        user: just the question
-        assistant: Filler: <filler tokens>\nAnswer:   ← model generates from here
-    
-    For N=0:
-        assistant: Answer:   ← model generates from here
-    
+
     Args:
-        example: Dataset example with "fact1" and "fact2" fields.
-        filler_len: Number of filler items (0 = no filler).
-        tokenizer: The tokenizer (must support apply_chat_template).
-        fewshot_examples: Few-shot (q1, q2, a1, a2, sum) tuples loaded from
-            the dataset manifest.
-        filler_type: "dots" or "counting".
-    
+        example: Dataset example. Addition: needs "fact1"/"fact2". Multihop: needs "question".
+        fewshot_examples: Addition: List[Tuple]. Multihop: List[Dict].
+        dataset_type: "addition" or "multihop".
+
     Returns:
         (input_ids, total_length)
     """
-    q1 = example["fact1"]
-    q2 = example["fact2"]
-    
-    messages = [
-        {"role": "system", "content": build_system_prompt(fewshot_examples)},
-        {"role": "user", "content": compose_question(q1, q2)},
-    ]
-    
-    # Apply chat template with generation prompt, then prefill assistant turn
-    prompt_text = tokenizer.apply_chat_template(
-        messages, tokenize=False, add_generation_prompt=True
-    )
-    prompt_text += build_filler_prefill(filler_len, filler_type)
-    
+    if dataset_type == "multihop":
+        messages = [
+            {"role": "system", "content": build_system_prompt_multihop(fewshot_examples)},
+            {"role": "user", "content": f"Question: {example['question']}"},
+        ]
+        prompt_text = tokenizer.apply_chat_template(
+            messages, tokenize=False, add_generation_prompt=True
+        )
+        prompt_text += build_filler_prefill_multihop(filler_len, filler_type)
+    else:
+        messages = [
+            {"role": "system", "content": build_system_prompt(fewshot_examples)},
+            {"role": "user", "content": compose_question(example["fact1"], example["fact2"])},
+        ]
+        prompt_text = tokenizer.apply_chat_template(
+            messages, tokenize=False, add_generation_prompt=True
+        )
+        prompt_text += build_filler_prefill(filler_len, filler_type)
+
     input_ids = tokenizer.encode(prompt_text, add_special_tokens=False)
-    
     return input_ids, len(input_ids)
 
 
@@ -457,23 +471,20 @@ def evaluate_batch(
     tokenizer: Any,
     examples: List[Dict[str, Any]],
     filler_lens: List[int],
-    fewshot_examples: List[Tuple[str, str, int, int, int]],
+    fewshot_examples: Any,
     max_new_tokens: int = 10,
     temperature: float = 0.0,
     filler_type: str = "dots",
+    dataset_type: str = "addition",
 ) -> List[Dict[str, Any]]:
     """
     Evaluate a batch of examples simultaneously.
-    
+
     Args:
-        examples: List of example dicts (must have "fact1", "fact2", "answer", etc.)
-        filler_lens: Filler length for each example (same length as examples).
-        fewshot_examples: Few-shot (q1, q2, a1, a2, sum) tuples loaded from
-            the dataset manifest.
-        max_new_tokens: Max tokens to generate.
-        temperature: Sampling temperature (0 = greedy).
-        filler_type: "dots" or "counting".
-    
+        examples: List of example dicts. Addition: "fact1"/"fact2". Multihop: "question".
+        fewshot_examples: Addition: List[Tuple]. Multihop: List[Dict].
+        dataset_type: "addition" or "multihop".
+
     Returns:
         List of result dicts, one per example.
     """
@@ -488,6 +499,7 @@ def evaluate_batch(
             tokenizer=tokenizer,
             fewshot_examples=fewshot_examples,
             filler_type=filler_type,
+            dataset_type=dataset_type,
         )
         all_input_ids.append(ids)
     
@@ -533,27 +545,44 @@ def evaluate_batch(
         # Extract only the generated tokens (after the padded input)
         generated_ids = outputs[i, max_len:].tolist()
         generated_text = tokenizer.decode(generated_ids, skip_special_tokens=True)
-        
-        predicted, was_direct = parse_integer_answer(generated_text)
-        expected = ex["answer"]
-        # Count as correct if the first integer in the output is the right answer.
-        # This rewards "53\n\nStep 1:..." (answer first, then explanation) while
-        # correctly rejecting "37 + 16 = 53" (the first integer there is 37, not 53).
-        correct = (predicted == expected)
-        
-        results.append({
-            "id": ex.get("id", ""),
-            "correct": correct,
-            "predicted": predicted,
-            "expected": expected,
-            "generated_text": generated_text,
-            "filler_len": n,
-            "fact1": ex.get("fact1", ""),
-            "fact2": ex.get("fact2", ""),
-            "a1": ex.get("a1", 0),
-            "a2": ex.get("a2", 0),
-            "regex_fallback": predicted is not None and not was_direct,
-        })
+
+        if dataset_type == "multihop":
+            predicted_str = parse_string_answer(generated_text)
+            expected_str = str(ex["answer"])
+            correct = (
+                predicted_str is not None
+                and normalize_answer(predicted_str) == normalize_answer(expected_str)
+            )
+            results.append({
+                "id": ex.get("id", ""),
+                "correct": correct,
+                "predicted": predicted_str,
+                "expected": expected_str,
+                "generated_text": generated_text,
+                "filler_len": n,
+                "question": ex.get("question", ""),
+                "regex_fallback": False,
+            })
+        else:
+            predicted, was_direct = parse_integer_answer(generated_text)
+            expected = ex["answer"]
+            # Count as correct if the first integer in the output is the right answer.
+            # This rewards "53\n\nStep 1:..." (answer first, then explanation) while
+            # correctly rejecting "37 + 16 = 53" (the first integer there is 37, not 53).
+            correct = (predicted == expected)
+            results.append({
+                "id": ex.get("id", ""),
+                "correct": correct,
+                "predicted": predicted,
+                "expected": expected,
+                "generated_text": generated_text,
+                "filler_len": n,
+                "fact1": ex.get("fact1", ""),
+                "fact2": ex.get("fact2", ""),
+                "a1": ex.get("a1", 0),
+                "a2": ex.get("a2", 0),
+                "regex_fallback": predicted is not None and not was_direct,
+            })
     
     return results
 
@@ -564,10 +593,11 @@ def evaluate_single(
     tokenizer: Any,
     example: Dict[str, Any],
     filler_len: int,
-    fewshot_examples: List[Tuple[str, str, int, int, int]],
+    fewshot_examples: Any,
     max_new_tokens: int = 10,
     temperature: float = 0.0,
     filler_type: str = "dots",
+    dataset_type: str = "addition",
 ) -> Dict[str, Any]:
     """Evaluate a single example. Delegates to evaluate_batch with batch_size=1."""
     results = evaluate_batch(
@@ -578,6 +608,7 @@ def evaluate_single(
         max_new_tokens=max_new_tokens,
         temperature=temperature,
         filler_type=filler_type,
+        dataset_type=dataset_type,
     )
     return results[0]
 
@@ -587,21 +618,21 @@ def evaluate_dataset(
     tokenizer: Any,
     dataset: Any,
     tracker: ResultsTracker,
-    fewshot_examples: List[Tuple[str, str, int, int, int]],
+    fewshot_examples: Any,
     filler_lengths: Optional[List[int]] = None,
     max_new_tokens: int = 10,
     temperature: float = 0.0,
     max_examples: Optional[int] = None,
     batch_size: int = 8,
     filler_type: str = "dots",
+    dataset_type: str = "addition",
 ) -> Dict[str, Any]:
     """
     Evaluate a dataset with batched inference.
-    
+
     Args:
-        fewshot_examples: Few-shot (q1, q2, a1, a2, sum) tuples from the manifest.
-        batch_size: Number of examples per batch for generation.
-        filler_type: "dots" or "counting".
+        fewshot_examples: Addition: List[Tuple]. Multihop: List[Dict].
+        dataset_type: "addition" or "multihop".
     """
     n_total = min(len(dataset), max_examples) if max_examples else len(dataset)
     
@@ -640,21 +671,22 @@ def evaluate_dataset(
                     max_new_tokens=max_new_tokens,
                     temperature=temperature,
                     filler_type=filler_type,
+                    dataset_type=dataset_type,
                 )
                 tracker.add_results_batch(results)
                 pbar.update(len(batch))
-        
+
         pbar.close()
     else:
         # Evaluate at each specified filler length
         # Collect all examples that need evaluation
         all_examples = [dataset[idx] for idx in range(n_total)]
-        
+
         for n in filler_lengths:
             print(f"\n{'='*60}")
             print(f"Evaluating at N={n} ({len(all_examples)} examples, batch_size={batch_size})")
             print(f"{'='*60}")
-            
+
             # Filter to non-completed examples
             pending = []
             skipped = 0
@@ -664,17 +696,17 @@ def evaluate_dataset(
                     skipped += 1
                 else:
                     pending.append(ex)
-            
+
             if skipped > 0:
                 print(f"  Skipping {skipped} already-completed examples")
-            
+
             start_time = time.time()
-            
+
             pbar = tqdm(total=len(pending), desc=f"N={n}")
             for batch_start in range(0, len(pending), batch_size):
                 batch = pending[batch_start:batch_start + batch_size]
                 batch_fillers = [n] * len(batch)
-                
+
                 results = evaluate_batch(
                     model, tokenizer, batch,
                     filler_lens=batch_fillers,
@@ -682,6 +714,7 @@ def evaluate_dataset(
                     max_new_tokens=max_new_tokens,
                     temperature=temperature,
                     filler_type=filler_type,
+                    dataset_type=dataset_type,
                 )
                 tracker.add_results_batch(results)
                 pbar.update(len(batch))
@@ -715,23 +748,29 @@ def analyze_errors(results: Dict[str, Any], max_show: int = 10) -> None:
     wrong_answers = [e for e in errors if e["predicted"] is not None]
     regex_fallbacks = [e for e in errors if e.get("regex_fallback", False)]
     
-    print(f"\nParse failures (couldn't extract integer): {len(parse_failures)}")
-    print(f"Wrong answers (got integer, but wrong): {len(wrong_answers)}")
+    print(f"\nParse failures (empty output): {len(parse_failures)}")
+    print(f"Wrong answers: {len(wrong_answers)}")
     print(f"Regex fallback used (among errors): {len(regex_fallbacks)}")
-    
+
     if parse_failures:
         print(f"\nSample parse failures (showing up to {min(5, len(parse_failures))}):")
         for e in parse_failures[:5]:
             print(f"  Expected: {e['expected']}, Generated: {e['generated_text']!r}")
-    
+
     if wrong_answers:
         print(f"\nSample wrong answers (showing up to {min(max_show, len(wrong_answers))}):")
         for e in wrong_answers[:max_show]:
-            diff = e['predicted'] - e['expected']
-            print(f"  N={e['filler_len']:3d}: Expected {e['expected']:3d}, "
-                  f"Got {e['predicted']:3d} (diff={diff:+d})")
-            print(f"         {e['fact1'][:40]}... + {e['fact2'][:40]}...")
-            print(f"         a1={e['a1']}, a2={e['a2']}")
+            expected = e['expected']
+            predicted = e['predicted']
+            if isinstance(expected, int) and isinstance(predicted, int):
+                diff = predicted - expected
+                print(f"  N={e['filler_len']:3d}: Expected {expected:3d}, "
+                      f"Got {predicted:3d} (diff={diff:+d})")
+                print(f"         {e.get('fact1','')[:40]}... + {e.get('fact2','')[:40]}...")
+                print(f"         a1={e.get('a1','')}, a2={e.get('a2','')}")
+            else:
+                print(f"  N={e['filler_len']:3d}: Expected {expected!r}, Got {predicted!r}")
+                print(f"         {e.get('question', e.get('fact1', ''))[:80]}")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -876,9 +915,14 @@ def main():
             "manifest.json does not contain 'fewshot_examples'. "
             "Regenerate the dataset with the updated generate_2hop_dataset.py."
         )
-    fewshot_examples: List[Tuple[str, str, int, int, int]] = [
-        (e["q1"], e["q2"], e["a1"], e["a2"], e["sum"]) for e in raw_fewshot
-    ]
+    # Auto-detect dataset type from fewshot example format
+    if "q1" in raw_fewshot[0]:
+        dataset_type = "addition"
+        fewshot_examples = [(e["q1"], e["q2"], e["a1"], e["a2"], e["sum"]) for e in raw_fewshot]
+    else:
+        dataset_type = "multihop"
+        fewshot_examples = raw_fewshot  # List[Dict] with question/answer/chain/type
+    print(f"Dataset type: {dataset_type}")
     print(f"Loaded {len(fewshot_examples)} few-shot examples from manifest")
     
     # Initialize results tracker
@@ -923,6 +967,7 @@ def main():
         max_examples=args.max_examples,
         batch_size=args.batch_size,
         filler_type=filler_type,
+        dataset_type=dataset_type,
     )
     
     tracker.finalize()

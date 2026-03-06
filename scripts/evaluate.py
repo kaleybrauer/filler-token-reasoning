@@ -928,6 +928,43 @@ def main():
     # Initialize results tracker
     outdir = pathlib.Path(args.outdir) if args.outdir else None
     tracker = ResultsTracker(outdir=outdir, report_every=args.report_every)
+
+    # Save eval manifest so results are self-describing
+    if outdir:
+        import datetime
+        # Load training config from adapter dir to recover training hyperparameters
+        training_cfg = {}
+        if args.adapter:
+            train_cfg_path = pathlib.Path(args.adapter) / "training_config.json"
+            if train_cfg_path.exists():
+                training_cfg = json.loads(train_cfg_path.read_text(encoding="utf-8"))
+            else:
+                print(f"  Note: no training_config.json found in {args.adapter}")
+
+        eval_manifest = {
+            "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            "model": args.model,
+            "adapter": args.adapter,
+            "quantization": "4bit" if args.load_in_4bit else ("8bit" if args.load_in_8bit else "none"),
+            "filler_type": filler_type,
+            "learning_rate": training_cfg.get("lr"),
+            "cot_fraction": training_cfg.get("cot_fraction") if training_cfg.get("cot_mixture") else 0,
+            "filler_lengths_override": filler_lengths,
+            "split": args.split,
+            "data_dir": str(args.data_dir),
+            "max_examples": args.max_examples,
+            "batch_size": args.batch_size,
+            "temperature": args.temperature,
+            "max_new_tokens": args.max_new_tokens,
+            "dataset_type": dataset_type,
+            "training_config": training_cfg,
+            "dataset_manifest": manifest,
+        }
+        outdir.mkdir(parents=True, exist_ok=True)
+        (outdir / "eval_manifest.json").write_text(
+            json.dumps(eval_manifest, indent=2), encoding="utf-8"
+        )
+        print(f"Saved eval manifest to {outdir / 'eval_manifest.json'}")
     
     # Initialize wandb
     if args.wandb:

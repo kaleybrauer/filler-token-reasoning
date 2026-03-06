@@ -93,8 +93,8 @@ def main() -> None:
     eval_filler_lengths = [int(x.strip()) for x in args.eval_filler_lengths.split(",")]
 
     print(f"Filler type: {_FILLER_TYPE} (1..N shuffled with fixed seed {_SHUFFLE_SEED})")
-    print(f"  Sample N=8:  {_build_scrambled_counting_filler(8)!r}")
-    print(f"  Sample N=16: {_build_scrambled_counting_filler(16)!r}")
+    print(f"  Sample N=8:  {gen._build_scrambled_counting_filler(8)!r}")
+    print(f"  Sample N=16: {gen._build_scrambled_counting_filler(16)!r}")
     print(f"Eval filler lengths: {eval_filler_lengths}")
     print(f"CoT mixture: {'ENABLED' if args.cot_mixture else 'disabled'}")
 

@@ -1,18 +1,20 @@
 #!/usr/bin/env python3
 """
-Generate addition dataset with mixed-case alphabet filler (a-zA-Z cycling).
+Generate addition dataset with scrambled counting filler.
 
-Tests whether filler token diversity explains the counting > dots performance gap.
-Alphabet filler cycles through a-z A-Z (52 letters), producing 53 unique token
-types in Qwen's tokenizer when space-separated (52 letter tokens + space token),
-vs. 2 unique tokens for dots and ~11 for counting up to 300.
+Tests whether the *order* of counting tokens matters, or just their identity/diversity.
+Scrambled counting uses the same numbers as counting (1..N) but in a randomly shuffled
+order, so token diversity is identical to counting but the sequence is non-sequential.
 
-Eval filler lengths: 0, 250, 500, 1000
+The shuffle uses a fixed seed (42) per N so the permutation is deterministic and
+consistent across all training/eval examples for a given N.
+
+Eval filler lengths: 0, 64, 128, 256  (matching 2hop_add for direct comparison)
 
 Usage:
-    python dev/generate_alphabet_filler_dataset.py \\
+    python dev/generate_scrambled_counting_dataset.py \\
         --tokenizer Qwen/Qwen2.5-7B-Instruct \\
-        --outdir data/datasets/addition_alphabet_filler
+        --known-facts results/fact_knowledge_base/known_facts.json
 
 Known facts default: results/fact_knowledge_base/known_facts.json
 """
@@ -21,26 +23,27 @@ import json
 import pathlib
 import random
 import sys
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 _SCRIPTS_DIR = pathlib.Path(__file__).parent.parent / "scripts"
 sys.path.insert(0, str(_SCRIPTS_DIR))
 import generate_addition_dataset as gen  # noqa: E402
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Default values for this experiment
+# Defaults
 # ─────────────────────────────────────────────────────────────────────────────
 
 _REPO_ROOT = pathlib.Path(__file__).parent.parent
 _DEFAULT_KNOWN_FACTS = str(_REPO_ROOT / "results" / "fact_knowledge_base" / "known_facts.json")
-_DEFAULT_OUTDIR = str(_REPO_ROOT / "data" / "datasets" / "addition_alphabet_filler")
-_DEFAULT_EVAL_LENGTHS = "0,250,500,1000"
-_FILLER_TYPE = "alphabet"
+_DEFAULT_OUTDIR = str(_REPO_ROOT / "data" / "datasets" / "addition_scrambled_counting")
+_DEFAULT_EVAL_LENGTHS = "0,64,128,256"  # matches 2hop_add counting for direct comparison
+_FILLER_TYPE = "scrambled_counting"
+_SHUFFLE_SEED = 42  # must match the seed in generate_addition_dataset._build_scrambled_counting_filler
 
 
 def main() -> None:
     ap = argparse.ArgumentParser(
-        description="Generate addition dataset with alphabet filler (a-zA-Z cycling).",
+        description="Generate addition dataset with scrambled counting filler.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     ap.add_argument("--tokenizer", type=str, required=True,
@@ -63,10 +66,9 @@ def main() -> None:
 
     ap.add_argument("--eval-filler-lengths", type=str, default=_DEFAULT_EVAL_LENGTHS,
                     help="Comma-separated filler lengths for eval and test set generation")
-    ap.add_argument("--filler-mode", type=str, default="eval", choices=["uniform", "eval"],
-                    help="How to sample filler lengths during training")
-    ap.add_argument("--filler-min", type=int, default=0, help="Min filler length (uniform mode)")
-    ap.add_argument("--filler-max", type=int, default=1000, help="Max filler length (uniform mode)")
+    ap.add_argument("--filler-mode", type=str, default="eval", choices=["uniform", "eval"])
+    ap.add_argument("--filler-min", type=int, default=0)
+    ap.add_argument("--filler-max", type=int, default=256)
 
     ap.add_argument("--fact-split-train", type=float, default=0.75)
     ap.add_argument("--fact-split-val", type=float, default=0.125)
@@ -75,7 +77,7 @@ def main() -> None:
     ap.add_argument("--n-fewshot-facts", type=int, default=10)
 
     ap.add_argument("--cot-mixture", action="store_true", default=True,
-                    help="Enable CoT + alphabet-filler mixture (default: on)")
+                    help="Enable CoT + scrambled-counting mixture (default: on)")
     ap.add_argument("--no-cot-mixture", action="store_false", dest="cot_mixture",
                     help="Disable CoT mixture (filler-only training)")
     ap.add_argument("--cot-fraction", type=float, default=0.5)
@@ -90,7 +92,9 @@ def main() -> None:
     rng = random.Random(args.seed)
     eval_filler_lengths = [int(x.strip()) for x in args.eval_filler_lengths.split(",")]
 
-    print(f"Filler type: {_FILLER_TYPE} (a-z A-Z cycling, 53 unique token types)")
+    print(f"Filler type: {_FILLER_TYPE} (1..N shuffled with fixed seed {_SHUFFLE_SEED})")
+    print(f"  Sample N=8:  {_build_scrambled_counting_filler(8)!r}")
+    print(f"  Sample N=16: {_build_scrambled_counting_filler(16)!r}")
     print(f"Eval filler lengths: {eval_filler_lengths}")
     print(f"CoT mixture: {'ENABLED' if args.cot_mixture else 'disabled'}")
 
@@ -98,15 +102,6 @@ def main() -> None:
     tok = AutoTokenizer.from_pretrained(args.tokenizer, use_fast=True)
     print(f"BOS token: {tok.bos_token!r} (id={tok.bos_token_id})")
     print(f"EOS token: {tok.eos_token!r} (id={tok.eos_token_id})")
-
-    # Verify the tokenizer sees the expected number of unique tokens
-    sample_filler = _build_alphabet_filler(52)
-    sample_ids = tok.encode(sample_filler, add_special_tokens=False)
-    unique_ids = len(set(sample_ids))
-    print(f"\nAlphabet filler uniqueness check (one full cycle, 52 letters):")
-    print(f"  Text:        {sample_filler[:40]}...")
-    print(f"  Token IDs:   {sample_ids[:10]}...")
-    print(f"  Unique token IDs: {unique_ids}")
 
     # Load known facts
     known_path = pathlib.Path(args.known_facts)
@@ -206,7 +201,7 @@ def main() -> None:
         cot_fraction=args.cot_fraction,
     )
 
-    # Val eval (accuracy eval split)
+    # Val eval
     print("\nGenerating val_eval data...")
     print(f"  {args.n_val_eval} pairs × {len(eval_filler_lengths)} filler lengths "
           f"= {args.n_val_eval * len(eval_filler_lengths)} examples")
@@ -255,8 +250,9 @@ def main() -> None:
         "known_facts_source": str(args.known_facts),
         "prompt_format": "system_prompt_with_examples",
         "filler_type": _FILLER_TYPE,
-        "filler_description": "Mixed-case a-zA-Z cycling (52 unique letters, 53 unique token types)",
-        "unique_token_types_in_filler": unique_ids,
+        "filler_description": "Numbers 1..N in fixed-seed random order (seed=42). "
+                              "Same token identities as counting, non-sequential order.",
+        "shuffle_seed": _SHUFFLE_SEED,
         "cot_mixture": args.cot_mixture,
         "cot_fraction": args.cot_fraction if args.cot_mixture else None,
         "seed": args.seed,

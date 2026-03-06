@@ -116,10 +116,29 @@ def _build_counting_filler(filler_len: int) -> str:
     return " ".join(str(i) for i in range(1, filler_len + 1))
 
 
+def _build_alphabet_filler(filler_len: int) -> str:
+    """Cycle through a-z A-Z for filler_len steps (~1 token/item, 53 unique token types)."""
+    _alphabet = list("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+    return " ".join(_alphabet[i % len(_alphabet)] for i in range(filler_len))
+
+
+def _build_scrambled_counting_filler(filler_len: int) -> str:
+    """Numbers 1..N in a fixed random order (seed=42). Same token diversity as
+    counting but non-sequential, to test whether order matters."""
+    import random as _random
+    nums = list(range(1, filler_len + 1))
+    _random.Random(42).shuffle(nums)
+    return " ".join(str(n) for n in nums)
+
+
 def _build_filler(filler_len: int, filler_type: str = "dots") -> str:
     """Build filler text of the given type."""
     if filler_type == "counting":
         return _build_counting_filler(filler_len)
+    if filler_type == "alphabet":
+        return _build_alphabet_filler(filler_len)
+    if filler_type == "scrambled_counting":
+        return _build_scrambled_counting_filler(filler_len)
     return _build_dot_filler(filler_len)
 
 
@@ -856,7 +875,8 @@ def main() -> None:
                     help="Max filler length (for uniform mode)")
     ap.add_argument("--eval-filler-lengths", type=str, default="0,32,128,300,600",
                     help="Comma-separated filler lengths for eval mode and test set generation")
-    ap.add_argument("--filler-type", type=str, default="counting", choices=["dots", "counting"],
+    ap.add_argument("--filler-type", type=str, default="counting",
+                    choices=["dots", "counting", "alphabet", "scrambled_counting"],
                     help="Type of filler tokens: 'dots' uses '. . . ...' (Pfau et al.), "
                          "'counting' uses '1 2 3 ... N' (Greenblatt style)")
 

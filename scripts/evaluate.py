@@ -815,7 +815,7 @@ def main():
     parser.add_argument("--filler-lengths", type=str, default=None,
                         help="Comma-separated filler lengths to evaluate at.")
     parser.add_argument("--filler-type", type=str, default=None,
-                        choices=["dots", "counting"],
+                        choices=["dots", "counting", "alphabet", "scrambled_counting"],
                         help="Override filler type (default: read from dataset manifest)")
     parser.add_argument("--max-new-tokens", type=int, default=10,
                         help="Max tokens to generate")

@@ -28,6 +28,7 @@ from datasets import load_dataset
 from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 
+import generate_addition_dataset as _gen_module
 from generate_addition_dataset import (
     build_filler_prefill,
     build_system_prompt,
@@ -58,6 +59,40 @@ except ImportError:
 
 USE_BF16 = torch.cuda.is_available() and torch.cuda.is_bf16_supported()
 DTYPE = torch.bfloat16 if USE_BF16 else torch.float16
+
+_DIGIT_LETTER_DIGITS  = "0123456789"
+_DIGIT_LETTER_LETTERS = "abcdefghij"
+
+
+def _apply_digit_letter_patch(tokenizer) -> None:
+    """Patch generate_addition_dataset._build_filler to support 'digit_letter' filler type.
+
+    Builds the 10-entry digit→space-letter token-ID map from the loaded tokenizer,
+    then replaces _build_filler with a version that handles filler_type='digit_letter'.
+    Safe to call multiple times (each call replaces the previous patch).
+    """
+    subst_map = {}
+    for digit, letter in zip(_DIGIT_LETTER_DIGITS, _DIGIT_LETTER_LETTERS):
+        d_ids = tokenizer.encode(digit, add_special_tokens=False)
+        l_ids = tokenizer.encode(" " + letter, add_special_tokens=False)
+        if len(d_ids) != 1 or len(l_ids) != 1:
+            raise RuntimeError(
+                f"digit_letter patch: {digit!r} or {' '+letter!r} is not a single token "
+                f"in this tokenizer — cannot apply substitution."
+            )
+        subst_map[d_ids[0]] = l_ids[0]
+
+    _original = _gen_module._build_filler
+
+    def _patched(filler_len: int, filler_type: str = "dots") -> str:
+        if filler_type == "digit_letter":
+            counting_text = " ".join(str(i) for i in range(1, filler_len + 1))
+            ids = tokenizer.encode(counting_text, add_special_tokens=False)
+            return tokenizer.decode([subst_map.get(tid, tid) for tid in ids])
+        return _original(filler_len, filler_type)
+
+    _gen_module._build_filler = _patched
+    print(f"  digit_letter patch applied ({len(subst_map)} token substitutions)")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -815,7 +850,7 @@ def main():
     parser.add_argument("--filler-lengths", type=str, default=None,
                         help="Comma-separated filler lengths to evaluate at.")
     parser.add_argument("--filler-type", type=str, default=None,
-                        choices=["dots", "counting", "alphabet", "scrambled_counting"],
+                        choices=["dots", "counting", "alphabet", "scrambled_counting", "digit_letter"],
                         help="Override filler type (default: read from dataset manifest)")
     parser.add_argument("--max-new-tokens", type=int, default=10,
                         help="Max tokens to generate")
@@ -903,7 +938,11 @@ def main():
     else:
         filler_type = "dots"
     print(f"Using filler type: {filler_type}")
-    
+
+    if filler_type == "digit_letter":
+        print("Applying digit_letter token substitution patch...")
+        _apply_digit_letter_patch(tokenizer)
+
     if not manifest_file.exists():
         raise FileNotFoundError(
             f"manifest.json not found in {data_dir}. "

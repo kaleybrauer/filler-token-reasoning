@@ -6,15 +6,26 @@ Tests whether the *order* of counting tokens matters, or just their identity/div
 Scrambled counting uses the same numbers as counting (1..N) but in a randomly shuffled
 order, so token diversity is identical to counting but the sequence is non-sequential.
 
-The shuffle uses a fixed seed (42) per N so the permutation is deterministic and
-consistent across all training/eval examples for a given N.
+Two modes (controlled by --random-scramble):
+  Fixed (default):  The shuffle uses a fixed seed (42) per N so every training and
+                    eval example at a given N sees the same permutation.
+  Random:           Each example gets an independently drawn permutation (seeded from
+                    --seed for reproducibility). Tests whether the uplift is robust to
+                    the specific permutation or only works for one fixed order.
 
 Eval filler lengths: 0, 64, 128, 256  (matching 2hop_add for direct comparison)
 
 Usage:
+    # Fixed permutation (default)
     python dev/generate_scrambled_counting_dataset.py \\
         --tokenizer Qwen/Qwen2.5-7B-Instruct \\
         --known-facts results/fact_knowledge_base/known_facts.json
+
+    # Random permutation per example
+    python dev/generate_scrambled_counting_dataset.py \\
+        --tokenizer Qwen/Qwen2.5-7B-Instruct \\
+        --known-facts results/fact_knowledge_base/known_facts.json \\
+        --random-scramble
 
 Known facts default: results/fact_knowledge_base/known_facts.json
 """
@@ -35,10 +46,10 @@ import generate_addition_dataset as gen  # noqa: E402
 
 _REPO_ROOT = pathlib.Path(__file__).parent.parent
 _DEFAULT_KNOWN_FACTS = str(_REPO_ROOT / "results" / "fact_knowledge_base" / "known_facts.json")
-_DEFAULT_OUTDIR = str(_REPO_ROOT / "data" / "datasets" / "addition_scrambled_counting")
+_DEFAULT_OUTDIR_FIXED  = str(_REPO_ROOT / "data" / "datasets" / "addition_scrambled_counting")
+_DEFAULT_OUTDIR_RANDOM = str(_REPO_ROOT / "data" / "datasets" / "addition_scrambled_counting_random")
 _DEFAULT_EVAL_LENGTHS = "0,64,128,256"  # matches 2hop_add counting for direct comparison
-_FILLER_TYPE = "scrambled_counting"
-_SHUFFLE_SEED = 42  # must match the seed in generate_addition_dataset._build_scrambled_counting_filler
+_SHUFFLE_SEED = 42  # seed used by the fixed-permutation mode
 
 
 def main() -> None:
@@ -50,8 +61,13 @@ def main() -> None:
                     help="Tokenizer name, e.g. Qwen/Qwen2.5-7B-Instruct")
     ap.add_argument("--known-facts", type=str, default=_DEFAULT_KNOWN_FACTS,
                     help="Path to known_facts.json")
-    ap.add_argument("--outdir", type=str, default=_DEFAULT_OUTDIR,
-                    help="Output directory for generated JSONL files")
+    ap.add_argument("--outdir", type=str, default=None,
+                    help="Output directory (default: addition_scrambled_counting or "
+                         "addition_scrambled_counting_random depending on --random-scramble)")
+    ap.add_argument("--random-scramble", action="store_true", default=False,
+                    help="Draw a fresh random permutation per example instead of using a "
+                         "fixed permutation (seed=42). Tests whether uplift is robust to "
+                         "the specific ordering.")
 
     ap.add_argument("--n-train", type=int, default=20000,
                     help="Training examples. At default cot-fraction=0.5 this yields "
@@ -89,12 +105,33 @@ def main() -> None:
             f"--cot-fraction must be in (0, 0.5], got {args.cot_fraction}."
         )
 
+    # Resolve outdir default based on mode
+    if args.outdir is None:
+        args.outdir = _DEFAULT_OUTDIR_RANDOM if args.random_scramble else _DEFAULT_OUTDIR_FIXED
+
+    filler_type = "scrambled_counting_random" if args.random_scramble else "scrambled_counting"
+
+    # For random mode: monkey-patch gen's filler builder so each call draws a fresh
+    # permutation from a seeded RNG (reproducible given --seed, but unique per example).
+    if args.random_scramble:
+        _scramble_rng = random.Random(args.seed ^ 0xDEADBEEF)
+        def _random_scrambled_filler(filler_len: int) -> str:
+            nums = list(range(1, filler_len + 1))
+            _scramble_rng.shuffle(nums)
+            return " ".join(str(n) for n in nums)
+        gen._build_scrambled_counting_filler = _random_scrambled_filler
+
     rng = random.Random(args.seed)
     eval_filler_lengths = [int(x.strip()) for x in args.eval_filler_lengths.split(",")]
 
-    print(f"Filler type: {_FILLER_TYPE} (1..N shuffled with fixed seed {_SHUFFLE_SEED})")
-    print(f"  Sample N=8:  {gen._build_scrambled_counting_filler(8)!r}")
-    print(f"  Sample N=16: {gen._build_scrambled_counting_filler(16)!r}")
+    if args.random_scramble:
+        print(f"Filler type: {filler_type} (1..N shuffled with a fresh permutation per example)")
+        print(f"  Sample call 1 N=8:  {gen._build_scrambled_counting_filler(8)!r}")
+        print(f"  Sample call 2 N=8:  {gen._build_scrambled_counting_filler(8)!r}  (differs from above)")
+    else:
+        print(f"Filler type: {filler_type} (1..N shuffled with fixed seed {_SHUFFLE_SEED})")
+        print(f"  Sample N=8:  {gen._build_scrambled_counting_filler(8)!r}")
+        print(f"  Sample N=16: {gen._build_scrambled_counting_filler(16)!r}")
     print(f"Eval filler lengths: {eval_filler_lengths}")
     print(f"CoT mixture: {'ENABLED' if args.cot_mixture else 'disabled'}")
 
@@ -162,7 +199,7 @@ def main() -> None:
             filler_max=args.filler_max,
             eval_filler_lengths=eval_filler_lengths,
             rng=rng,
-            filler_type=_FILLER_TYPE,
+            filler_type=filler_type,
         )
 
     # Train
@@ -249,10 +286,16 @@ def main() -> None:
         "tokenizer": args.tokenizer,
         "known_facts_source": str(args.known_facts),
         "prompt_format": "system_prompt_with_examples",
-        "filler_type": _FILLER_TYPE,
-        "filler_description": "Numbers 1..N in fixed-seed random order (seed=42). "
-                              "Same token identities as counting, non-sequential order.",
-        "shuffle_seed": _SHUFFLE_SEED,
+        "filler_type": filler_type,
+        "filler_description": (
+            "Numbers 1..N in a fresh random order per example (seeded from --seed). "
+            "Same token identities as counting, non-sequential, permutation varies per example."
+            if args.random_scramble else
+            f"Numbers 1..N in fixed-seed random order (seed={_SHUFFLE_SEED}). "
+            "Same token identities as counting, non-sequential order."
+        ),
+        "random_scramble": args.random_scramble,
+        "shuffle_seed": None if args.random_scramble else _SHUFFLE_SEED,
         "cot_mixture": args.cot_mixture,
         "cot_fraction": args.cot_fraction if args.cot_mixture else None,
         "seed": args.seed,

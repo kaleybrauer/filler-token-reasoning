@@ -168,10 +168,10 @@ def load_model_and_tokenizer(
 
     Supports two multi-GPU modes:
       DDP (torchrun): Each process loads the full model onto its own GPU
-                      (device_map={""": local_rank}). Launched via torchrun.
+                      using device_map keyed to local_rank. Launched via torchrun.
                       Scales linearly with GPU count.
       Pipeline parallel (default): One process splits the model across GPUs
-                      (device_map="balanced"). Good for single-node debugging
+                      using device_map="balanced". Good for single-node debugging
                       but does not scale as well as DDP for training.
     """
     tokenizer = AutoTokenizer.from_pretrained(

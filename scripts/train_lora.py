@@ -284,6 +284,15 @@ def apply_lora(
 # Main
 # ─────────────────────────────────────────────────────────────────────────────
 
+def _resolve_optim(optim_arg: Optional[str], load_in_4bit: bool, load_in_8bit: bool) -> str:
+    """Choose optimizer. Defaults to paged_adamw_8bit when quantization is active."""
+    if optim_arg is not None:
+        return optim_arg
+    if load_in_4bit or load_in_8bit:
+        return "paged_adamw_8bit"
+    return "adamw_torch"
+
+
 def parse_int_list(s: str) -> Optional[List[int]]:
     """Parse comma-separated integers: '0,32,128' -> [0, 32, 128]"""
     if not s:
@@ -342,6 +351,14 @@ def main():
     parser.add_argument("--lora-alpha", type=int, default=128, help="LoRA alpha")
     parser.add_argument("--lora-dropout", type=float, default=0.05, help="LoRA dropout")
     
+    # Optimizer
+    parser.add_argument(
+        "--optim", type=str, default=None,
+        help="Optimizer. Defaults to 'paged_adamw_8bit' when --load-in-4bit/8bit is set "
+             "(pages optimizer states to CPU to save GPU memory), otherwise 'adamw_torch'. "
+             "Other options: 'adamw_8bit', 'adamw_torch', 'adamw_bnb_8bit'."
+    )
+
     # Performance
     parser.add_argument("--num-workers", type=int, default=0, help="Dataloader workers")
     
@@ -462,7 +479,7 @@ def main():
         bf16=USE_BF16,
         fp16=not USE_BF16,
         gradient_checkpointing=use_grad_ckpt,
-        optim="adamw_torch",  # Don't use fused - it pre-allocates more memory
+        optim=_resolve_optim(args.optim, args.load_in_4bit, args.load_in_8bit),
         dataloader_num_workers=args.num_workers,
         dataloader_pin_memory=is_ddp,  # Pin memory with DDP for faster host→GPU transfer
         remove_unused_columns=False,

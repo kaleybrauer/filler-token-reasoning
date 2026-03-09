@@ -164,17 +164,25 @@ def load_model_and_tokenizer(
     use_gradient_checkpointing: bool = True,
     trust_remote_code: bool = False,
 ):
-    """Load model and tokenizer with optional quantization."""
-    
+    """Load model and tokenizer with optional quantization.
+
+    Supports two multi-GPU modes:
+      DDP (torchrun): Each process loads the full model onto its own GPU
+                      (device_map={""": local_rank}). Launched via torchrun.
+                      Scales linearly with GPU count.
+      Pipeline parallel (default): One process splits the model across GPUs
+                      (device_map="balanced"). Good for single-node debugging
+                      but does not scale as well as DDP for training.
+    """
     tokenizer = AutoTokenizer.from_pretrained(
-        model_name, 
-        use_fast=True, 
+        model_name,
+        use_fast=True,
         trust_remote_code=trust_remote_code,
     )
-    
+
     if tokenizer.pad_token_id is None:
         tokenizer.pad_token = tokenizer.eos_token if tokenizer.eos_token else "<|endoftext|>"
-    
+
     # Quantization config
     quant_config = None
     if load_in_4bit:
@@ -186,22 +194,27 @@ def load_model_and_tokenizer(
         )
     elif load_in_8bit:
         quant_config = BitsAndBytesConfig(load_in_8bit=True)
-    
+
     # Model loading kwargs
     model_kwargs = dict(
         torch_dtype=DTYPE,
         quantization_config=quant_config,
         trust_remote_code=trust_remote_code,
     )
-    
-    # Use device_map for proper Flash Attention and multi-GPU support.
-    # "balanced" distributes layers evenly across GPUs (unlike "auto" which
-    # greedily fills GPU 0 first — problematic when the 4-bit model fits on
-    # one GPU but training overhead doesn't).
+
+    # Determine device placement strategy.
+    # DDP (torchrun): LOCAL_RANK is set — assign the full model to this process's GPU.
+    # Pipeline parallel (fallback): split across all visible GPUs with "balanced".
+    local_rank = int(os.environ.get("LOCAL_RANK", -1))
+    is_ddp = local_rank != -1
     n_gpus = torch.cuda.device_count()
-    if n_gpus > 1:
+
+    if is_ddp:
+        model_kwargs["device_map"] = {"": local_rank}
+        print(f"  DDP mode: LOCAL_RANK={local_rank}, assigning model to GPU {local_rank}")
+    elif n_gpus > 1:
         model_kwargs["device_map"] = "balanced"
-        print(f"  Multi-GPU: balanced distribution across {n_gpus} GPUs")
+        print(f"  Pipeline parallel: balanced distribution across {n_gpus} GPUs")
     else:
         model_kwargs["device_map"] = "auto"
     
@@ -398,7 +411,16 @@ def main():
     # Load model
     # ─────────────────────────────────────────────────────────────────────────
     
-    print(f"\nLoading model: {args.model}")
+    local_rank = int(os.environ.get("LOCAL_RANK", -1))
+    world_size = int(os.environ.get("WORLD_SIZE", 1))
+    is_ddp = local_rank != -1
+    if is_ddp:
+        print(f"\nDDP training: LOCAL_RANK={local_rank}, WORLD_SIZE={world_size}")
+        print(f"  Launch command: torchrun --nproc_per_node={world_size} ...")
+    else:
+        print(f"\nSingle-process training (use torchrun for DDP)")
+
+    print(f"Loading model: {args.model}")
     use_grad_ckpt = not args.no_grad_checkpoint
     model, tokenizer = load_model_and_tokenizer(
         args.model,
@@ -442,7 +464,7 @@ def main():
         gradient_checkpointing=use_grad_ckpt,
         optim="adamw_torch",  # Don't use fused - it pre-allocates more memory
         dataloader_num_workers=args.num_workers,
-        dataloader_pin_memory=False,  # Reduce memory pressure
+        dataloader_pin_memory=is_ddp,  # Pin memory with DDP for faster host→GPU transfer
         remove_unused_columns=False,
         ddp_find_unused_parameters=False,
         max_grad_norm=1.0,

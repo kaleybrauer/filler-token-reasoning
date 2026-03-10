@@ -600,10 +600,12 @@ def main():
         post_attn_by_group[group_name] = np.mean(all_post_sums, axis=0)
         print(f"  Mean filler attention shape: {attention_by_group[group_name].shape}")
 
-    # The averaged attention arrays are filler-position-relative:
-    # attention_by_group[g].shape == [n_layers, n_heads, filler_len]
-    # Use (0, filler_len) as the region tuple for all plot/stat calls.
-    filler_region_rel = (0, args.filler_len)
+    # The averaged attention arrays are filler-position-relative.
+    # The number of filler TOKENS is not args.filler_len (counting numbers) —
+    # "1 2 3 ... 128" tokenizes to many more than 128 tokens.
+    # Read the actual token count from the first example's region info.
+    filler_token_count = sample_info["regions"]["filler"][1] - sample_info["regions"]["filler"][0]
+    filler_region_rel = (0, filler_token_count)
 
     # ── Save aggregate results ──
     save_dict = {f"attn_{k}": v for k, v in attention_by_group.items()}
@@ -649,6 +651,7 @@ def main():
         "n_filler_helped": len(filler_helped),
         "n_filler_didnt_help": len(filler_didnt_help),
         "filler_region": list(filler_region_rel),
+        "filler_token_count": filler_token_count,
         "total_seq_len": sample_info["total_len"],
     }
     with open(outdir / "config.json", "w") as f:

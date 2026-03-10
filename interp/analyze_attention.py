@@ -48,6 +48,8 @@ import torch
 from tqdm import tqdm
 
 # ── Imports from project ──
+sys.path.insert(0, str(pathlib.Path(__file__).parent.parent / "scripts"))
+
 from generate_addition_dataset import (
     build_filler_prefill,
     build_system_prompt,
@@ -200,9 +202,9 @@ def extract_last_token_attention(
 def load_eval_results(results_dir: str) -> Dict[str, Dict]:
     """Load evaluation results from a results directory."""
     results = {}
-    results_file = os.path.join(results_dir, "results.jsonl")
+    results_file = os.path.join(results_dir, "eval_detailed.jsonl")
     if not os.path.exists(results_file):
-        raise FileNotFoundError(f"No results.jsonl in {results_dir}")
+        raise FileNotFoundError(f"No eval_detailed.jsonl in {results_dir}")
 
     with open(results_file) as f:
         for line in f:
@@ -482,34 +484,33 @@ def main():
     print("\nLoading model with EAGER attention (required for attention weights)...")
     print("(This is slower than Flash Attention but necessary for this analysis)")
 
-    # Temporarily override to force eager attention
     model, tokenizer = load_model_and_tokenizer(
         args.model,
         adapter_path=args.adapter,
         load_in_4bit=args.load_in_4bit,
-        use_flash_attn=False,  # MUST be False for attention weights
+        use_flash_attn=False,
         trust_remote_code=args.trust_remote_code,
         cache_dir=args.cache_dir,
+        attn_implementation="eager",  # Required to get attention weights back
     )
 
-    # Double-check: override attention implementation to eager
-    # (load_model_and_tokenizer might set sdpa when flash_attn=False)
-    for module in model.modules():
-        if hasattr(module, "_attn_implementation"):
-            module._attn_implementation = "eager"
+    # Determine input device: for device_map models, use the embedding layer's device.
+    if hasattr(model, "hf_device_map") and model.hf_device_map:
+        first_device = next(iter(model.hf_device_map.values()))
+        device = torch.device(f"cuda:{first_device}" if isinstance(first_device, int) else first_device)
+    else:
+        device = next(model.parameters()).device
 
-    device = next(model.parameters()).device
-
-    # ── Identify filler region structure (using first example) ──
+    # ── Print prompt structure for the first example (informational only) ──
     sample_info = locate_filler_region(
         filler_helped[0], args.filler_len, tokenizer,
         fewshot_examples, filler_type
     )
-    filler_region = sample_info["regions"]["filler"]
     print(f"\nPrompt structure (first example):")
     for region_name, (start, end) in sample_info["regions"].items():
         print(f"  {region_name}: tokens {start}-{end} ({end - start} tokens)")
     print(f"  Total length: {sample_info['total_len']}")
+    print(f"  Note: filler position varies per example; averaging is filler-position-relative.")
 
     # ── Extract attention patterns ──
     groups = {
@@ -517,7 +518,9 @@ def main():
         "filler_didnt_help": filler_didnt_help,
     }
 
-    attention_by_group = {}
+    attention_by_group = {}   # [n_layers, n_heads, filler_len] — filler-position-relative
+    pre_attn_by_group = {}    # [n_layers, n_heads] — sum of attention to system+question
+    post_attn_by_group = {}   # [n_layers, n_heads] — sum of attention to answer prefix
 
     for group_name, examples in groups.items():
         if len(examples) == 0:
@@ -525,58 +528,58 @@ def main():
             continue
 
         print(f"\nExtracting attention for {group_name} ({len(examples)} examples)...")
-        all_attention = []
+        all_filler_attn = []
+        all_pre_sums = []
+        all_post_sums = []
 
         for i, ex in enumerate(tqdm(examples, desc=group_name)):
-            # Locate filler region for this example
+            # Locate filler region for THIS example (question lengths vary)
             info = locate_filler_region(
                 ex, args.filler_len, tokenizer,
                 fewshot_examples, filler_type,
             )
+            filler_start, filler_end = info["regions"]["filler"]
 
-            # Extract attention
+            # Extract attention: [n_layers, n_heads, seq_len]
             attn = extract_last_token_attention(model, info["input_ids"], device)
-            # attn shape: [n_layers, n_heads, seq_len]
 
-            # Pad or truncate to consistent length for averaging
-            # (different examples might have slightly different prompt lengths)
-            target_len = sample_info["total_len"]
-            if attn.shape[2] < target_len:
-                pad_width = target_len - attn.shape[2]
-                attn = np.pad(attn, ((0, 0), (0, 0), (0, pad_width)))
-            elif attn.shape[2] > target_len:
-                attn = attn[:, :, :target_len]
+            # Slice to filler-relative coordinates so averaging is aligned
+            filler_attn = attn[:, :, filler_start:filler_end]   # [n_layers, n_heads, filler_len]
+            pre_sum = attn[:, :, :filler_start].sum(axis=2)      # [n_layers, n_heads]
+            post_sum = attn[:, :, filler_end:].sum(axis=2)       # [n_layers, n_heads]
 
-            all_attention.append(attn)
+            all_filler_attn.append(filler_attn)
+            all_pre_sums.append(pre_sum)
+            all_post_sums.append(post_sum)
 
-            # Save per-example data
-            example_data = {
-                "id": ex.get("id", f"{group_name}_{i}"),
-                "fact1": ex.get("fact1", ""),
-                "fact2": ex.get("fact2", ""),
-                "a1": ex.get("a1", 0),
-                "a2": ex.get("a2", 0),
-                "answer": ex.get("answer", 0),
-                "regions": {k: list(v) for k, v in info["regions"].items()},
-            }
+            # Save per-example data (full attention + per-example regions)
             np.savez_compressed(
                 outdir / f"attn_{group_name}_{i}.npz",
-                attention=attn.astype(np.float16),  # Save space
-                **{k: np.array(v) if isinstance(v, (list, tuple)) else v 
-                   for k, v in example_data.items() if isinstance(v, (int, float))}
+                attention=attn.astype(np.float16),
+                filler_start=filler_start,
+                filler_end=filler_end,
+                a1=ex.get("a1", 0),
+                a2=ex.get("a2", 0),
+                answer=ex.get("answer", 0),
             )
 
-        # Average across examples
-        attention_by_group[group_name] = np.mean(all_attention, axis=0)
-        print(f"  Mean attention shape: {attention_by_group[group_name].shape}")
+        # Average across examples — all filler slices have shape [n_layers, n_heads, filler_len]
+        attention_by_group[group_name] = np.mean(all_filler_attn, axis=0)
+        pre_attn_by_group[group_name] = np.mean(all_pre_sums, axis=0)
+        post_attn_by_group[group_name] = np.mean(all_post_sums, axis=0)
+        print(f"  Mean filler attention shape: {attention_by_group[group_name].shape}")
+
+    # The averaged attention arrays are filler-position-relative:
+    # attention_by_group[g].shape == [n_layers, n_heads, filler_len]
+    # Use (0, filler_len) as the region tuple for all plot/stat calls.
+    filler_region_rel = (0, args.filler_len)
 
     # ── Save aggregate results ──
-    np.savez_compressed(
-        outdir / "aggregate_attention.npz",
-        **{f"attn_{k}": v for k, v in attention_by_group.items()},
-        filler_start=filler_region[0],
-        filler_end=filler_region[1],
-    )
+    save_dict = {f"attn_{k}": v for k, v in attention_by_group.items()}
+    save_dict.update({f"pre_attn_{k}": v for k, v in pre_attn_by_group.items()})
+    save_dict.update({f"post_attn_{k}": v for k, v in post_attn_by_group.items()})
+    save_dict["filler_len"] = args.filler_len
+    np.savez_compressed(outdir / "aggregate_attention.npz", **save_dict)
     print(f"\nSaved aggregate attention to {outdir / 'aggregate_attention.npz'}")
 
     # ── Summary statistics ──
@@ -584,17 +587,16 @@ def main():
     print("ATTENTION SUMMARY")
     print(f"{'='*60}")
     for group_name, attn in attention_by_group.items():
-        filler_start, filler_end = filler_region
-        # Total attention to filler, averaged across heads and layers
-        filler_attn = attn[:, :, filler_start:filler_end].sum(axis=2)  # [layers, heads]
-        total_filler = filler_attn.mean()
+        # attn is [n_layers, n_heads, filler_len] — all filler, no pre/post
+        filler_sum_per_head = attn.sum(axis=2)  # [layers, heads]
+        total_filler = filler_sum_per_head.mean()
         print(f"\n{group_name}:")
         print(f"  Mean attention to filler region: {total_filler:.4f}")
-        print(f"  Mean attention to system+question: {attn[:, :, :filler_start].sum(axis=2).mean():.4f}")
-        print(f"  Mean attention to answer prefix: {attn[:, :, filler_end:].sum(axis=2).mean():.4f}")
+        print(f"  Mean attention to system+question: {pre_attn_by_group[group_name].mean():.4f}")
+        print(f"  Mean attention to answer prefix: {post_attn_by_group[group_name].mean():.4f}")
 
         # Which layers attend most to filler?
-        layer_filler_attn = filler_attn.mean(axis=1)  # [layers]
+        layer_filler_attn = filler_sum_per_head.mean(axis=1)  # [layers]
         top_layers = np.argsort(layer_filler_attn)[-5:][::-1]
         print(f"  Top 5 layers by filler attention:")
         for li in top_layers:
@@ -602,10 +604,10 @@ def main():
 
     # ── Visualize ──
     plot_attention_heatmap(
-        attention_by_group, filler_region, str(outdir),
+        attention_by_group, filler_region_rel, str(outdir),
         title_suffix=f" (N={args.filler_len})",
     )
-    plot_top_heads(attention_by_group, filler_region, str(outdir))
+    plot_top_heads(attention_by_group, filler_region_rel, str(outdir))
 
     # ── Save config ──
     config = {
@@ -615,7 +617,7 @@ def main():
         "filler_type": filler_type,
         "n_filler_helped": len(filler_helped),
         "n_filler_didnt_help": len(filler_didnt_help),
-        "filler_region": list(filler_region),
+        "filler_region": list(filler_region_rel),
         "total_seq_len": sample_info["total_len"],
     }
     with open(outdir / "config.json", "w") as f:

@@ -125,6 +125,7 @@ def load_model_and_tokenizer(
     use_flash_attn: bool = True,
     trust_remote_code: bool = False,
     cache_dir: Optional[str] = None,
+    attn_implementation: Optional[str] = None,
 ) -> Tuple[Any, Any]:
     """Load model and tokenizer, optionally with LoRA adapter."""
     
@@ -174,7 +175,10 @@ def load_model_and_tokenizer(
         model_kwargs["cache_dir"] = cache_dir
     
     # Attention implementation
-    if use_flash_attn:
+    if attn_implementation is not None:
+        model_kwargs["attn_implementation"] = attn_implementation
+        print(f"Using attention implementation: {attn_implementation}")
+    elif use_flash_attn:
         try:
             import flash_attn
             model_kwargs["attn_implementation"] = "flash_attention_2"

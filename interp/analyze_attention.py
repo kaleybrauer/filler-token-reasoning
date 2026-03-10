@@ -23,7 +23,7 @@ OUTPUT:
   - Head-level analysis: which heads attend most to filler
 
 Usage:
-    python analyze_attention.py \
+    python interp/analyze_attention.py \
         --model Qwen/Qwen2.5-72B-Instruct \
         --adapter outputs/lr2e-5_50k \
         --data-dir data/datasets/2hop_add \
@@ -48,7 +48,7 @@ import torch
 from tqdm import tqdm
 
 # ── Imports from project ──
-from generate_2hop_dataset import (
+from generate_addition_dataset import (
     build_filler_prefill,
     build_system_prompt,
     compose_question,

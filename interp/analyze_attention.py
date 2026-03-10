@@ -200,7 +200,13 @@ def extract_last_token_attention(
 # ─────────────────────────────────────────────────────────────────────────────
 
 def load_eval_results(results_dir: str) -> Dict[str, Dict]:
-    """Load evaluation results from a results directory."""
+    """Load evaluation results keyed by example id.
+
+    Each example id maps to its single eval result. This works whether
+    evaluate.py was run with stored filler lengths (one result per id)
+    or with --filler-lengths override (multiple results per id, last wins —
+    but classify_examples uses pair_id grouping so this is fine).
+    """
     results = {}
     results_file = os.path.join(results_dir, "eval_detailed.jsonl")
     if not os.path.exists(results_file):
@@ -208,50 +214,73 @@ def load_eval_results(results_dir: str) -> Dict[str, Dict]:
 
     with open(results_file) as f:
         for line in f:
+            line = line.strip()
+            if not line:
+                continue
             r = json.loads(line)
-            example_id = r.get("id", "")
-            filler_len = r.get("filler_len", 0)
-            key = f"{example_id}__N{filler_len}"
-            results[key] = r
+            results[r.get("id", "")] = r
+
+    print(f"  Loaded {len(results)} result entries from {results_file}")
+    if results:
+        print(f"  Sample result ids: {list(results.keys())[:3]}")
+    else:
+        print("  WARNING: results dict is empty!")
     return results
 
 
 def classify_examples(
     dataset: Any,
-    results_n0: Dict[str, Dict],
-    results_nf: Dict[str, Dict],
+    results: Dict[str, Dict],
     filler_len: int,
 ) -> Tuple[List[Dict], List[Dict]]:
     """
     Classify examples into filler_helped and filler_didnt_help groups.
 
+    Uses pair_id to link the N=0 row and N=filler_len row for the same
+    question (they have different example ids but share a pair_id).
+
     filler_helped: wrong at N=0, correct at N=filler_len
     filler_didnt_help: wrong at N=0, wrong at N=filler_len
     """
-    filler_helped = []
-    filler_didnt_help = []
+    # Group dataset rows by pair_id, then by filler_len
+    pair_result_n0: Dict[Any, Dict] = {}   # pair_id → result at filler_len=0
+    pair_result_nf: Dict[Any, Dict] = {}   # pair_id → result at filler_len=filler_len
+    pair_example_nf: Dict[Any, Dict] = {}  # pair_id → dataset row at filler_len=filler_len
 
     for idx in range(len(dataset)):
         ex = dataset[idx]
-        example_id = ex.get("id", "")
-        
-        # Find this example in both result sets
-        key_n0 = f"{example_id}__N0"
-        key_nf = f"{example_id}__N{filler_len}"
-
-        r0 = results_n0.get(key_n0)
-        rf = results_nf.get(key_nf)
-
-        if r0 is None or rf is None:
+        ex_id = ex.get("id", "")
+        pair_id = ex.get("pair_id")
+        fl = ex.get("filler_len", 0)
+        result = results.get(ex_id)
+        if result is None or pair_id is None:
             continue
+        if fl == 0:
+            pair_result_n0[pair_id] = result
+        elif fl == filler_len:
+            pair_result_nf[pair_id] = result
+            pair_example_nf[pair_id] = ex
 
+    filler_helped = []
+    filler_didnt_help = []
+
+    for pair_id, r0 in pair_result_n0.items():
+        rf = pair_result_nf.get(pair_id)
+        if rf is None:
+            continue
+        ex = pair_example_nf[pair_id]
         wrong_at_0 = not r0.get("correct", False)
         correct_at_f = rf.get("correct", False)
-
         if wrong_at_0 and correct_at_f:
             filler_helped.append(ex)
         elif wrong_at_0 and not correct_at_f:
             filler_didnt_help.append(ex)
+
+    n_pairs_with_n0 = len(pair_result_n0)
+    n_pairs_with_nf = len(pair_result_nf)
+    print(f"  Pairs with N=0 result: {n_pairs_with_n0}, "
+          f"with N={filler_len} result: {n_pairs_with_nf}, "
+          f"with both: {sum(1 for p in pair_result_n0 if p in pair_result_nf)}")
 
     return filler_helped, filler_didnt_help
 
@@ -455,16 +484,18 @@ def main():
     print(f"Loaded {len(dataset)} filler examples")
 
     # ── Load evaluation results ──
-    print(f"\nLoading N=0 results from {args.results_n0}")
-    results_n0 = load_eval_results(args.results_n0)
+    # N=0 and N=filler_len results may live in the same directory (most common)
+    # or separate ones. Merge into a single id→result dict.
+    print(f"\nLoading results from {args.results_n0}")
+    results = load_eval_results(args.results_n0)
 
-    results_nf_dir = args.results_nf or args.results_n0
-    print(f"Loading N={args.filler_len} results from {results_nf_dir}")
-    results_nf = load_eval_results(results_nf_dir)
+    if args.results_nf and args.results_nf != args.results_n0:
+        print(f"Loading additional results from {args.results_nf}")
+        results.update(load_eval_results(args.results_nf))
 
     # ── Classify examples ──
     filler_helped, filler_didnt_help = classify_examples(
-        dataset, results_n0, results_nf, args.filler_len
+        dataset, results, args.filler_len
     )
     print(f"\nClassification:")
     print(f"  Filler helped (wrong@0, correct@{args.filler_len}): {len(filler_helped)}")

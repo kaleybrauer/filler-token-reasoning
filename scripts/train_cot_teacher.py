@@ -30,7 +30,7 @@ Usage:
       --model outputs/cot_teacher_14b \\
       --data-dir data/datasets/2hop_14b \\
       --cache-outdir outputs/cot_teacher_14b/cached_hidden_states \\
-      --cache-layer -1 --batch-size 4
+      --cache-layer -1 --cache-batch-size 4
 """
 import argparse
 import inspect
@@ -329,7 +329,8 @@ def train_teacher(args):
 # Phase 2: Cache Hidden States
 # ─────────────────────────────────────────────────────────────────────────────
 
-def find_answer_colon_position(input_ids: List[int], tokenizer) -> int:
+def find_answer_colon_position(input_ids: List[int], prompt_ids: Optional[List[int]] = None,
+                               tokenizer=None) -> int:
     """Find the token position of the last "Answer:" in the sequence.
 
     This is the position just before the answer digits — where the model
@@ -337,26 +338,42 @@ def find_answer_colon_position(input_ids: List[int], tokenizer) -> int:
     We extract the hidden state here as the distillation target.
 
     Returns the index of the ":" token in the last "Answer:" occurrence.
+
+    Strategy:
+      1. If prompt_ids is available, use len(prompt_ids) - 1 directly. The
+         prompt_ids field in our dataset ends right at "Answer:", so its last
+         token is the ":" we want.
+      2. Otherwise, search for the "Answer" token followed by ":" in input_ids
+         using multiple tokenization variants to handle BPE context sensitivity
+         (e.g. "Answer:" vs " Answer:" vs "Answer" + ":").
     """
-    # Tokenize "Answer:" to get the pattern
-    answer_tokens = tokenizer.encode("Answer:", add_special_tokens=False)
-    # Usually this is ["Answer", ":"] — we want the position of ":"
+    # --- Fast path: use prompt_ids boundary from the dataset ---------------
+    if prompt_ids is not None and len(prompt_ids) > 0:
+        return len(prompt_ids) - 1
 
-    # Search backwards for the pattern
+    # --- Slow path: pattern-match on token IDs ----------------------------
+    if tokenizer is None:
+        raise ValueError("Either prompt_ids or tokenizer must be provided")
+
     ids = list(input_ids)
-    pattern_len = len(answer_tokens)
 
-    for start in range(len(ids) - pattern_len, -1, -1):
-        if ids[start:start + pattern_len] == answer_tokens:
-            # Return position of the last token in the pattern (the ":")
-            return start + pattern_len - 1
+    # Try multiple tokenization variants to handle BPE context sensitivity.
+    # "Answer:" tokenized in isolation may differ from " Answer:" mid-sequence.
+    variants = set()
+    for text in ["Answer:", " Answer:", "\nAnswer:"]:
+        toks = tokenizer.encode(text, add_special_tokens=False)
+        # Strip leading space/newline tokens to get just the Answer: part
+        if text.startswith((" ", "\n")):
+            toks = toks[1:]  # drop the space/newline token
+        variants.add(tuple(toks))
 
-    # Fallback: search for just ":" near the end
-    colon_id = tokenizer.encode(":", add_special_tokens=False)
-    if colon_id:
-        for pos in range(len(ids) - 1, max(0, len(ids) - 50), -1):
-            if ids[pos] == colon_id[0]:
-                return pos
+    # Search backwards for any variant
+    for pattern in variants:
+        pattern_len = len(pattern)
+        pattern_list = list(pattern)
+        for start in range(len(ids) - pattern_len, -1, -1):
+            if ids[start:start + pattern_len] == pattern_list:
+                return start + pattern_len - 1
 
     raise ValueError(
         f"Could not find 'Answer:' pattern in sequence of length {len(ids)}. "
@@ -394,8 +411,9 @@ def cache_hidden_states(args):
     dataset = load_cot_dataset(data_dir, "train")
     print(f"Loaded {len(dataset)} CoT examples for caching")
 
-    # Determine which layer(s) to cache
-    # -1 = last layer, -2 = second to last, etc.
+    # Determine which layer to cache
+    # outputs.hidden_states indexing: 0 = embedding output, 1 = after layer 0,
+    # ..., N = after last layer. So -1 = last transformer layer output.
     cache_layer = args.cache_layer
     print(f"Caching hidden states from layer: {cache_layer}")
 
@@ -408,63 +426,99 @@ def cache_hidden_states(args):
     else:
         device = next(model.parameters()).device
 
+    has_prompt_ids = "prompt_ids" in dataset.column_names
+
     # Verify answer position detection on first example
     sample = dataset[0]
-    sample_pos = find_answer_colon_position(sample["input_ids"], tokenizer)
+    sample_pos = find_answer_colon_position(
+        sample["input_ids"],
+        prompt_ids=sample.get("prompt_ids") if has_prompt_ids else None,
+        tokenizer=tokenizer,
+    )
     context = tokenizer.decode(sample["input_ids"][max(0, sample_pos - 5):sample_pos + 3])
     print(f"Sample Answer: position = {sample_pos}, context: '...{context}...'")
     print(f"  a1={sample.get('a1')}, a2={sample.get('a2')}, answer={sample.get('answer')}")
 
-    # Cache hidden states
-    all_hidden_states = []
-    all_metadata = []
+    # Pre-compute all answer positions
+    print("Finding Answer: positions...")
+    answer_positions = []  # (dataset_index, answer_pos)
     errors = 0
-
-    print(f"\nCaching hidden states for {len(dataset)} examples...")
-    for i in tqdm(range(len(dataset)), desc="Caching"):
+    for i in range(len(dataset)):
         ex = dataset[i]
-        input_ids = ex["input_ids"]
-
-        # Find the Answer: position
         try:
-            answer_pos = find_answer_colon_position(input_ids, tokenizer)
+            pos = find_answer_colon_position(
+                ex["input_ids"],
+                prompt_ids=ex.get("prompt_ids") if has_prompt_ids else None,
+                tokenizer=tokenizer,
+            )
+            answer_positions.append((i, pos))
         except ValueError as e:
             print(f"  Warning: {e}")
             errors += 1
-            continue
 
-        # Forward pass with hidden states
-        ids_tensor = torch.tensor([input_ids], dtype=torch.long, device=device)
+    print(f"Found {len(answer_positions)} positions ({errors} errors)")
+
+    # Cache hidden states in batches
+    batch_size = args.cache_batch_size
+    all_hidden_states = [None] * len(answer_positions)
+    all_metadata = [None] * len(answer_positions)
+    pad_id = tokenizer.pad_token_id
+
+    print(f"\nCaching hidden states (batch_size={batch_size})...")
+    for batch_start in tqdm(range(0, len(answer_positions), batch_size), desc="Caching"):
+        batch_items = answer_positions[batch_start:batch_start + batch_size]
+
+        # Gather sequences and their answer positions
+        batch_ids = []
+        batch_pos = []
+        batch_dataset_indices = []
+        for ds_idx, ans_pos in batch_items:
+            batch_ids.append(dataset[ds_idx]["input_ids"])
+            batch_pos.append(ans_pos)
+            batch_dataset_indices.append(ds_idx)
+
+        # Pad to max length in this batch
+        max_len = max(len(ids) for ids in batch_ids)
+        padded_ids = []
+        attn_masks = []
+        for ids in batch_ids:
+            pad_len = max_len - len(ids)
+            padded_ids.append(ids + [pad_id] * pad_len)
+            attn_masks.append([1] * len(ids) + [0] * pad_len)
+
+        ids_tensor = torch.tensor(padded_ids, dtype=torch.long, device=device)
+        attn_tensor = torch.tensor(attn_masks, dtype=torch.long, device=device)
 
         with torch.no_grad():
             outputs = model(
                 input_ids=ids_tensor,
+                attention_mask=attn_tensor,
                 output_hidden_states=True,
                 use_cache=False,
             )
 
-        # Extract hidden state at the Answer: position from specified layer
-        # outputs.hidden_states is tuple of (n_layers+1,) tensors [batch, seq, hidden]
-        # Index 0 = embedding, 1 = after layer 0, ..., -1 = after last layer
-        h = outputs.hidden_states[cache_layer][0, answer_pos].float().cpu().numpy()
+        # Extract hidden states at each example's answer position
+        hidden_layer = outputs.hidden_states[cache_layer]  # [batch, seq, hidden]
+        for j, (ds_idx, ans_pos) in enumerate(batch_items):
+            h = hidden_layer[j, ans_pos].float().cpu().numpy()
+            out_idx = batch_start + j
+            all_hidden_states[out_idx] = h
 
-        all_hidden_states.append(h)
-        all_metadata.append({
-            "id": ex.get("id", f"train-{i}"),
-            "pair_id": ex.get("pair_id", i),
-            "fact1": ex.get("fact1", ""),
-            "fact2": ex.get("fact2", ""),
-            "a1": ex.get("a1", 0),
-            "a2": ex.get("a2", 0),
-            "answer": ex.get("answer", 0),
-            "answer_pos": answer_pos,
-            "seq_len": len(input_ids),
-        })
+            ex = dataset[ds_idx]
+            all_metadata[out_idx] = {
+                "id": ex.get("id", f"train-{ds_idx}"),
+                "pair_id": ex.get("pair_id", ds_idx),
+                "fact1": ex.get("fact1", ""),
+                "fact2": ex.get("fact2", ""),
+                "a1": ex.get("a1", 0),
+                "a2": ex.get("a2", 0),
+                "answer": ex.get("answer", 0),
+                "answer_pos": ans_pos,
+                "seq_len": len(batch_ids[j]),
+            }
 
-        # Free memory
-        del outputs
-        if i % 100 == 0:
-            torch.cuda.empty_cache()
+        del outputs, hidden_layer
+        torch.cuda.empty_cache()
 
     print(f"\nCached {len(all_hidden_states)} hidden states ({errors} errors)")
 
@@ -528,7 +582,8 @@ def main():
                         help="Output directory for trained model")
     parser.add_argument("--lr", type=float, default=1e-5)
     parser.add_argument("--epochs", type=int, default=1)
-    parser.add_argument("--batch-size", type=int, default=1)
+    parser.add_argument("--batch-size", type=int, default=1,
+                        help="Per-device batch size for training (phase=train)")
     parser.add_argument("--grad-accum", type=int, default=32)
     parser.add_argument("--max-steps", type=int, default=-1)
     parser.add_argument("--warmup-ratio", type=float, default=0.03)
@@ -545,6 +600,8 @@ def main():
     parser.add_argument("--cache-layer", type=int, default=-1,
                         help="Which layer's hidden state to cache. "
                              "-1 = last layer, -2 = second to last, etc.")
+    parser.add_argument("--cache-batch-size", type=int, default=4,
+                        help="Batch size for caching forward passes (phase=cache)")
 
     # Wandb
     parser.add_argument("--wandb", action="store_true")

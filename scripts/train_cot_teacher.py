@@ -215,7 +215,7 @@ def train_teacher(args):
         bf16=USE_BF16,
         fp16=not USE_BF16,
         gradient_checkpointing=not args.no_grad_checkpoint,
-        optim="adamw_torch",
+        optim="adamw_bnb_8bit",  # 8-bit Adam: halves optimizer memory (112GB → 56GB)
         dataloader_num_workers=0,
         dataloader_pin_memory=False,
         remove_unused_columns=False,
@@ -339,21 +339,13 @@ def find_answer_colon_position(input_ids: List[int], prompt_ids: Optional[List[i
 
     Returns the index of the ":" token in the last "Answer:" occurrence.
 
-    Strategy:
-      1. If prompt_ids is available, use len(prompt_ids) - 1 directly. The
-         prompt_ids field in our dataset ends right at "Answer:", so its last
-         token is the ":" we want.
-      2. Otherwise, search for the "Answer" token followed by ":" in input_ids
-         using multiple tokenization variants to handle BPE context sensitivity
-         (e.g. "Answer:" vs " Answer:" vs "Answer" + ":").
+    NOTE: We always use pattern matching rather than prompt_ids, because
+    for CoT examples, prompt_ids ends at the start of the assistant turn
+    (before "Step 1: ..."), NOT at "Answer:". The "Answer:" we want is
+    inside the CoT response, near the end.
     """
-    # --- Fast path: use prompt_ids boundary from the dataset ---------------
-    if prompt_ids is not None and len(prompt_ids) > 0:
-        return len(prompt_ids) - 1
-
-    # --- Slow path: pattern-match on token IDs ----------------------------
     if tokenizer is None:
-        raise ValueError("Either prompt_ids or tokenizer must be provided")
+        raise ValueError("tokenizer must be provided")
 
     ids = list(input_ids)
 
@@ -367,7 +359,7 @@ def find_answer_colon_position(input_ids: List[int], prompt_ids: Optional[List[i
             toks = toks[1:]  # drop the space/newline token
         variants.add(tuple(toks))
 
-    # Search backwards for any variant
+    # Search backwards for any variant (we want the LAST occurrence)
     for pattern in variants:
         pattern_len = len(pattern)
         pattern_list = list(pattern)
@@ -426,13 +418,10 @@ def cache_hidden_states(args):
     else:
         device = next(model.parameters()).device
 
-    has_prompt_ids = "prompt_ids" in dataset.column_names
-
     # Verify answer position detection on first example
     sample = dataset[0]
     sample_pos = find_answer_colon_position(
         sample["input_ids"],
-        prompt_ids=sample.get("prompt_ids") if has_prompt_ids else None,
         tokenizer=tokenizer,
     )
     context = tokenizer.decode(sample["input_ids"][max(0, sample_pos - 5):sample_pos + 3])
@@ -448,7 +437,6 @@ def cache_hidden_states(args):
         try:
             pos = find_answer_colon_position(
                 ex["input_ids"],
-                prompt_ids=ex.get("prompt_ids") if has_prompt_ids else None,
                 tokenizer=tokenizer,
             )
             answer_positions.append((i, pos))

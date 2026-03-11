@@ -35,9 +35,8 @@ Usage:
 import argparse
 import inspect
 import json
-import os
 import pathlib
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List
 
 import numpy as np
 import torch
@@ -329,7 +328,7 @@ def train_teacher(args):
 # Phase 2: Cache Hidden States
 # ─────────────────────────────────────────────────────────────────────────────
 
-def find_answer_colon_position(input_ids: List[int], prompt_ids: Optional[List[int]] = None,
+def find_answer_colon_position(input_ids: List[int],
                                tokenizer=None) -> int:
     """Find the token position of the last "Answer:" in the sequence.
 
@@ -338,11 +337,6 @@ def find_answer_colon_position(input_ids: List[int], prompt_ids: Optional[List[i
     We extract the hidden state here as the distillation target.
 
     Returns the index of the ":" token in the last "Answer:" occurrence.
-
-    NOTE: We always use pattern matching rather than prompt_ids, because
-    for CoT examples, prompt_ids ends at the start of the assistant turn
-    (before "Step 1: ..."), NOT at "Answer:". The "Answer:" we want is
-    inside the CoT response, near the end.
     """
     if tokenizer is None:
         raise ValueError("tokenizer must be provided")

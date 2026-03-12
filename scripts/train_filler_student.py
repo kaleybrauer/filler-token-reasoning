@@ -77,12 +77,17 @@ def find_answer_colon_position(input_ids: List[int], tokenizer) -> int:
             toks = toks[1:]
         variants.add(tuple(toks))
 
+    best_pos = -1
     for pattern in variants:
         pattern_len = len(pattern)
         pattern_list = list(pattern)
         for start in range(len(ids) - pattern_len, -1, -1):
             if ids[start:start + pattern_len] == pattern_list:
-                return start + pattern_len - 1
+                best_pos = max(best_pos, start + pattern_len - 1)
+                break  # rightmost match for this variant; try next variant
+
+    if best_pos >= 0:
+        return best_pos
 
     raise ValueError(
         f"Could not find 'Answer:' pattern in sequence of length {len(ids)}. "
@@ -335,6 +340,7 @@ class DistillationTrainer(Trainer):
                 "loss_answer": loss_answer.item(),
                 "loss_distill": loss_distill.item(),
                 "loss_total": loss_total.item(),
+            })
 
         if return_outputs:
             return loss_total, outputs
@@ -457,7 +463,7 @@ def train_student(args):
         bf16=USE_BF16,
         fp16=not USE_BF16,
         gradient_checkpointing=not args.no_grad_checkpoint,
-        optim="adamw_bnb_8bit",
+        optim="adamw_8bit",
         dataloader_num_workers=0,
         dataloader_pin_memory=False,
         remove_unused_columns=False,

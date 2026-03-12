@@ -242,38 +242,74 @@ class DistillationDataCollator:
 # ─────────────────────────────────────────────────────────────────────────────
 
 class DistillationTrainer(Trainer):
-    """HuggingFace Trainer with added hidden state distillation loss."""
+    """HuggingFace Trainer with added hidden state distillation loss.
+
+    Uses a forward hook to capture a single layer's hidden state, avoiding the
+    memory cost of output_hidden_states=True (which stores all layers).
+    """
 
     def __init__(self, *args, lambda_distill: float = 1.0,
                  distill_layer: int = -1, **kwargs):
         super().__init__(*args, **kwargs)
         self.lambda_distill = lambda_distill
         self.distill_layer = distill_layer
-        self._step_count = 0
+        self._captured_hidden = None
+        self._hook_handle = None
+        self._last_logged_step = -1
+
+    def _get_target_module(self, model):
+        """Get the transformer layer module to hook into."""
+        # Unwrap DDP / FSDP wrappers
+        base = model.module if hasattr(model, "module") else model
+        # Qwen2.5 uses model.layers; adjust if architecture differs
+        layers = base.model.layers
+        # Convert negative index to positive
+        idx = self.distill_layer if self.distill_layer >= 0 else len(layers) + self.distill_layer
+        return layers[idx]
+
+    def _register_hook(self, model):
+        """Register a forward hook on the target layer to capture its output."""
+        if self._hook_handle is not None:
+            return  # Already registered
+
+        target = self._get_target_module(model)
+
+        def hook_fn(module, input, output):
+            # Qwen2 layers return (hidden_states, ...) tuple
+            hidden = output[0] if isinstance(output, tuple) else output
+            self._captured_hidden = hidden
+
+        self._hook_handle = target.register_forward_hook(hook_fn)
 
     def compute_loss(self, model, inputs, return_outputs=False, **kwargs):
         # Pop distillation-specific inputs before passing to model
         teacher_hs = inputs.pop("teacher_hidden_states")  # [batch, hidden_dim]
         answer_pos = inputs.pop("answer_positions")  # [batch]
 
-        # Forward pass with hidden states
+        # Register hook on first call
+        self._register_hook(model)
+
+        # Forward pass — no output_hidden_states needed
         outputs = model(
             input_ids=inputs["input_ids"],
             attention_mask=inputs["attention_mask"],
             labels=inputs["labels"],
-            output_hidden_states=True,
         )
 
         # Standard language modeling loss (on answer tokens only, per labels mask)
         loss_answer = outputs.loss
 
-        # Extract student hidden states at answer positions
-        # outputs.hidden_states: tuple of [batch, seq, hidden] for each layer
-        # Index 0 = embedding, 1 = after layer 0, ..., -1 = after last layer
-        hidden = outputs.hidden_states[self.distill_layer]  # [batch, seq, hidden]
+        # Skip distillation during eval
+        if not model.training:
+            if return_outputs:
+                return loss_answer, outputs
+            return loss_answer
+
+        # Extract student hidden states at answer positions from the hook
+        hidden = self._captured_hidden  # [batch, seq, hidden]
+        self._captured_hidden = None  # Free reference
 
         # Gather hidden states at each example's answer position
-        batch_size = hidden.shape[0]
         # answer_pos: [batch] → need to index hidden[b, answer_pos[b], :]
         idx = answer_pos.unsqueeze(-1).unsqueeze(-1)  # [batch, 1, 1]
         idx = idx.expand(-1, -1, hidden.shape[-1])  # [batch, 1, hidden_dim]
@@ -286,18 +322,15 @@ class DistillationTrainer(Trainer):
         # Combined loss
         loss_total = loss_answer + self.lambda_distill * loss_distill
 
-        # Log individual losses (every logging step)
-        self._step_count += 1
-        if self.state.global_step % self.args.logging_steps == 0:
-            if self.args.report_to and "wandb" in self.args.report_to:
-                try:
-                    wandb.log({
-                        "loss_answer": loss_answer.item(),
-                        "loss_distill": loss_distill.item(),
-                        "loss_total": loss_total.item(),
-                    }, step=self.state.global_step)
-                except Exception:
-                    pass  # Don't crash on logging failures
+        # Log individual losses (once per global step, not per micro-batch)
+        if (self.state.global_step > self._last_logged_step
+                and self.state.global_step % self.args.logging_steps == 0):
+            self._last_logged_step = self.state.global_step
+            self.log({
+                "loss_answer": loss_answer.item(),
+                "loss_distill": loss_distill.item(),
+                "loss_total": loss_total.item(),
+            })
 
         if return_outputs:
             return loss_total, outputs

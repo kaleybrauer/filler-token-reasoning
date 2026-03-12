@@ -721,15 +721,25 @@ def evaluate_dataset(
         # Collect all examples that need evaluation
         all_examples = [dataset[idx] for idx in range(n_total)]
 
+        # Check if dataset has pre-assigned filler_len fields (one variant per example)
+        dataset_has_filler_len = any(
+            ex.get("filler_len") is not None for ex in all_examples[:10]
+        )
+
         for n in filler_lengths:
             print(f"\n{'='*60}")
-            print(f"Evaluating at N={n} ({len(all_examples)} examples, batch_size={batch_size})")
+            # If dataset stores pre-tokenized variants, filter to examples at this filler length
+            if dataset_has_filler_len:
+                examples_for_n = [ex for ex in all_examples if ex.get("filler_len") == n]
+            else:
+                examples_for_n = all_examples
+            print(f"Evaluating at N={n} ({len(examples_for_n)} examples, batch_size={batch_size})")
             print(f"{'='*60}")
 
             # Filter to non-completed examples
             pending = []
             skipped = 0
-            for ex in all_examples:
+            for ex in examples_for_n:
                 example_id = ex.get("id", "")
                 if tracker.is_completed(example_id, n):
                     skipped += 1

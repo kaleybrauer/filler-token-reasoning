@@ -4,7 +4,9 @@ Train a filler student model with hidden state distillation from CoT teacher.
 
 Initializes from the CoT teacher checkpoint and trains on filler (dot) examples
 with a combined loss:
-    L_total = L_answer + λ * MSE(student_h, teacher_h)
+    L_total = L_answer + λ * distill_loss(student_h, teacher_h)
+
+where distill_loss is either MSE or cosine similarity loss (1 - cosine_sim).
 
 where student_h is the hidden state at the "Answer:" position in the filler
 example, and teacher_h is the cached hidden state from the CoT teacher at the
@@ -259,10 +261,11 @@ class DistillationTrainer(Trainer):
     """
 
     def __init__(self, *args, lambda_distill: float = 1.0,
-                 distill_layer: int = -1, **kwargs):
+                 distill_layer: int = -1, distill_loss: str = "cosine", **kwargs):
         super().__init__(*args, **kwargs)
         self.lambda_distill = lambda_distill
         self.distill_layer = distill_layer
+        self.distill_loss = distill_loss
         self._captured_hidden = None
         self._hook_handle = None
         self._last_logged_step = -1
@@ -325,9 +328,12 @@ class DistillationTrainer(Trainer):
         idx = idx.expand(-1, -1, hidden.shape[-1])  # [batch, 1, hidden_dim]
         student_hs = hidden.gather(1, idx).squeeze(1)  # [batch, hidden_dim]
 
-        # Distillation loss: MSE between student and teacher hidden states
+        # Distillation loss: MSE or cosine between student and teacher hidden states
         teacher_hs = teacher_hs.to(student_hs.device, dtype=student_hs.dtype)
-        loss_distill = F.mse_loss(student_hs, teacher_hs)
+        if self.distill_loss == "cosine":
+            loss_distill = (1.0 - F.cosine_similarity(student_hs, teacher_hs, dim=-1)).mean()
+        else:
+            loss_distill = F.mse_loss(student_hs, teacher_hs)
 
         # Combined loss
         loss_total = loss_answer + self.lambda_distill * loss_distill
@@ -459,7 +465,7 @@ def train_student(args):
         logging_steps=args.logging_steps,
         save_steps=args.save_steps,
         save_strategy="steps",
-        save_total_limit=3,
+        save_total_limit=1,
         bf16=USE_BF16,
         fp16=not USE_BF16,
         gradient_checkpointing=not args.no_grad_checkpoint,
@@ -504,6 +510,7 @@ def train_student(args):
                     "effective_batch_size": args.batch_size * args.grad_accum,
                     "lambda_distill": args.lambda_distill,
                     "distill_layer": args.distill_layer,
+                    "distill_loss": args.distill_loss,
                     "train_examples": len(train_dataset),
                     "filler_type": "dots",
                 },
@@ -528,6 +535,7 @@ def train_student(args):
         data_collator=data_collator,
         lambda_distill=args.lambda_distill,
         distill_layer=args.distill_layer,
+        distill_loss=args.distill_loss,
     )
     tr_sig = inspect.signature(Trainer.__init__).parameters
     if "processing_class" in tr_sig:
@@ -562,6 +570,7 @@ def train_student(args):
 
     print(f"\nStarting filler student training...")
     print(f"  λ_distill = {args.lambda_distill}")
+    print(f"  Distill loss = {args.distill_loss}")
     print(f"  Distill layer = {args.distill_layer}")
     trainer.train(resume_from_checkpoint=resume_checkpoint)
 
@@ -577,6 +586,7 @@ def train_student(args):
         "epochs": args.epochs,
         "lambda_distill": args.lambda_distill,
         "distill_layer": args.distill_layer,
+        "distill_loss": args.distill_loss,
         "train_examples": len(train_dataset),
     }
     with open(outdir / "training_config.json", "w") as f:
@@ -630,6 +640,9 @@ def main():
     # Distillation
     parser.add_argument("--lambda-distill", type=float, default=1.0,
                         help="Weight of the distillation loss (default: 1.0)")
+    parser.add_argument("--distill-loss", type=str, default="cosine",
+                        choices=["cosine", "mse"],
+                        help="Distillation loss type: 'cosine' (1 - cosine_sim) or 'mse' (default: cosine)")
     parser.add_argument("--distill-layer", type=int, default=-1,
                         help="Which layer to extract student hidden states from. "
                              "Must match --cache-layer used during teacher caching. "

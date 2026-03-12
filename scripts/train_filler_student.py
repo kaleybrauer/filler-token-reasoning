@@ -51,6 +51,11 @@ USE_BF16 = torch.cuda.is_available() and torch.cuda.is_bf16_supported()
 DTYPE = torch.bfloat16 if USE_BF16 else torch.float16
 
 
+def is_main_process() -> bool:
+    """Return True only on rank-0 process (covers single-GPU and torchrun DDP)."""
+    return int(os.environ.get("RANK", 0)) == 0
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Answer position detection (shared with train_cot_teacher.py)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -330,7 +335,6 @@ class DistillationTrainer(Trainer):
                 "loss_answer": loss_answer.item(),
                 "loss_distill": loss_distill.item(),
                 "loss_total": loss_total.item(),
-            })
 
         if return_outputs:
             return loss_total, outputs
@@ -480,23 +484,24 @@ def train_student(args):
         ta_kwargs["report_to"] = "wandb"
         run_name = args.wandb_run_name or f"filler_student_{args.lr}"
         ta_kwargs["run_name"] = run_name
-        wandb.init(
-            project=args.wandb_project,
-            name=run_name,
-            config={
-                "phase": "filler_student",
-                "model": args.model,
-                "lr": args.lr,
-                "epochs": args.epochs,
-                "batch_size": args.batch_size,
-                "grad_accum": args.grad_accum,
-                "effective_batch_size": args.batch_size * args.grad_accum,
-                "lambda_distill": args.lambda_distill,
-                "distill_layer": args.distill_layer,
-                "train_examples": len(train_dataset),
-                "filler_type": "dots",
-            },
-        )
+        if is_main_process():
+            wandb.init(
+                project=args.wandb_project,
+                name=run_name,
+                config={
+                    "phase": "filler_student",
+                    "model": args.model,
+                    "lr": args.lr,
+                    "epochs": args.epochs,
+                    "batch_size": args.batch_size,
+                    "grad_accum": args.grad_accum,
+                    "effective_batch_size": args.batch_size * args.grad_accum,
+                    "lambda_distill": args.lambda_distill,
+                    "distill_layer": args.distill_layer,
+                    "train_examples": len(train_dataset),
+                    "filler_type": "dots",
+                },
+            )
     else:
         ta_kwargs["report_to"] = "none"
 
@@ -571,7 +576,7 @@ def train_student(args):
     with open(outdir / "training_config.json", "w") as f:
         json.dump(config, f, indent=2)
 
-    if args.wandb and WANDB_AVAILABLE:
+    if args.wandb and WANDB_AVAILABLE and is_main_process():
         wandb.finish()
 
     print("Filler student training complete!")

@@ -30,8 +30,10 @@ Usage:
 """
 import argparse
 import json
+import os
 import pathlib
 import sys
+import time
 from typing import Any, Dict, List, Optional, Tuple
 
 import torch
@@ -39,7 +41,7 @@ from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 
 # Project imports
-sys.path.insert(0, str(pathlib.Path(__file__).parent.parent / "scripts"))
+sys.path.insert(0, str(pathlib.Path(__file__).parent))
 from generate_addition_dataset import build_system_prompt, compose_question
 from evaluate import load_model_and_tokenizer, parse_integer_answer
 
@@ -47,26 +49,82 @@ USE_BF16 = torch.cuda.is_available() and torch.cuda.is_bf16_supported()
 DTYPE = torch.bfloat16 if USE_BF16 else torch.float16
 
 
+def build_compressed_system_prompt(
+    fewshot_examples: List[Tuple[str, str, int, int, int]],
+) -> str:
+    """Build a system prompt with compressed few-shot examples.
+    
+    Instead of full CoT (Step 1 / Step 2 / Calculation), shows
+    compressed thinking: just the key numbers.
+    """
+    examples_text = []
+    for q1, q2, a1, a2, s in fewshot_examples:
+        q1_inner = q1.rstrip("? \t")
+        q2_inner = q2.rstrip("? \t")
+        question = f"What is ({q1_inner}) + ({q2_inner})?"
+        examples_text.append(
+            f"Q: {question}\n"
+            f"Thinking: {a1}, {a2}, {s}\n"
+            f"Answer: {s}"
+        )
+
+    joined = "\n\n".join(examples_text)
+
+    return (
+        "You answer questions that require looking up two facts and adding them.\n"
+        "\n"
+        "Here are some worked examples:\n"
+        "\n"
+        f"{joined}\n"
+        "\n"
+        "The user will ask a similar question. "
+        "Think briefly, then give your final answer as 'Answer: [NUMBER]'."
+    )
+
+
 def build_prompt_for_generation(
     example: Dict[str, Any],
     tokenizer: Any,
     fewshot_examples: List[Tuple[str, str, int, int, int]],
+    system_prompt_override: Optional[str] = None,
+    assistant_prefix: str = "",
+    prompt_style: str = "default",
 ) -> Tuple[str, List[int]]:
-    """Build prompt up to the start of the assistant turn.
+    """Build prompt up to the start of free generation.
 
     Returns (prompt_text, prompt_ids) — the model generates from here.
+    
+    prompt_style:
+        "default" — uses build_system_prompt from dataset (full CoT few-shots)
+        "compressed" — uses build_compressed_system_prompt (a1, a2, sum few-shots)
+        "custom" — uses system_prompt_override text directly
+    
+    If assistant_prefix is provided (e.g., "Thinking:"), it's appended
+    after the generation prompt start, before the model generates freely.
     """
     q1 = example["fact1"]
     q2 = example["fact2"]
 
+    if system_prompt_override:
+        system_content = system_prompt_override
+    elif prompt_style == "compressed":
+        system_content = build_compressed_system_prompt(fewshot_examples)
+    else:
+        system_content = build_system_prompt(fewshot_examples)
+
     messages = [
-        {"role": "system", "content": build_system_prompt(fewshot_examples)},
+        {"role": "system", "content": system_content},
         {"role": "user", "content": compose_question(q1, q2)},
     ]
 
     prompt_text = tokenizer.apply_chat_template(
         messages, tokenize=False, add_generation_prompt=True
     )
+    
+    # Add assistant prefix (e.g., "Thinking:") before free generation
+    if assistant_prefix:
+        prompt_text += assistant_prefix
+
     prompt_ids = tokenizer.encode(prompt_text, add_special_tokens=False)
 
     return prompt_text, prompt_ids
@@ -105,22 +163,24 @@ def generate_with_k_free_tokens(
     device: torch.device,
     digit_token_ids: Optional[List[int]] = None,
     temperature: float = 0.0,
+    answer_prefix: str = "\nAnswer:",
 ) -> Tuple[str, str, List[int]]:
-    """Generate K free tokens, then force Answer: and generate the answer.
+    """Generate K free tokens, then force answer_prefix and generate the answer.
 
     Args:
         model: The language model.
         tokenizer: The tokenizer.
-        prompt_ids: Token IDs for the prompt (up to assistant turn start).
+        prompt_ids: Token IDs for the prompt (up to free generation start).
         k: Number of free tokens to generate.
         device: GPU device.
         digit_token_ids: If provided, mask these during K free token generation.
         temperature: Sampling temperature (0 = greedy).
+        answer_prefix: Text to force after K tokens (e.g., "\\nAnswer:" or "Answer:").
 
     Returns:
         (free_text, answer_text, full_ids)
         free_text: The K tokens the model generated freely.
-        answer_text: What the model generated after "Answer:".
+        answer_text: What the model generated after the answer prefix.
         full_ids: Complete token sequence.
     """
     current_ids = list(prompt_ids)
@@ -159,8 +219,7 @@ def generate_with_k_free_tokens(
     else:
         free_text = ""
 
-    # Phase 2: Force "\nAnswer:" into the sequence
-    answer_prefix = "\nAnswer:"
+    # Phase 2: Force answer_prefix into the sequence
     answer_prefix_ids = tokenizer.encode(answer_prefix, add_special_tokens=False)
     current_ids.extend(answer_prefix_ids)
 
@@ -210,6 +269,21 @@ def main():
     parser.add_argument("--temperature", type=float, default=0.0,
                         help="Sampling temperature for free tokens (0 = greedy)")
 
+    # Prompt customization
+    parser.add_argument("--prompt-style", type=str, default="default",
+                        choices=["default", "compressed", "custom"],
+                        help="'default' = full CoT few-shots from manifest, "
+                             "'compressed' = brief 'a1, a2, sum' few-shots from manifest, "
+                             "'custom' = load from --system-prompt-file")
+    parser.add_argument("--system-prompt-file", type=str, default=None,
+                        help="Path to a text file containing a custom system prompt "
+                             "(only used with --prompt-style custom)")
+    parser.add_argument("--assistant-prefix", type=str, default="",
+                        help="Text to prepend to the assistant turn before free generation "
+                             "(e.g., 'Thinking:' or 'Let me think...')")
+    parser.add_argument("--answer-prefix", type=str, default="\nAnswer:",
+                        help="Text to force after K free tokens (default: '\\nAnswer:')")
+
     # Output
     parser.add_argument("--outdir", type=str, default="results/compressed_pilot")
     parser.add_argument("--show-examples", type=int, default=10,
@@ -220,6 +294,23 @@ def main():
     k_values = [int(x) for x in args.k_values.split(",")]
     outdir = pathlib.Path(args.outdir)
     outdir.mkdir(parents=True, exist_ok=True)
+
+    # ── Load custom system prompt if provided ──
+    system_prompt_override = None
+    if args.prompt_style == "custom":
+        if not args.system_prompt_file:
+            parser.error("--prompt-style custom requires --system-prompt-file")
+        system_prompt_override = pathlib.Path(args.system_prompt_file).read_text().strip()
+        print(f"Using custom system prompt from {args.system_prompt_file}")
+        print(f"  Preview: {system_prompt_override[:100]}...")
+    elif args.prompt_style == "compressed":
+        print("Using compressed few-shot format (a1, a2, sum) from manifest")
+    else:
+        print("Using default full-CoT few-shot format from manifest")
+    
+    if args.assistant_prefix:
+        print(f"Assistant prefix: {repr(args.assistant_prefix)}")
+    print(f"Answer prefix: {repr(args.answer_prefix)}")
 
     # ── Load data ──
     data_dir = pathlib.Path(args.data_dir)
@@ -270,6 +361,18 @@ def main():
         digit_token_ids = get_digit_token_ids(tokenizer)
         print(f"Restricting {len(digit_token_ids)} digit tokens during free generation")
 
+    # ── Preview prompt format on first example ──
+    preview_prompt, _ = build_prompt_for_generation(
+        dataset[0], tokenizer, fewshot_examples,
+        system_prompt_override=system_prompt_override,
+        assistant_prefix=args.assistant_prefix,
+        prompt_style=args.prompt_style,
+    )
+    # Show the last ~300 chars to see the format near the generation point
+    print(f"\n--- Prompt preview (last 300 chars) ---")
+    print(f"...{preview_prompt[-300:]}")
+    print(f"--- End preview ---\n")
+
     # ── Run evaluation for each K ──
     all_results = {}
 
@@ -289,7 +392,10 @@ def main():
 
             # Build prompt
             prompt_text, prompt_ids = build_prompt_for_generation(
-                ex, tokenizer, fewshot_examples
+                ex, tokenizer, fewshot_examples,
+                system_prompt_override=system_prompt_override,
+                assistant_prefix=args.assistant_prefix,
+                prompt_style=args.prompt_style,
             )
 
             # Generate with K free tokens
@@ -297,11 +403,12 @@ def main():
                 model, tokenizer, prompt_ids, k, device,
                 digit_token_ids=digit_token_ids if k > 0 else None,
                 temperature=args.temperature,
+                answer_prefix=args.answer_prefix,
             )
 
             # Parse answer
-            predicted, _ = parse_integer_answer(answer_text)
-            is_correct = predicted is not None and predicted == expected
+            predicted, was_direct = parse_integer_answer(answer_text)
+            is_correct = was_direct and predicted == expected
             if is_correct:
                 correct += 1
             total += 1
@@ -367,6 +474,10 @@ def main():
         "no_digits": args.no_digits,
         "temperature": args.temperature,
         "n_examples": len(dataset),
+        "prompt_style": args.prompt_style,
+        "system_prompt_file": args.system_prompt_file,
+        "assistant_prefix": args.assistant_prefix,
+        "answer_prefix": args.answer_prefix,
         "results": all_results,
     }
     with open(outdir / "summary.json", "w") as f:

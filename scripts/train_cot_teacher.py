@@ -97,8 +97,9 @@ class DataCollatorForCausalLM:
 # Data Loading
 # ─────────────────────────────────────────────────────────────────────────────
 
-def load_cot_dataset(data_dir: pathlib.Path, split: str = "train"):
-    """Load dataset and filter to CoT examples only."""
+def load_cot_dataset(data_dir: pathlib.Path, split: str = "train",
+                     include_filler: bool = False):
+    """Load dataset, optionally filtering to CoT examples only."""
     data_file = data_dir / f"{split}.jsonl"
     if not data_file.exists():
         raise FileNotFoundError(f"Data file not found: {data_file}")
@@ -106,8 +107,9 @@ def load_cot_dataset(data_dir: pathlib.Path, split: str = "train"):
     dataset = load_dataset("json", data_files=str(data_file), split="train")
     n_before = len(dataset)
 
-    # Filter to CoT examples only
-    if "sequence_type" in dataset.column_names:
+    if include_filler:
+        print(f"Loaded {split}: {len(dataset)} examples (CoT + filler)")
+    elif "sequence_type" in dataset.column_names:
         dataset = dataset.filter(lambda ex: ex["sequence_type"] == "cot")
         print(f"Filtered {split}: {n_before} → {len(dataset)} CoT examples")
     else:
@@ -116,9 +118,9 @@ def load_cot_dataset(data_dir: pathlib.Path, split: str = "train"):
     return dataset
 
 
-def load_training_dataset(data_dir: pathlib.Path):
-    """Load and prepare CoT training data."""
-    dataset = load_cot_dataset(data_dir, "train")
+def load_training_dataset(data_dir: pathlib.Path, include_filler: bool = False):
+    """Load and prepare training data."""
+    dataset = load_cot_dataset(data_dir, "train", include_filler=include_filler)
 
     keep_cols = {"input_ids", "attention_mask", "labels"}
     remove_cols = [c for c in dataset.column_names if c not in keep_cols]
@@ -128,9 +130,9 @@ def load_training_dataset(data_dir: pathlib.Path):
     return dataset
 
 
-def load_eval_dataset(data_dir: pathlib.Path):
-    """Load and prepare CoT eval data."""
-    dataset = load_cot_dataset(data_dir, "val")
+def load_eval_dataset(data_dir: pathlib.Path, include_filler: bool = False):
+    """Load and prepare eval data."""
+    dataset = load_cot_dataset(data_dir, "val", include_filler=include_filler)
 
     keep_cols = {"input_ids", "attention_mask", "labels"}
     remove_cols = [c for c in dataset.column_names if c not in keep_cols]
@@ -184,14 +186,15 @@ def train_teacher(args):
 
     # Load data
     data_dir = pathlib.Path(args.data_dir)
-    train_dataset = load_training_dataset(data_dir)
+    train_dataset = load_training_dataset(data_dir, include_filler=args.include_filler)
     eval_dataset = None
     if (data_dir / "val.jsonl").exists():
-        eval_dataset = load_eval_dataset(data_dir)
+        eval_dataset = load_eval_dataset(data_dir, include_filler=args.include_filler)
 
-    print(f"\nTraining: {len(train_dataset)} CoT examples")
+    label = "CoT + filler" if args.include_filler else "CoT"
+    print(f"\nTraining: {len(train_dataset)} {label} examples")
     if eval_dataset:
-        print(f"Eval: {len(eval_dataset)} CoT examples")
+        print(f"Eval: {len(eval_dataset)} {label} examples")
 
     # Training arguments
     outdir = pathlib.Path(args.outdir)
@@ -574,6 +577,8 @@ def main():
     parser.add_argument("--eval-steps", type=int, default=100)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--resume-from", type=str, default=None)
+    parser.add_argument("--include-filler", action="store_true",
+                        help="Train on CoT + filler examples (default: CoT only)")
 
     # Caching args (phase=cache)
     parser.add_argument("--cache-outdir", type=str, default=None,

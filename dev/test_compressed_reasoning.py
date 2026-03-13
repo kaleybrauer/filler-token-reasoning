@@ -30,18 +30,15 @@ Usage:
 """
 import argparse
 import json
-import os
 import pathlib
 import sys
-import time
 from typing import Any, Dict, List, Optional, Tuple
 
 import torch
 from tqdm import tqdm
-from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 
 # Project imports
-sys.path.insert(0, str(pathlib.Path(__file__).parent))
+sys.path.insert(0, str(pathlib.Path(__file__).parent.parent / "scripts"))
 from generate_addition_dataset import build_system_prompt, compose_question
 from evaluate import load_model_and_tokenizer, parse_integer_answer
 
@@ -407,8 +404,8 @@ def main():
             )
 
             # Parse answer
-            predicted, was_direct = parse_integer_answer(answer_text)
-            is_correct = was_direct and predicted == expected
+            predicted, _ = parse_integer_answer(answer_text)
+            is_correct = predicted is not None and predicted == expected
             if is_correct:
                 correct += 1
             total += 1

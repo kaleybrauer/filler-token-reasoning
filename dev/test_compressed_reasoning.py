@@ -293,6 +293,14 @@ def main():
     parser.add_argument("--show-examples", type=int, default=10,
                         help="Number of example outputs to print per K value")
 
+    # Sharding (for parallelizing across multiple processes/GPUs)
+    parser.add_argument("--shard", type=int, nargs=2, metavar=("IDX", "TOTAL"),
+                        default=None,
+                        help="Run only shard IDX of TOTAL (0-indexed). "
+                             "Multiple shards write to the same outdir; "
+                             "resume logic merges results by example ID. "
+                             "Example: --shard 0 2 and --shard 1 2 on two GPUs.")
+
     args = parser.parse_args()
 
     # Process escape sequences in string arguments
@@ -341,6 +349,15 @@ def main():
 
     if args.max_examples:
         dataset = dataset.select(range(min(args.max_examples, len(dataset))))
+
+    # Shard: keep only every TOTAL-th example starting at IDX
+    if args.shard is not None:
+        shard_idx, shard_total = args.shard
+        if shard_idx >= shard_total or shard_idx < 0:
+            raise ValueError(f"--shard IDX must be in [0, TOTAL-1], got {shard_idx}/{shard_total}")
+        indices = list(range(shard_idx, len(dataset), shard_total))
+        dataset = dataset.select(indices)
+        print(f"Shard {shard_idx}/{shard_total}: {len(dataset)} examples")
 
     print(f"Loaded {len(dataset)} test examples")
 

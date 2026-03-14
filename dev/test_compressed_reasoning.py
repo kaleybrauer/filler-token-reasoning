@@ -33,6 +33,7 @@ import json
 import pathlib
 import sys
 from typing import Any, Dict, List, Optional, Tuple
+import unicodedata
 
 import torch
 from tqdm import tqdm
@@ -128,27 +129,16 @@ def build_prompt_for_generation(
 
 
 def get_digit_token_ids(tokenizer) -> List[int]:
-    """Find all token IDs that represent digit characters."""
+    """Find all token IDs that contain digit characters (any script)."""
     digit_ids = set()
-    for d in range(10):
-        # Try various forms: "0", " 0", etc.
-        for prefix in ["", " "]:
-            text = f"{prefix}{d}"
-            ids = tokenizer.encode(text, add_special_tokens=False)
-            for tid in ids:
-                decoded = tokenizer.decode([tid]).strip()
-                if decoded.isdigit():
-                    digit_ids.add(tid)
-
-    # Also scan vocabulary directly for single-digit tokens
     for tid in range(tokenizer.vocab_size):
         try:
-            decoded = tokenizer.decode([tid]).strip()
-            if decoded and all(c.isdigit() for c in decoded):
+            decoded = tokenizer.decode([tid])
+            # Check if any character is a digit in ANY unicode category
+            if any(unicodedata.category(c).startswith('N') for c in decoded if c.strip()):
                 digit_ids.add(tid)
         except Exception:
             continue
-
     return sorted(digit_ids)
 
 

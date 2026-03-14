@@ -184,14 +184,14 @@ def generate_with_k_free_tokens(
 
     # Phase 1: Generate K free tokens
     if k > 0:
+        # Prime the KV cache with the full prompt
         ids_tensor = torch.tensor([current_ids], dtype=torch.long, device=device)
+        with torch.no_grad():
+            outputs = model(input_ids=ids_tensor, use_cache=True)
+        past = outputs.past_key_values
+        logits = outputs.logits[0, -1, :]
 
         for step in range(k):
-            with torch.no_grad():
-                outputs = model(input_ids=ids_tensor, use_cache=False)
-
-            logits = outputs.logits[0, -1, :]  # [vocab_size]
-
             # Mask digit tokens if restricted
             if digit_token_ids is not None:
                 logits[digit_token_ids] = float("-inf")
@@ -207,7 +207,14 @@ def generate_with_k_free_tokens(
                 next_token = torch.multinomial(probs, 1).item()
 
             current_ids.append(next_token)
-            ids_tensor = torch.tensor([current_ids], dtype=torch.long, device=device)
+
+            if step < k - 1:
+                # Pass only the new token, reuse cached context
+                next_tensor = torch.tensor([[next_token]], dtype=torch.long, device=device)
+                with torch.no_grad():
+                    outputs = model(input_ids=next_tensor, past_key_values=past, use_cache=True)
+                past = outputs.past_key_values
+                logits = outputs.logits[0, -1, :]
 
         free_text = tokenizer.decode(
             current_ids[len(prompt_ids):],
@@ -394,13 +401,30 @@ def main():
         print(f"  K = {k} {'(no digits)' if args.no_digits else '(unrestricted)'}")
         print(f"{'='*60}")
 
+        # Load any existing results for this K (resume support)
+        results_file = outdir / f"results_K{k}.jsonl"
+        completed_ids = set()
+        detailed_results = []
         correct = 0
         total = 0
+        if results_file.exists():
+            with open(results_file) as f:
+                for line in f:
+                    r = json.loads(line.strip())
+                    completed_ids.add(r["id"])
+                    detailed_results.append(r)
+                    total += 1
+                    if r.get("correct"):
+                        correct += 1
+            print(f"  Resuming: {len(completed_ids)} already done")
+
         examples_shown = 0
-        detailed_results = []
 
         for i in tqdm(range(len(dataset)), desc=f"K={k}"):
             ex = dataset[i]
+            ex_id = ex.get("id", f"test-{i}")
+            if ex_id in completed_ids:
+                continue
             expected = ex["answer"]
 
             # Build prompt — skip assistant_prefix for k=0 (no thinking tokens)
@@ -434,7 +458,7 @@ def main():
             total += 1
 
             result = {
-                "id": ex.get("id", f"test-{i}"),
+                "id": ex_id,
                 "fact1": ex.get("fact1", ""),
                 "fact2": ex.get("fact2", ""),
                 "a1": ex.get("a1", 0),
@@ -447,6 +471,8 @@ def main():
                 "k": k,
             }
             detailed_results.append(result)
+            with open(results_file, "a") as f:
+                f.write(json.dumps(result, ensure_ascii=False) + "\n")
 
             # Print examples
             if examples_shown < args.show_examples:
@@ -469,12 +495,6 @@ def main():
             "accuracy": accuracy,
             "no_digits": args.no_digits,
         }
-
-        # Save detailed results
-        results_file = outdir / f"results_K{k}.jsonl"
-        with open(results_file, "w") as f:
-            for r in detailed_results:
-                f.write(json.dumps(r, ensure_ascii=False) + "\n")
 
     # ── Summary ──
     print(f"\n{'='*60}")

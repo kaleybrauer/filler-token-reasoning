@@ -33,6 +33,7 @@ import json
 import pathlib
 import sys
 from typing import Any, Dict, List, Optional, Tuple
+import re
 import unicodedata
 
 import torch
@@ -128,14 +129,45 @@ def build_prompt_for_generation(
     return prompt_text, prompt_ids
 
 
+# Regex covering digit-like codepoints not in Unicode 'N' category (e.g. CJK number words)
+_EXTRA_NUMERIC_RE = re.compile(
+    r'['
+    r'\uFF10-\uFF19'          # Fullwidth digits ０-９
+    r'\u0660-\u0669'          # Arabic-Indic digits ٠-٩
+    r'\u06F0-\u06F9'          # Extended Arabic-Indic (Persian) ۰-۹
+    r'\u0966-\u096F'          # Devanagari digits ०-९
+    r'\u09E6-\u09EF'          # Bengali digits
+    r'\u0A66-\u0A6F'          # Gurmukhi digits
+    r'\u0AE6-\u0AEF'          # Gujarati digits
+    r'\u0BE6-\u0BEF'          # Tamil digits
+    r'\u0CE6-\u0CEF'          # Kannada digits
+    r'\u0D66-\u0D6F'          # Malayalam digits
+    r'\u0E50-\u0E59'          # Thai digits ๐-๙
+    r'\u0F20-\u0F29'          # Tibetan digits
+    r'\u1040-\u1049'          # Myanmar digits
+    r'\u17E0-\u17E9'          # Khmer digits
+    r'\u4E00\u4E8C\u4E09\u56DB\u4E94\u516D\u4E03\u516B\u4E5D\u5341'  # 一二三四五六七八九十
+    r'\u767E\u5343\u4E07\u5104\u5146'  # 百千万億兆
+    r'\u96F6\u3007'           # 零〇
+    r'\u58F1\u5F10\u53C2\u62FE\u767E\u4EDF\u842C'  # 壱弐参拾百仟萬 (formal)
+    r'\u2160-\u2188'          # Roman numerals Ⅰ-Ↄ
+    r']'
+)
+
+
 def get_digit_token_ids(tokenizer) -> List[int]:
-    """Find all token IDs that contain digit characters (any script)."""
+    """Find all token IDs that represent number-like characters (any script)."""
     digit_ids = set()
     for tid in range(tokenizer.vocab_size):
         try:
             decoded = tokenizer.decode([tid])
-            # Check if any character is a digit in ANY unicode category
-            if any(unicodedata.category(c).startswith('N') for c in decoded if c.strip()):
+            # Unicode 'N' category: Nd (decimal digit), Nl (letter number), No (other number)
+            has_unicode_numeric = any(
+                unicodedata.category(c).startswith('N') for c in decoded if c.strip()
+            )
+            # Extra: scripts/codepoints not in 'N' category (e.g. CJK number words)
+            has_extra_numeric = bool(_EXTRA_NUMERIC_RE.search(decoded))
+            if has_unicode_numeric or has_extra_numeric:
                 digit_ids.add(tid)
         except Exception:
             continue

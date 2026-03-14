@@ -5,7 +5,7 @@ Test compressed reasoning: give the model K free tokens before "Answer:".
 For each test example:
 1. Build the prompt (system + question + start of assistant turn)
 2. Let the model generate K tokens freely (optionally with digit restriction)
-3. Force "\\nAnswer:" into the sequence
+3. Force "\nAnswer:" into the sequence
 4. Let the model generate the answer
 5. Check if the answer is correct
 
@@ -288,6 +288,11 @@ def main():
 
     args = parser.parse_args()
 
+    # Process escape sequences in string arguments
+    # (CLI passes literal \n as two chars, but we want an actual newline)
+    args.answer_prefix = args.answer_prefix.replace("\\n", "\n").replace("\\t", "\t")
+    args.assistant_prefix = args.assistant_prefix.replace("\\n", "\n").replace("\\t", "\t")
+
     k_values = [int(x) for x in args.k_values.split(",")]
     outdir = pathlib.Path(args.outdir)
     outdir.mkdir(parents=True, exist_ok=True)
@@ -358,16 +363,27 @@ def main():
         digit_token_ids = get_digit_token_ids(tokenizer)
         print(f"Restricting {len(digit_token_ids)} digit tokens during free generation")
 
-    # ── Preview prompt format on first example ──
-    preview_prompt, _ = build_prompt_for_generation(
-        dataset[0], tokenizer, fewshot_examples,
-        system_prompt_override=system_prompt_override,
-        assistant_prefix=args.assistant_prefix,
-        prompt_style=args.prompt_style,
-    )
-    # Show the last ~300 chars to see the format near the generation point
-    print(f"\n--- Prompt preview (last 300 chars) ---")
-    print(f"...{preview_prompt[-300:]}")
+    # ── Preview prompt format ──
+    if 0 in k_values and args.assistant_prefix:
+        print(f"\n--- Prompt preview K=0 (no thinking prefix, last 200 chars) ---")
+        preview_k0, _ = build_prompt_for_generation(
+            dataset[0], tokenizer, fewshot_examples,
+            system_prompt_override=system_prompt_override,
+            assistant_prefix="",
+            prompt_style=args.prompt_style,
+        )
+        print(f"...{preview_k0[-200:]}")
+    
+    k_preview = max(k for k in k_values if k > 0) if any(k > 0 for k in k_values) else 0
+    if k_preview > 0:
+        print(f"\n--- Prompt preview K>0 (with thinking prefix, last 200 chars) ---")
+        preview_kn, _ = build_prompt_for_generation(
+            dataset[0], tokenizer, fewshot_examples,
+            system_prompt_override=system_prompt_override,
+            assistant_prefix=args.assistant_prefix,
+            prompt_style=args.prompt_style,
+        )
+        print(f"...{preview_kn[-200:]}")
     print(f"--- End preview ---\n")
 
     # ── Run evaluation for each K ──
@@ -387,20 +403,27 @@ def main():
             ex = dataset[i]
             expected = ex["answer"]
 
-            # Build prompt
+            # Build prompt — skip assistant_prefix for k=0 (no thinking tokens)
+            effective_prefix = args.assistant_prefix if k > 0 else ""
             prompt_text, prompt_ids = build_prompt_for_generation(
                 ex, tokenizer, fewshot_examples,
                 system_prompt_override=system_prompt_override,
-                assistant_prefix=args.assistant_prefix,
+                assistant_prefix=effective_prefix,
                 prompt_style=args.prompt_style,
             )
+
+            # For k=0, go straight to "Answer:" without the thinking prefix
+            effective_answer_prefix = args.answer_prefix
+            if k == 0 and args.assistant_prefix:
+                # Strip leading newline from answer_prefix since there's no thinking line before it
+                effective_answer_prefix = effective_answer_prefix.lstrip("\n")
 
             # Generate with K free tokens
             free_text, answer_text, full_ids = generate_with_k_free_tokens(
                 model, tokenizer, prompt_ids, k, device,
                 digit_token_ids=digit_token_ids if k > 0 else None,
                 temperature=args.temperature,
-                answer_prefix=args.answer_prefix,
+                answer_prefix=effective_answer_prefix,
             )
 
             # Parse answer

@@ -185,13 +185,33 @@ def _all_digit_chars() -> List[str]:
     return chars
 
 
-def get_digit_token_ids(tokenizer) -> List[int]:
-    """Find all token IDs that represent number-like characters (any script).
+# English number words to block (cardinals, ordinals, multipliers)
+_NUMBER_WORDS = (
+    # Cardinals
+    "zero", "one", "two", "three", "four", "five", "six", "seven", "eight",
+    "nine", "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen",
+    "sixteen", "seventeen", "eighteen", "nineteen",
+    "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety",
+    "hundred", "thousand", "million", "billion", "trillion",
+    # Ordinals
+    "first", "second", "third", "fourth", "fifth", "sixth", "seventh",
+    "eighth", "ninth", "tenth", "eleventh", "twelfth",
+    "twentieth", "thirtieth", "fortieth", "fiftieth",
+    "sixtieth", "seventieth", "eightieth", "ninetieth",
+    "hundredth", "thousandth", "millionth", "billionth",
+    # Multipliers / quantifiers
+    "dozen", "score", "gross", "nought", "naught",
+)
 
-    Uses two passes:
+
+def get_digit_token_ids(tokenizer) -> List[int]:
+    """Find all token IDs that represent any numeric quantity.
+
+    Blocks digit characters (all scripts), number words, and ordinals.
+    Uses three passes:
     1. Decode-and-check: catches tokens that decode cleanly to digit characters.
-    2. Encode-and-collect: encodes each digit character directly to catch byte-level
-       tokens (e.g. multi-byte UTF-8 sequences that fail to decode in isolation).
+    2. Encode digit chars: catches byte-level tokens for multi-byte digit scripts.
+    3. Encode number words: catches tokens for spelled-out numbers ("one", "ten", etc.).
     """
     digit_ids = set()
 
@@ -209,8 +229,7 @@ def get_digit_token_ids(tokenizer) -> List[int]:
             continue
 
     # Pass 2: encode digit characters directly to capture byte-level token IDs
-    # (byte tokens for multi-byte scripts like Arabic-Indic fail to decode alone
-    # and are silently skipped in Pass 1)
+    # (byte tokens for multi-byte scripts like Arabic-Indic fail to decode in isolation)
     for ch in _all_digit_chars():
         for prefix in ("", " ", "\n"):
             try:
@@ -218,6 +237,21 @@ def get_digit_token_ids(tokenizer) -> List[int]:
                 digit_ids.update(ids)
             except Exception:
                 continue
+
+    # Pass 3: encode English number words to block spelled-out numbers
+    for word in _NUMBER_WORDS:
+        for surface in (word, word.capitalize()):
+            for prefix in (" ", "\n", ""):
+                try:
+                    ids = tokenizer.encode(prefix + surface, add_special_tokens=False)
+                    # Only block if this encodes to a single token whose decoded form
+                    # matches the word (avoids blocking shared prefix/suffix tokens)
+                    if len(ids) == 1:
+                        decoded = tokenizer.decode(ids).strip().lower()
+                        if decoded == word:
+                            digit_ids.update(ids)
+                except Exception:
+                    continue
 
     return sorted(digit_ids)
 

@@ -155,22 +155,70 @@ _EXTRA_NUMERIC_RE = re.compile(
 )
 
 
+def _all_digit_chars() -> List[str]:
+    """Return all single digit characters across scripts to block."""
+    ranges = [
+        (0x0030, 0x0039),  # ASCII 0-9
+        (0x0660, 0x0669),  # Arabic-Indic ٠-٩
+        (0x06F0, 0x06F9),  # Extended Arabic-Indic (Persian) ۰-۹
+        (0x0966, 0x096F),  # Devanagari ०-९
+        (0x09E6, 0x09EF),  # Bengali ০-৯
+        (0x0A66, 0x0A6F),  # Gurmukhi ੦-੯
+        (0x0AE6, 0x0AEF),  # Gujarati ૦-૯
+        (0x0BE6, 0x0BEF),  # Tamil ௦-௯
+        (0x0CE6, 0x0CEF),  # Kannada ೦-೯
+        (0x0D66, 0x0D6F),  # Malayalam ൦-൯
+        (0x0E50, 0x0E59),  # Thai ๐-๙
+        (0x0F20, 0x0F29),  # Tibetan ༠-༩
+        (0x1040, 0x1049),  # Myanmar ၀-၉
+        (0x17E0, 0x17E9),  # Khmer ០-៩
+        (0xFF10, 0xFF19),  # Fullwidth ０-９
+        (0x2160, 0x2188),  # Roman numerals Ⅰ-Ↄ
+    ]
+    chars = []
+    for lo, hi in ranges:
+        for cp in range(lo, hi + 1):
+            chars.append(chr(cp))
+    # CJK number words (category Lo, not caught by ranges above)
+    for ch in "零一二三四五六七八九十百千万億兆〇壱弐参拾仟萬":
+        chars.append(ch)
+    return chars
+
+
 def get_digit_token_ids(tokenizer) -> List[int]:
-    """Find all token IDs that represent number-like characters (any script)."""
+    """Find all token IDs that represent number-like characters (any script).
+
+    Uses two passes:
+    1. Decode-and-check: catches tokens that decode cleanly to digit characters.
+    2. Encode-and-collect: encodes each digit character directly to catch byte-level
+       tokens (e.g. multi-byte UTF-8 sequences that fail to decode in isolation).
+    """
     digit_ids = set()
+
+    # Pass 1: decode each token and check for digit characters
     for tid in range(tokenizer.vocab_size):
         try:
             decoded = tokenizer.decode([tid])
-            # Unicode 'N' category: Nd (decimal digit), Nl (letter number), No (other number)
             has_unicode_numeric = any(
                 unicodedata.category(c).startswith('N') for c in decoded if c.strip()
             )
-            # Extra: scripts/codepoints not in 'N' category (e.g. CJK number words)
             has_extra_numeric = bool(_EXTRA_NUMERIC_RE.search(decoded))
             if has_unicode_numeric or has_extra_numeric:
                 digit_ids.add(tid)
         except Exception:
             continue
+
+    # Pass 2: encode digit characters directly to capture byte-level token IDs
+    # (byte tokens for multi-byte scripts like Arabic-Indic fail to decode alone
+    # and are silently skipped in Pass 1)
+    for ch in _all_digit_chars():
+        for prefix in ("", " ", "\n"):
+            try:
+                ids = tokenizer.encode(prefix + ch, add_special_tokens=False)
+                digit_ids.update(ids)
+            except Exception:
+                continue
+
     return sorted(digit_ids)
 
 

@@ -3,13 +3,14 @@
 Generate training data for compressed reasoning curriculum.
 
 Stages:
-  0: Thinking: a1, a2, sum\nAnswer: sum         (fully readable)
-  1: Thinking: a1, a2, . . .\nAnswer: sum       (sum replaced with dots)
-  2: Thinking: . . . . . . . . . .\nAnswer: sum  (all values replaced with dots)
-  3: . . . . . . . . . .\nAnswer: sum            (no Thinking: prefix, just dots)
+  0:   Thinking: a1, a2, sum\nAnswer: sum           (fully readable)
+  1:   Thinking: a1, a2, . . .\nAnswer: sum         (sum hidden)
+  1.5: Thinking: . . . . ., a2, . . . . .\nAnswer: sum  (a1 and sum hidden)
+  2:   Thinking: . . . . . . . . . .\nAnswer: sum   (all values hidden)
+  3:   . . . . . . . . . .\nAnswer: sum              (no Thinking: prefix, just dots)
 
 All stages use the same questions and answers. The system prompt few-shot
-examples match the stage format so the model sees consistent formatting.
+examples always use stage 0 format so the model always sees readable demonstrations.
 
 Usage:
     python scripts/generate_compressed_dataset.py \
@@ -20,7 +21,7 @@ Usage:
         --outdir data/datasets/compressed_s0
 
     # Generate all stages at once:
-    for s in 0 1 2 3; do
+    for s in 0 1 1.5 2 3; do
         python scripts/generate_compressed_dataset.py \
             --known-facts data/known_facts_14b.json \
             --tokenizer Qwen/Qwen2.5-14B-Instruct \
@@ -122,13 +123,13 @@ def compose_question(q1: str, q2: str) -> str:
     return f"What is ({q1_inner}) + ({q2_inner})?"
 
 
-def _format_thinking(a1: int, a2: int, total: int, stage: int, n_think: int) -> str:
+def _format_thinking(a1: int, a2: int, total: int, stage: float, n_think: int) -> str:
     """Format the thinking portion based on curriculum stage.
 
     Args:
         a1, a2, total: The fact values and their sum.
-        stage: Curriculum stage (0-3).
-        n_think: Number of think tokens to use when replacing values with dots.
+        stage: Curriculum stage (0, 1, 1.5, 2, or 3).
+        n_think: Number of dot tokens to use when replacing a hidden value.
     """
     dots = " ".join(["."] * n_think)
 
@@ -136,14 +137,17 @@ def _format_thinking(a1: int, a2: int, total: int, stage: int, n_think: int) -> 
         # Fully readable: "Thinking: a1, a2, sum"
         return f"Thinking: {a1}, {a2}, {total}"
     elif stage == 1:
-        # Sum replaced: "Thinking: a1, a2, . . . ."
+        # Sum hidden: "Thinking: a1, a2, . . . ."
         return f"Thinking: {a1}, {a2}, {dots}"
+    elif stage == 1.5:
+        # a1 and sum hidden, a2 visible: "Thinking: . . . . ., a2, . . . . ."
+        return f"Thinking: {dots}, {a2}, {dots}"
     elif stage == 2:
-        # All values replaced: "Thinking: . . . . . . . . . ."
-        return f"Thinking: {dots}"
+        # All values hidden, one block per value: "Thinking: . . ., . . ., . . ."
+        return f"Thinking: {dots}, {dots}, {dots}"
     elif stage == 3:
-        # No prefix, just dots: ". . . . . . . . . ."
-        return dots
+        # No prefix, one block per value: ". . ., . . ., . . ."
+        return f"{dots}, {dots}, {dots}"
     else:
         raise ValueError(f"Unknown stage: {stage}")
 
@@ -173,7 +177,7 @@ def build_system_prompt(
         for q1, q2, a1, a2, s in fewshot_examples
     )
 
-    if stage <= 1:
+    if stage <= 1.5:
         instruction = (
             "Think briefly, then give your final answer as 'Answer: [NUMBER]'."
         )
@@ -432,8 +436,8 @@ def main():
                         help="Tokenizer to use for encoding")
 
     # Curriculum
-    parser.add_argument("--stage", type=int, required=True, choices=[0, 1, 2, 3],
-                        help="Curriculum stage (0=readable, 3=fully opaque)")
+    parser.add_argument("--stage", type=float, required=True, choices=[0, 1, 1.5, 2, 3],
+                        help="Curriculum stage (0=readable, 1.5=a1+sum hidden, 3=fully opaque)")
     parser.add_argument("--n-think-tokens", type=int, default=10,
                         help="Number of think tokens (dots) when replacing values")
 
@@ -502,7 +506,8 @@ def main():
     print(f"  Test pairs: {len(test_pairs)}")
 
     # Build examples
-    print(f"\nGenerating stage {args.stage} data (n_think={args.n_think_tokens})...")
+    stage_str = str(args.stage).rstrip("0").rstrip(".")  # "1.5" stays "1.5", "1.0" becomes "1"
+    print(f"\nGenerating stage {stage_str} data (n_think={args.n_think_tokens})...")
 
     train_examples = build_examples(
         train_facts, train_pairs, fewshot_examples, tok,

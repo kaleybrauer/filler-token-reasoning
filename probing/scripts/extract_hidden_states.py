@@ -30,6 +30,11 @@ import numpy as np
 import torch
 from tqdm import tqdm
 
+# Patch: autoawq imports PytorchGELUTanh which was renamed in older transformers
+import transformers.activations as _act
+if not hasattr(_act, "PytorchGELUTanh"):
+    _act.PytorchGELUTanh = _act.GELUTanh
+
 # Reuse prompt construction from the eval script
 from evaluate_1hop_vllm import build_messages
 
@@ -240,10 +245,19 @@ def load_model(model_path: str):
         mem = torch.cuda.get_device_properties(i).total_memory / 1e9
         print(f"  GPU {i}: {name}, {mem:.0f} GB")
 
+    # Set max_memory per GPU to prevent CPU offloading.
+    # AWQ quantizer rejects device maps with CPU.
+    max_memory = {
+        i: f"{int(torch.cuda.get_device_properties(i).total_memory * 0.85 / 1e9)}GiB"
+        for i in range(n_gpus)
+    }
+    print(f"  max_memory: {max_memory}")
+
     t0 = time.time()
     model = AutoModelForCausalLM.from_pretrained(
         model_path,
         device_map="auto",
+        max_memory=max_memory,
         torch_dtype=torch.float16,
         trust_remote_code=True,
     )

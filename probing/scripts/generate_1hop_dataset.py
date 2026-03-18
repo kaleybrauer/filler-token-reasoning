@@ -235,17 +235,22 @@ def main() -> None:
     print(f"Reserved {len(few_shot_items)} few-shot facts.")
 
     # ------------------------------------------------------------------
-    # 3. Sample examples from the remaining pool
+    # 3. Generate examples: use every fact once first, then repeat with new x
     # ------------------------------------------------------------------
     pool_facts = [all_facts[i] for i in pool_indices]
 
     examples: list[dict] = []
-    for idx in range(args.num_examples):
-        fact = rng.choice(pool_facts)
+
+    # First pass: one example per unique fact (shuffled order)
+    shuffled_pool = list(pool_facts)
+    rng.shuffle(shuffled_pool)
+    for fact in shuffled_pool:
+        if len(examples) >= args.num_examples:
+            break
         x = rng.randint(X_MIN, X_MAX)
         fact_phrase = question_to_fact_phrase(fact["question"])
         examples.append({
-            "idx": idx,
+            "idx": len(examples),
             "fact_question": fact["question"],
             "fact_phrase": fact_phrase,
             "fact_value": fact["answer"],
@@ -254,7 +259,24 @@ def main() -> None:
             "kind": fact["kind"],
         })
 
-    print(f"Generated {len(examples)} examples.")
+    # Second pass: fill remaining slots by cycling through facts with new x
+    while len(examples) < args.num_examples:
+        fact = rng.choice(pool_facts)
+        x = rng.randint(X_MIN, X_MAX)
+        fact_phrase = question_to_fact_phrase(fact["question"])
+        examples.append({
+            "idx": len(examples),
+            "fact_question": fact["question"],
+            "fact_phrase": fact_phrase,
+            "fact_value": fact["answer"],
+            "x": x,
+            "answer": fact["answer"] + x,
+            "kind": fact["kind"],
+        })
+
+    n_unique = len(set(e["fact_phrase"] for e in examples))
+    print(f"Generated {len(examples)} examples ({n_unique} unique facts, "
+          f"{len(examples) - n_unique} repeats with new x).")
 
     # ------------------------------------------------------------------
     # 4. Save dataset

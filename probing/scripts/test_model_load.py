@@ -41,6 +41,11 @@ def load_model_4bit(model_path: str = MODEL_PATH):
     max_memory["cpu"] = "64GiB"
     print(f"Max memory config: {max_memory}")
 
+    import os
+    from pathlib import Path as _Path
+    offload_dir = "/workspace/.offload"
+    _Path(offload_dir).mkdir(parents=True, exist_ok=True)
+
     t0 = time.time()
     model = AutoModelForCausalLM.from_pretrained(
         model_path,
@@ -48,6 +53,7 @@ def load_model_4bit(model_path: str = MODEL_PATH):
         device_map="auto",
         max_memory=max_memory,
         torch_dtype=torch.bfloat16,
+        offload_folder=offload_dir,
     )
     model.eval()
     load_time = time.time() - t0

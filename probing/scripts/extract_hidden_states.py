@@ -248,7 +248,7 @@ def load_model(model_path: str):
     # Set max_memory per GPU to prevent CPU offloading.
     # AWQ quantizer rejects device maps with CPU.
     max_memory = {
-        i: f"{int(torch.cuda.get_device_properties(i).total_memory * 0.85 / 1e9)}GiB"
+        i: f"{int(torch.cuda.get_device_properties(i).total_memory * 0.80 / 1e9)}GiB"
         for i in range(n_gpus)
     }
     print(f"  max_memory: {max_memory}")

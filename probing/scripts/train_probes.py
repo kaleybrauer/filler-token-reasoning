@@ -13,8 +13,13 @@ Usage:
 import argparse
 import json
 import pickle
+import time
+import warnings
 from collections import defaultdict
 from pathlib import Path
+
+warnings.filterwarnings("ignore", category=UserWarning, module="sklearn")
+warnings.filterwarnings("ignore", message="Ill-conditioned")
 
 import matplotlib
 matplotlib.use("Agg")
@@ -157,9 +162,12 @@ def run_probes_for_condition(
     total = len(target_names) * len(positions) * len(layers)
 
     print(f"  Training {total} probes "
-          f"({len(target_names)} targets x {len(positions)} positions x {len(layers)} layers)")
+          f"({len(target_names)} targets x {len(positions)} positions x {len(layers)} layers)",
+          flush=True)
 
     count = 0
+    t0 = time.time()
+    last_print = t0
     for target_name in target_names:
         y = targets[target_name]
         y_train, y_test = y[train_idx], y[test_idx]
@@ -173,8 +181,16 @@ def run_probes_for_condition(
                 results[target_name][pos_name][layer_idx] = result
 
                 count += 1
-                if count % 200 == 0:
-                    print(f"    {count}/{total} probes done")
+                now = time.time()
+                if now - last_print >= 30 or count == total:
+                    elapsed = now - t0
+                    rate = count / elapsed if elapsed > 0 else 0
+                    eta = (total - count) / rate if rate > 0 else 0
+                    print(f"    {count}/{total} probes ({count*100//total}%) | "
+                          f"{elapsed:.0f}s elapsed | {eta:.0f}s remaining | "
+                          f"current: {target_name}/{pos_name}/L{layer_idx}",
+                          flush=True)
+                    last_print = now
 
     return results
 

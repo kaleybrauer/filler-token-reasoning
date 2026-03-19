@@ -21,6 +21,7 @@ Prerequisites:
 import argparse
 import json
 import pickle
+import random
 import re
 import time
 from pathlib import Path
@@ -35,8 +36,33 @@ import transformers.activations as _act
 if not hasattr(_act, "PytorchGELUTanh"):
     _act.PytorchGELUTanh = _act.GELUTanh
 
-# Reuse prompt construction from the eval script
-from evaluate_1hop_vllm import build_messages
+# Reuse prompt construction from the dataset generator (supports all filler types)
+from generate_1hop_dataset import build_system_message, build_user_turn
+
+
+def build_messages_for_condition(few_shot_items, target, filler_type, k, rng=None):
+    """Build chat messages for any filler condition.
+
+    Uses generate_1hop_dataset's prompt helpers (which support all filler types)
+    but matches the assistant turn format ("Answer: {answer}") used by the
+    eval script and existing extractions.
+    """
+    system_msg = build_system_message(filler_type, k)
+    messages = [{"role": "system", "content": system_msg}]
+
+    for fs in few_shot_items:
+        user_content = build_user_turn(
+            fs["fact_phrase"], fs["x"], filler_type, k, rng=rng
+        )
+        messages.append({"role": "user", "content": user_content})
+        messages.append({"role": "assistant", "content": f"Answer: {fs['answer']}"})
+
+    user_content = build_user_turn(
+        target["fact_phrase"], target["x"], filler_type, k, rng=rng
+    )
+    messages.append({"role": "user", "content": user_content})
+
+    return messages
 
 
 # ==============================================================================
@@ -46,10 +72,12 @@ from evaluate_1hop_vllm import build_messages
 FILLER_FRACTIONS = [0.0, 0.1, 0.25, 0.5, 0.75, 0.9, 1.0]
 
 CONDITIONS = {
-    "baseline": 0,
-    "dots_50": 50,
-    "dots_250": 250,
-    "dots_500": 500,
+    "baseline": (0, "dots"),
+    "dots_50": (50, "dots"),
+    "dots_250": (250, "dots"),
+    "dots_500": (500, "dots"),
+    "counting_150": (150, "counting"),
+    "counting_scrambled_150": (150, "counting-scrambled"),
 }
 
 
@@ -65,22 +93,20 @@ def find_filler_boundaries(
     """
     Find the start and end token positions of the TARGET question's filler.
 
-    The filler pattern "Filler: . . . ..." appears in every few-shot example
-    AND the target question. We want the LAST occurrence (the target).
+    Works for any filler type (dots, counting, scrambled counting).
+    Scans backward from the last "Answer" token to find filler content
+    boundaries using the "Filler: <content>\\n\\nAnswer:" structure.
 
     Returns:
-        filler_start: index of first filler dot token in target question
-        filler_end: index of last filler dot token in target question (inclusive)
+        filler_start: index of first filler content token in target question
+        filler_end: index of last filler content token in target question (inclusive)
     """
     if k == 0:
         return -1, -1
 
-    tokens = tokenizer.convert_ids_to_tokens(input_ids[0])
+    ids = input_ids[0].tolist()
+    tokens = tokenizer.convert_ids_to_tokens(ids)
     seq_len = len(tokens)
-
-    # The target question's filler is the LAST block of consecutive dot tokens
-    # before the final "Answer:" and "<|Assistant|>".
-    # Work backwards from the end to find it.
 
     # Find the last "Answer" token (marks end of filler region)
     last_answer_pos = -1
@@ -92,22 +118,27 @@ def find_filler_boundaries(
     if last_answer_pos == -1:
         raise ValueError("Could not find 'Answer' token in sequence")
 
-    # Scan backwards from Answer to find the filler dots
-    # The last dot might be merged with newlines (e.g., "Ġ.ĊĊ")
+    # Scan backward from Answer, skip newline/whitespace-only tokens to find filler_end
     filler_end = -1
     for i in range(last_answer_pos - 1, -1, -1):
-        if tokens[i].startswith("Ġ."):
+        decoded = tokenizer.decode([ids[i]])
+        if decoded.strip():  # has non-whitespace content
             filler_end = i
             break
 
-    # Scan backwards from filler_end to find filler_start
-    # Dots are "Ġ." tokens; stop when we hit a non-dot token (like ":")
+    if filler_end == -1:
+        raise ValueError("Could not find filler content before 'Answer' token")
+
+    # Scan backward from filler_end to find filler_start
+    # Stop when we hit ":" (the colon of "Filler:")
+    # Note: space tokens ("Ġ" → " ") between counting numbers must NOT stop the scan
     filler_start = filler_end
     for i in range(filler_end - 1, -1, -1):
-        if tokens[i] in ("Ġ.", "."):
-            filler_start = i
-        else:
+        decoded = tokenizer.decode([ids[i]])
+        stripped = decoded.strip()
+        if stripped == ":":
             break
+        filler_start = i
 
     return filler_start, filler_end
 
@@ -225,6 +256,38 @@ class HiddenStateExtractor:
 # Model loading
 # ==============================================================================
 
+def load_tokenizer(model_path: str):
+    """
+    Load the tokenizer from a model directory.
+
+    Uses PreTrainedTokenizerFast to load tokenizer.json directly, bypassing
+    the tokenizer_config.json "tokenizer_class": "LlamaTokenizer" override.
+    AutoTokenizer loads as LlamaTokenizer (sentencepiece) which aggressively
+    merges tokens (e.g. 250 dots → 2 tokens). The fast tokenizer respects
+    the pre_tokenizer rules in tokenizer.json and gives correct tokenization
+    (e.g. 250 dots → 250 tokens).
+    """
+    import json
+    from pathlib import Path
+    from transformers import PreTrainedTokenizerFast
+
+    model_dir = Path(model_path)
+    tokenizer_file = model_dir / "tokenizer.json"
+    config_file = model_dir / "tokenizer_config.json"
+
+    # Read chat_template and special tokens from tokenizer_config.json
+    with open(config_file) as f:
+        config = json.load(f)
+
+    tokenizer = PreTrainedTokenizerFast(
+        tokenizer_file=str(tokenizer_file),
+        chat_template=config.get("chat_template"),
+        bos_token=config.get("bos_token"),
+        eos_token=config.get("eos_token"),
+    )
+    return tokenizer
+
+
 def load_model(model_path: str):
     """
     Load the AWQ model via transformers with device_map="auto".
@@ -233,10 +296,10 @@ def load_model(model_path: str):
     have the slow _move_missing_keys_from_meta_to_device bug (that's 5.x).
     Loading should take ~5-10 minutes on 3x H200.
     """
-    from transformers import AutoModelForCausalLM, AutoTokenizer
+    from transformers import AutoModelForCausalLM
 
     print(f"Loading tokenizer from {model_path}...")
-    tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
+    tokenizer = load_tokenizer(model_path)
 
     n_gpus = torch.cuda.device_count()
     print(f"Loading model on {n_gpus} GPUs...")
@@ -312,7 +375,7 @@ def run_extraction(
     tokenizer,
     problems: list,
     few_shot: list,
-    conditions: Dict[str, int],
+    conditions: Dict[str, Tuple[int, str]],
     layer_indices: List[int],
     output_dir: Path,
     skip_existing: bool = True,
@@ -351,12 +414,12 @@ def run_extraction(
     with open(output_dir / "metadata.json", "w") as f:
         json.dump(metadata, f, indent=2)
 
-    for cond_name, k in conditions.items():
+    for cond_name, (k, filler_type) in conditions.items():
         cond_dir = output_dir / cond_name
         cond_dir.mkdir(exist_ok=True)
 
         print(f"\n{'='*60}")
-        print(f"Condition: {cond_name} (k={k})")
+        print(f"Condition: {cond_name} (k={k}, filler_type={filler_type})")
         print(f"{'='*60}")
 
         correct_count = 0
@@ -369,8 +432,13 @@ def run_extraction(
             if skip_existing and save_path.exists():
                 continue
 
-            # Build prompt using the same function as the eval script
-            messages = build_messages(few_shot, problem, k)
+            # Per-example deterministic RNG (for scrambled filler reproducibility)
+            example_rng = random.Random(prob_idx)
+
+            # Build prompt (supports all filler types, matches eval format)
+            messages = build_messages_for_condition(
+                few_shot[:5], problem, filler_type, k, rng=example_rng
+            )
             full_text = tokenizer.apply_chat_template(
                 messages, tokenize=False, add_generation_prompt=True
             )

@@ -1,32 +1,33 @@
 """
-Save per-example category labels (filler_helped, both_correct, etc.)
-to a JSON file for external analysis.
+Save per-example category labels and correctness for all conditions
+(baseline, dots_250, counting_150, counting_scrambled_150) to a JSON file.
 """
 
 import json
 import pickle
 from pathlib import Path
 
-import numpy as np
+
+CONDITIONS = ["baseline", "dots_250", "counting_150", "counting_scrambled_150"]
 
 
-def load_metadata(extraction_dir, condition):
+def load_condition(extraction_dir, condition):
+    """Load all pickle files for a condition, return list of dicts."""
     cond_dir = extraction_dir / condition
     files = sorted(cond_dir.glob("prob_*.pkl"))
-    meta = []
+    results = []
     for f in files:
         with open(f, "rb") as fp:
             data = pickle.load(fp)
-        meta.append({
-            "problem_idx": data["problem_idx"],
+        results.append({
+            "problem_idx": int(data["problem_idx"]),
             "fact_value": int(data["fact_value"]),
             "x": int(data["x"]),
             "answer": int(data["answer"]),
-            "model_correct_baseline": None,
-            "model_correct_dots250": None,
+            "model_correct": bool(data["model_correct"]),
             "model_answer": data.get("model_answer"),
         })
-    return meta
+    return results
 
 
 def main():
@@ -34,30 +35,31 @@ def main():
     output_dir = Path("probing/probe_results")
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    bl_meta = load_metadata(extraction_dir, "baseline")
-    dt_meta = load_metadata(extraction_dir, "dots_250")
+    # Load all conditions
+    cond_data = {}
+    for cond in CONDITIONS:
+        cond_data[cond] = load_condition(extraction_dir, cond)
+        print(f"Loaded {len(cond_data[cond])} examples for {cond}")
 
-    n = len(bl_meta)
+    n = len(cond_data["baseline"])
+
+    # Build per-example records
     examples = []
     for i in range(n):
-        bl_correct = bool(bl_meta[i]["model_correct_baseline"]) if bl_meta[i]["model_correct_baseline"] is not None else None
-        # Re-read to get actual correctness
-        pass
+        bl = cond_data["baseline"][i]
+        ex = {
+            "problem_idx": bl["problem_idx"],
+            "fact_value": bl["fact_value"],
+            "x": bl["x"],
+            "answer": bl["answer"],
+        }
+        for cond in CONDITIONS:
+            ex[f"{cond}_correct"] = cond_data[cond][i]["model_correct"]
+            ex[f"{cond}_model_answer"] = cond_data[cond][i]["model_answer"]
 
-    # Re-load with correctness
-    bl_files = sorted((extraction_dir / "baseline").glob("prob_*.pkl"))
-    dt_files = sorted((extraction_dir / "dots_250").glob("prob_*.pkl"))
-
-    examples = []
-    for i in range(n):
-        with open(bl_files[i], "rb") as f:
-            bl = pickle.load(f)
-        with open(dt_files[i], "rb") as f:
-            dt = pickle.load(f)
-
-        bl_correct = bool(bl["model_correct"])
-        dt_correct = bool(dt["model_correct"])
-
+        # Category based on baseline vs dots_250 (original definition)
+        bl_correct = ex["baseline_correct"]
+        dt_correct = ex["dots_250_correct"]
         if not bl_correct and dt_correct:
             category = "filler_helped"
         elif bl_correct and not dt_correct:
@@ -66,28 +68,25 @@ def main():
             category = "both_correct"
         else:
             category = "both_wrong"
+        ex["category"] = category
 
-        examples.append({
-            "problem_idx": int(bl["problem_idx"]),
-            "fact_value": int(bl["fact_value"]),
-            "x": int(bl["x"]),
-            "answer": int(bl["answer"]),
-            "baseline_correct": bl_correct,
-            "dots250_correct": dt_correct,
-            "baseline_model_answer": bl.get("model_answer"),
-            "dots250_model_answer": dt.get("model_answer"),
-            "category": category,
-        })
+        examples.append(ex)
 
-    counts = {}
+    # Counts and accuracies
+    category_counts = {}
     for ex in examples:
-        counts[ex["category"]] = counts.get(ex["category"], 0) + 1
+        category_counts[ex["category"]] = category_counts.get(ex["category"], 0) + 1
+
+    accuracies = {}
+    for cond in CONDITIONS:
+        key = f"{cond}_correct"
+        accuracies[cond] = sum(1 for ex in examples if ex[key]) / n
 
     output = {
         "n_examples": n,
-        "category_counts": counts,
-        "baseline_accuracy": sum(1 for ex in examples if ex["baseline_correct"]) / n,
-        "dots250_accuracy": sum(1 for ex in examples if ex["dots250_correct"]) / n,
+        "conditions": CONDITIONS,
+        "accuracies": accuracies,
+        "category_counts": category_counts,
         "examples": examples,
     }
 
@@ -95,10 +94,10 @@ def main():
     with open(out_path, "w") as f:
         json.dump(output, f, indent=2)
 
-    print(f"Saved {n} examples to {out_path}")
-    print(f"Category counts: {counts}")
-    print(f"Baseline accuracy: {output['baseline_accuracy']:.1%}")
-    print(f"Dots250 accuracy: {output['dots250_accuracy']:.1%}")
+    print(f"\nSaved {n} examples to {out_path}")
+    print(f"Category counts (baseline vs dots): {category_counts}")
+    for cond, acc in accuracies.items():
+        print(f"  {cond}: {acc:.1%}")
 
 
 if __name__ == "__main__":

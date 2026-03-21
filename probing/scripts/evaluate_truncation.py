@@ -162,6 +162,8 @@ def main():
                         default=["dots"])
     parser.add_argument("--tensor-parallel-size", type=int, default=None)
     parser.add_argument("--pipeline-parallel-size", type=int, default=None)
+    parser.add_argument("--ks", type=str, default=None,
+                        help="Comma-separated truncation levels (overrides defaults)")
     args = parser.parse_args()
 
     import torch
@@ -204,53 +206,63 @@ def main():
         from openai import OpenAI
 
         port = 8192
-        print(f"Starting vLLM server (PP={pp_size} requires async engine)...")
-        server_cmd = [
-            sys.executable, "-m", "vllm.entrypoints.openai.api_server",
-            "--model", args.model_path,
-            "--tensor-parallel-size", str(tp_size),
-            "--pipeline-parallel-size", str(pp_size),
-            "--max-model-len", "4096",
-            "--gpu-memory-utilization", "0.95",
-            "--enforce-eager",
-            "--dtype", "float16",
-            "--port", str(port),
-            "--disable-log-requests",
-        ]
-        server_log = open("/tmp/vllm_server.log", "w")
-        server_proc = subprocess.Popen(server_cmd, stdout=server_log, stderr=subprocess.STDOUT)
-        atexit.register(lambda: server_proc.kill())
-
         client = OpenAI(base_url=f"http://localhost:{port}/v1", api_key="dummy")
-        print("Waiting for server to load model...")
-        t0 = time.time()
-        for attempt in range(600):
-            time.sleep(1)
-            try:
-                client.models.list()
-                break
-            except Exception:
-                if server_proc.poll() is not None:
-                    with open("/tmp/vllm_server.log") as f:
-                        log = f.read()
-                    print(f"Server crashed! Output:\n{log[-3000:]}")
-                    sys.exit(1)
-        else:
-            print("Server failed to start in 10 minutes")
-            sys.exit(1)
-        print(f"Server ready in {time.time() - t0:.0f}s")
 
-        def generate_batch(prompts):
-            results = []
-            for prompt in prompts:
-                resp = client.completions.create(
-                    model=args.model_path,
-                    prompt=prompt,
-                    max_tokens=20,
-                    temperature=0,
-                )
-                results.append(resp.choices[0].text.strip())
-            return results
+        # Check if a server is already running on this port
+        server_proc = None
+        try:
+            client.models.list()
+            print(f"Found existing vLLM server on port {port}")
+        except Exception:
+            print(f"Starting vLLM server (PP={pp_size} requires async engine)...")
+            server_cmd = [
+                sys.executable, "-m", "vllm.entrypoints.openai.api_server",
+                "--model", args.model_path,
+                "--tensor-parallel-size", str(tp_size),
+                "--pipeline-parallel-size", str(pp_size),
+                "--max-model-len", "4096",
+                "--gpu-memory-utilization", "0.95",
+                "--enforce-eager",
+                "--dtype", "float16",
+                "--port", str(port),
+                "--disable-log-requests",
+                "--trust-remote-code",
+            ]
+            server_log = open("/tmp/vllm_server.log", "w")
+            server_proc = subprocess.Popen(server_cmd, stdout=server_log, stderr=subprocess.STDOUT)
+            atexit.register(lambda: server_proc.kill())
+
+            print("Waiting for server to load model...")
+            t0 = time.time()
+            for attempt in range(600):
+                time.sleep(1)
+                try:
+                    client.models.list()
+                    break
+                except Exception:
+                    if server_proc.poll() is not None:
+                        with open("/tmp/vllm_server.log") as f:
+                            log = f.read()
+                        print(f"Server crashed! Output:\n{log[-3000:]}")
+                        sys.exit(1)
+            else:
+                print("Server failed to start in 10 minutes")
+                sys.exit(1)
+            print(f"Server ready in {time.time() - t0:.0f}s")
+
+        def _complete_one(prompt):
+            resp = client.completions.create(
+                model=args.model_path,
+                prompt=prompt,
+                max_tokens=20,
+                temperature=0,
+            )
+            return resp.choices[0].text.strip()
+
+        def generate_batch(prompts, max_workers=32):
+            from concurrent.futures import ThreadPoolExecutor
+            with ThreadPoolExecutor(max_workers=max_workers) as pool:
+                return list(pool.map(_complete_one, prompts))
     else:
         from vllm import LLM, SamplingParams
         print(f"Loading model from {args.model_path}...")
@@ -284,7 +296,10 @@ def main():
 
     for filler_type in args.filler_types:
         full_k = FULL_K[filler_type]
-        ks = TRUNCATION_KS[filler_type]
+        if args.ks:
+            ks = [int(x) for x in args.ks.split(",")]
+        else:
+            ks = TRUNCATION_KS[filler_type]
         print(f"\n{'='*60}")
         print(f"Filler type: {filler_type} (full_k={full_k})")
         print(f"Truncation levels: {ks}")

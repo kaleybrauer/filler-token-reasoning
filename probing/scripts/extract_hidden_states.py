@@ -71,6 +71,9 @@ def build_messages_for_condition(few_shot_items, target, filler_type, k, rng=Non
 
 FILLER_FRACTIONS = [0.0, 0.1, 0.25, 0.5, 0.75, 0.9, 1.0]
 
+# Absolute filler token offsets for fine-grained extraction
+FILLER_ABSOLUTE_POSITIONS = None  # Set via --filler-positions; uses fractions if None
+
 CONDITIONS = {
     "baseline": (0, "dots"),
     "dots_50": (50, "dots"),
@@ -148,22 +151,33 @@ def compute_extraction_positions(
     filler_end: int,
     seq_len: int,
     fractions: List[float] = FILLER_FRACTIONS,
+    absolute_positions: Optional[List[int]] = None,
 ) -> Dict[str, int]:
     """
     Compute the token positions to extract hidden states from.
     Returns dict mapping descriptive name -> token index.
+
+    If absolute_positions is provided, uses those as filler token offsets
+    (e.g. [1, 5, 10, 25, 50] extracts at the 1st, 5th, ... filler token).
+    Otherwise uses fractions of the filler region.
     """
     positions = {}
 
     # Last token before filler (question end)
     positions["question_end"] = filler_start - 1
 
-    # Filler positions at specified fractions
     filler_len = filler_end - filler_start + 1
-    for frac in fractions:
-        idx = filler_start + int(frac * (filler_len - 1))
-        idx = min(idx, filler_end)
-        positions[f"filler_{frac:.2f}"] = idx
+
+    if absolute_positions is not None:
+        for k in absolute_positions:
+            idx = filler_start + k - 1  # k=1 means first filler token
+            if idx <= filler_end:
+                positions[f"filler_k{k}"] = idx
+    else:
+        for frac in fractions:
+            idx = filler_start + int(frac * (filler_len - 1))
+            idx = min(idx, filler_end)
+            positions[f"filler_{frac:.2f}"] = idx
 
     # Last token before generation
     positions["answer_prompt"] = seq_len - 1
@@ -380,6 +394,7 @@ def run_extraction(
     output_dir: Path,
     skip_existing: bool = True,
     also_generate: bool = True,
+    filler_positions: Optional[List[int]] = None,
 ):
     """
     For each (condition, problem), extract hidden states and save.
@@ -454,7 +469,8 @@ def run_extraction(
                     tokenizer, input_ids, k
                 )
                 positions = compute_extraction_positions(
-                    filler_start, filler_end, seq_len
+                    filler_start, filler_end, seq_len,
+                    absolute_positions=filler_positions,
                 )
             else:
                 positions = compute_baseline_positions(seq_len)
@@ -575,6 +591,9 @@ def main():
                         help="Skip answer generation (faster, no accuracy tracking)")
     parser.add_argument("--verify-only", action="store_true",
                         help="Just verify existing extractions, don't run")
+    parser.add_argument("--filler-positions", type=str, default=None,
+                        help="Comma-separated absolute filler token offsets "
+                             "(e.g. '1,5,10,25,50'). Overrides fraction-based positions.")
     args = parser.parse_args()
 
     # Load dataset
@@ -606,8 +625,17 @@ def main():
             verify_extraction(str(args.output_dir), cond_name)
         return
 
+    # Parse filler positions
+    filler_pos = None
+    if args.filler_positions:
+        filler_pos = [int(x) for x in args.filler_positions.split(",")]
+        print(f"Using absolute filler positions: {filler_pos}")
+
     # Storage estimate
-    n_positions = len(FILLER_FRACTIONS) + 2  # filler fracs + question_end + answer_prompt
+    if filler_pos:
+        n_positions = len(filler_pos) + 2  # absolute positions + question_end + answer_prompt
+    else:
+        n_positions = len(FILLER_FRACTIONS) + 2  # filler fracs + question_end + answer_prompt
     bytes_per_problem = n_positions * len(layer_indices) * 7168 * 2  # fp16
     total_gb = len(problems) * len(selected) * bytes_per_problem / 1e9
     print(f"Estimated storage: {total_gb:.1f} GB")
@@ -626,6 +654,7 @@ def main():
         output_dir=args.output_dir,
         skip_existing=not args.no_skip_existing,
         also_generate=not args.no_generate,
+        filler_positions=filler_pos,
     )
 
     # Verify

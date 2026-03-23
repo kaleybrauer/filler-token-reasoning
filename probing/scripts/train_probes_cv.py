@@ -195,6 +195,30 @@ def get_best_layer_preds(results, target, pos):
     return r["y_pred"], r["y_true"], best_layer
 
 
+def _filler_sort_key(p):
+    """Sort filler positions — handles both 'filler_0.25' (fractional) and 'filler_k5' (absolute) formats."""
+    suffix = p.split("filler_")[1]
+    if suffix.startswith("k"):
+        return float(suffix[1:])
+    return float(suffix)
+
+
+def _filler_x_value(p):
+    """Get numeric x-axis value for a filler position."""
+    suffix = p.split("filler_")[1]
+    if suffix.startswith("k"):
+        return float(suffix[1:])
+    return float(suffix)
+
+
+def _filler_label(p):
+    """Short label for a filler position."""
+    suffix = p.split("filler_")[1]
+    if suffix.startswith("k"):
+        return f"k={suffix[1:]}"
+    return f"f{suffix}"
+
+
 def plot_emergence(all_results, output_dir):
     fig, axes = plt.subplots(1, 3, figsize=(18, 5))
     targets = ["A", "A+Y", "Y"]
@@ -207,7 +231,7 @@ def plot_emergence(all_results, output_dir):
                 continue
             filler_positions = sorted(
                 [p for p in results[target] if p.startswith("filler_")],
-                key=lambda p: float(p.split("_")[1])
+                key=_filler_sort_key
             )
             if not filler_positions:
                 for sp in ["question_end", "answer_prompt"]:
@@ -216,13 +240,18 @@ def plot_emergence(all_results, output_dir):
                         ax.axhline(y=best_r2, linestyle="--", alpha=0.5, label=f"baseline ({sp})")
                 continue
 
-            fracs = [float(p.split("_")[1]) for p in filler_positions]
+            x_vals = [_filler_x_value(p) for p in filler_positions]
             r2_values = [max(results[target][pos][l]["r2"] for l in results[target][pos])
                          for pos in filler_positions]
-            ax.plot(fracs, r2_values, marker="o", label=cond_name, linewidth=2)
+            ax.plot(x_vals, r2_values, marker="o", label=cond_name, linewidth=2)
 
         ax.axhline(y=0, color="gray", linestyle=":", alpha=0.5)
-        ax.set_xlabel("Position in filler (fraction)")
+        # Detect axis type from first condition with filler positions
+        has_absolute = any(
+            any(p.startswith("filler_k") for p in results.get(target, {}))
+            for results in all_results.values()
+        )
+        ax.set_xlabel("Filler token index" if has_absolute else "Position in filler (fraction)")
         ax.set_ylabel("R² (best layer)")
         ax.set_title(title, fontsize=13)
         ax.legend(fontsize=9)
@@ -236,20 +265,92 @@ def plot_emergence(all_results, output_dir):
     print("Saved: emergence", flush=True)
 
 
-def plot_cross_condition(all_results, all_targets, all_metadata, output_dir):
-    """The main cross-condition analysis with MAE and tolerance metrics."""
-    if "baseline" not in all_targets or "dots_250" not in all_targets:
-        print("Need both baseline and dots_250 for cross-condition analysis")
+def _pos_label(p):
+    """Short label for any position name."""
+    if p == "question_end":
+        return "q_end"
+    if p == "answer_prompt":
+        return "ans"
+    if p.startswith("filler_"):
+        return _filler_label(p)
+    return p
+
+
+def _load_categories_from_file(categories_path, n_examples):
+    """Load category masks from a categories.json file.
+
+    Supports two formats:
+    - {cat_name: [indices]} — simple index lists
+    - {examples: [{problem_idx, category, ...}]} — per-example records
+    """
+    with open(categories_path) as f:
+        cats = json.load(f)
+
+    masks = {}
+    if "examples" in cats:
+        # Per-example format from save_categories.py
+        cat_names = set()
+        for ex in cats["examples"]:
+            cat_names.add(ex["category"])
+        for cat_name in cat_names:
+            mask = np.zeros(n_examples, dtype=bool)
+            for i, ex in enumerate(cats["examples"]):
+                if i < n_examples and ex["category"] == cat_name:
+                    mask[i] = True
+            masks[cat_name] = mask
+    else:
+        # Simple {cat_name: [indices]} format
+        for cat_name, indices in cats.items():
+            if not isinstance(indices, list):
+                continue
+            mask = np.zeros(n_examples, dtype=bool)
+            for idx in indices:
+                if idx < n_examples:
+                    mask[idx] = True
+            masks[cat_name] = mask
+    return masks
+
+
+def plot_cross_condition(all_results, all_targets, all_metadata, output_dir, categories_path=None):
+    """Cross-condition analysis with MAE and tolerance metrics.
+
+    Auto-detects filler condition. Uses baseline+filler from all_targets if both present,
+    otherwise loads categories from categories_path.
+    """
+    # Find the filler condition (anything that isn't "baseline")
+    filler_conds = [c for c in all_results if c != "baseline"]
+    if not filler_conds:
+        print("No filler condition found for cross-condition analysis")
+        return
+    filler_cond = filler_conds[0]
+    filler_results = all_results[filler_cond]
+    n_examples = len(all_metadata[filler_cond])
+
+    # Build category masks
+    if "baseline" in all_targets and filler_cond in all_targets:
+        bl_correct = all_targets["baseline"]["model_correct"]
+        dt_correct = all_targets[filler_cond]["model_correct"]
+        categories = {
+            "filler_helped\n(wrong→right)": ~bl_correct & dt_correct,
+            "both_correct": bl_correct & dt_correct,
+            "both_wrong": ~bl_correct & ~dt_correct,
+        }
+    elif categories_path and Path(categories_path).exists():
+        raw = _load_categories_from_file(categories_path, n_examples)
+        categories = {}
+        if "filler_helped" in raw:
+            categories["filler_helped\n(wrong→right)"] = raw["filler_helped"]
+        if "both_correct" in raw:
+            categories["both_correct"] = raw["both_correct"]
+        if "both_wrong" in raw:
+            categories["both_wrong"] = raw["both_wrong"]
+        if not categories:
+            print(f"No recognized categories in {categories_path}")
+            return
+    else:
+        print(f"Need baseline condition or --categories-file for cross-condition analysis")
         return
 
-    bl_correct = all_targets["baseline"]["model_correct"]
-    dt_correct = all_targets["dots_250"]["model_correct"]
-
-    categories = {
-        "filler_helped\n(wrong→right)": ~bl_correct & dt_correct,
-        "both_correct": bl_correct & dt_correct,
-        "both_wrong": ~bl_correct & ~dt_correct,
-    }
     cat_colors = {
         "filler_helped\n(wrong→right)": "#4CAF50",
         "both_correct": "#2196F3",
@@ -259,16 +360,13 @@ def plot_cross_condition(all_results, all_targets, all_metadata, output_dir):
     for cat_name, mask in categories.items():
         print(f"  {cat_name.replace(chr(10), ' ')}: n={mask.sum()}")
 
-    dots_results = all_results["dots_250"]
-
     filler_positions = sorted(
-        [p for p in dots_results["A"] if p.startswith("filler_")],
-        key=lambda p: float(p.split("_")[1])
+        [p for p in filler_results["A"] if p.startswith("filler_")],
+        key=_filler_sort_key
     )
     all_positions = ["question_end"] + filler_positions + ["answer_prompt"]
-    all_positions = [p for p in all_positions if p in dots_results["A"]]
-    pos_labels = [p.replace("filler_", "f").replace("question_end", "q_end").replace("answer_prompt", "ans")
-                  for p in all_positions]
+    all_positions = [p for p in all_positions if p in filler_results["A"]]
+    pos_labels = [_pos_label(p) for p in all_positions]
 
     # --- Plot: Per-example error trajectories ---
     fig, axes = plt.subplots(1, 3, figsize=(18, 5), sharey=True)
@@ -278,7 +376,7 @@ def plot_cross_condition(all_results, all_targets, all_metadata, output_dir):
             continue
         errors = np.zeros((n_cat, len(all_positions)))
         for j, pos in enumerate(all_positions):
-            y_pred, y_true, _ = get_best_layer_preds(dots_results, "A", pos)
+            y_pred, y_true, _ = get_best_layer_preds(filler_results, "A", pos)
             errors[:, j] = np.abs(y_pred[mask] - y_true[mask])
 
         x = np.arange(len(all_positions))
@@ -297,7 +395,7 @@ def plot_cross_condition(all_results, all_targets, all_metadata, output_dir):
         ax.grid(True, alpha=0.3)
         ax.set_ylim(bottom=0)
 
-    fig.suptitle("Per-example probe error trajectories (A, dots_250, 5-fold CV predictions)", fontsize=14, y=1.02)
+    fig.suptitle(f"Per-example probe error trajectories (A, {filler_cond}, 5-fold CV predictions)", fontsize=14, y=1.02)
     plt.tight_layout()
     plt.savefig(f"{output_dir}/error_trajectories.png", dpi=150, bbox_inches="tight")
     plt.savefig(f"{output_dir}/error_trajectories.pdf", bbox_inches="tight")
@@ -312,7 +410,7 @@ def plot_cross_condition(all_results, all_targets, all_metadata, output_dir):
             continue
         mae_vals = []
         for pos in all_positions:
-            y_pred, y_true, _ = get_best_layer_preds(dots_results, "A", pos)
+            y_pred, y_true, _ = get_best_layer_preds(filler_results, "A", pos)
             mae_vals.append(np.mean(np.abs(y_pred[mask] - y_true[mask])))
         short = cat_name.split("\n")[0]
         ax.plot(range(len(all_positions)), mae_vals, marker="o",
@@ -332,7 +430,7 @@ def plot_cross_condition(all_results, all_targets, all_metadata, output_dir):
             continue
         frac_vals = []
         for pos in all_positions:
-            y_pred, y_true, _ = get_best_layer_preds(dots_results, "A", pos)
+            y_pred, y_true, _ = get_best_layer_preds(filler_results, "A", pos)
             frac_vals.append(np.mean(np.abs(y_pred[mask] - y_true[mask]) <= tol))
         short = cat_name.split("\n")[0]
         ax.plot(range(len(all_positions)), frac_vals, marker="o",
@@ -345,7 +443,7 @@ def plot_cross_condition(all_results, all_targets, all_metadata, output_dir):
     ax.grid(True, alpha=0.3)
     ax.set_ylim(0, 1.05)
 
-    fig.suptitle("Probe for A across filler positions (dots_250, 5-fold CV)", fontsize=14, y=1.02)
+    fig.suptitle(f"Probe for A across filler positions ({filler_cond}, 5-fold CV)", fontsize=14, y=1.02)
     plt.tight_layout()
     plt.savefig(f"{output_dir}/mae_and_tolerance.png", dpi=150, bbox_inches="tight")
     plt.savefig(f"{output_dir}/mae_and_tolerance.pdf", bbox_inches="tight")
@@ -353,9 +451,9 @@ def plot_cross_condition(all_results, all_targets, all_metadata, output_dir):
     print("Saved: mae_and_tolerance", flush=True)
 
     # --- Plot: Error reduction scatter ---
-    if "question_end" in dots_results["A"] and "answer_prompt" in dots_results["A"]:
-        pred_qe, true_qe, _ = get_best_layer_preds(dots_results, "A", "question_end")
-        pred_ap, true_ap, _ = get_best_layer_preds(dots_results, "A", "answer_prompt")
+    if "question_end" in filler_results["A"] and "answer_prompt" in filler_results["A"]:
+        pred_qe, true_qe, _ = get_best_layer_preds(filler_results, "A", "question_end")
+        pred_ap, true_ap, _ = get_best_layer_preds(filler_results, "A", "answer_prompt")
         err_qe = np.abs(pred_qe - true_qe)
         err_ap = np.abs(pred_ap - true_ap)
 
@@ -384,14 +482,24 @@ def plot_cross_condition(all_results, all_targets, all_metadata, output_dir):
         print("Saved: error_reduction_scatter", flush=True)
 
     # --- Plot: Box plots at key positions ---
-    key_positions = [p for p in ["question_end", "filler_0.50", "filler_1.00", "answer_prompt"]
-                     if p in dots_results["A"]]
-    key_labels = [p.replace("filler_", "f").replace("question_end", "q_end").replace("answer_prompt", "ans")
-                  for p in key_positions]
+    # Use question_end, middle filler, last filler, answer_prompt
+    _filler_pos = sorted(
+        [p for p in filler_results["A"] if p.startswith("filler_")],
+        key=_filler_sort_key
+    )
+    _key_filler = []
+    if len(_filler_pos) >= 2:
+        _key_filler = [_filler_pos[len(_filler_pos) // 2], _filler_pos[-1]]
+    elif _filler_pos:
+        _key_filler = [_filler_pos[-1]]
+    key_positions = (["question_end"] if "question_end" in filler_results["A"] else []) \
+                  + _key_filler \
+                  + (["answer_prompt"] if "answer_prompt" in filler_results["A"] else [])
+    key_labels = [_pos_label(p) for p in key_positions]
 
     fig, axes = plt.subplots(1, len(key_positions), figsize=(4 * len(key_positions), 5), sharey=True)
     for ax, pos, label in zip(axes, key_positions, key_labels):
-        y_pred, y_true, best_l = get_best_layer_preds(dots_results, "A", pos)
+        y_pred, y_true, best_l = get_best_layer_preds(filler_results, "A", pos)
         abs_errors = np.abs(y_pred - y_true)
         box_data, box_labels_list, box_colors = [], [], []
         for cat_name, mask in categories.items():
@@ -423,7 +531,7 @@ def plot_cross_condition(all_results, all_targets, all_metadata, output_dir):
     print(f"{'='*90}")
     header = f"{'Category':<25} {'n':>4}"
     for pos in key_positions:
-        short = pos.replace("filler_", "f").replace("question_end", "q_end").replace("answer_prompt", "ans")
+        short = _pos_label(pos)
         header += f"  {short+' MAE':>10} {short+' ±10':>8}"
     print(header)
     print("-" * 90)
@@ -433,7 +541,7 @@ def plot_cross_condition(all_results, all_targets, all_metadata, output_dir):
         short_cat = cat_name.replace("\n", " ")
         row = f"{short_cat:<25} {mask.sum():>4}"
         for pos in key_positions:
-            y_pred, y_true, _ = get_best_layer_preds(dots_results, "A", pos)
+            y_pred, y_true, _ = get_best_layer_preds(filler_results, "A", pos)
             errs = np.abs(y_pred[mask] - y_true[mask])
             row += f"  {errs.mean():>10.1f} {np.mean(errs <= 10):>7.0%}"
         print(row)
@@ -456,7 +564,7 @@ def print_summary_table(all_results, output_dir):
                 report_positions.append("question_end")
             filler_positions = sorted(
                 [p for p in results[target] if p.startswith("filler_")],
-                key=lambda p: float(p.split("_")[1])
+                key=_filler_sort_key
             )
             if filler_positions:
                 report_positions.append(filler_positions[-1])
@@ -490,6 +598,8 @@ def main():
     parser.add_argument("--n-jobs", type=int, default=-1,
                         help="Number of parallel workers (-1 = all CPUs)")
     parser.add_argument("--conditions", nargs="+", default=None)
+    parser.add_argument("--categories-file", type=Path, default=None,
+                        help="Path to categories.json for cross-condition plots when baseline not in extraction dir")
     args = parser.parse_args()
 
     output_dir = args.output_dir
@@ -568,7 +678,8 @@ def main():
     print("\n\nGenerating plots...", flush=True)
     plot_emergence(all_results, str(output_dir))
     print_summary_table(all_results, str(output_dir))
-    plot_cross_condition(all_results, all_targets, all_metadata, str(output_dir))
+    plot_cross_condition(all_results, all_targets, all_metadata, str(output_dir),
+                         categories_path=args.categories_file)
 
     print(f"\nAll done! Results in {output_dir}/")
 

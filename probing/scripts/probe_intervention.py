@@ -93,31 +93,45 @@ def load_condition_states(extraction_dir: Path, condition_name: str, layer: int,
     return X, metadata
 
 
-def fit_steering_probe(X, y, target_name="A"):
+def fit_steering_probe(X, y, target_name="A", test_frac=0.2, seed=42):
     """
-    Fit RidgeCV on the full dataset to get the probe direction.
+    Fit RidgeCV on a train split to get the probe direction, validate on
+    a held-out test split.
+
+    Using the full dataset gives R²=1.0 (memorization with 7168 features
+    and 500 examples). Train/test split ensures the direction generalizes.
 
     Returns:
         steering_direction: np.ndarray (hidden_dim,) in raw hidden-state space.
             Adding delta * steering_direction to h shifts probe(h) by delta.
-        probe_info: dict with diagnostics (r2, mae, alpha, etc.)
+        probe_info: dict with diagnostics (r2_train, r2_test, alpha, etc.)
     """
     from sklearn.linear_model import RidgeCV
     from sklearn.metrics import r2_score, mean_absolute_error
+    from sklearn.model_selection import train_test_split
 
-    # Normalize (same as train_probes_cv.py)
-    mean = X.mean(axis=0)
-    std = X.std(axis=0)
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=test_frac, random_state=seed
+    )
+    print(f"  Train/test split: {len(X_train)} train, {len(X_test)} test")
+
+    # Normalize using TRAIN statistics only
+    mean = X_train.mean(axis=0)
+    std = X_train.std(axis=0)
     std[std < 1e-8] = 1.0
-    X_norm = (X - mean) / std
+    X_train_norm = (X_train - mean) / std
+    X_test_norm = (X_test - mean) / std
 
     alphas = np.logspace(-2, 6, 20)
     probe = RidgeCV(alphas=alphas, cv=5)
-    probe.fit(X_norm, y)
+    probe.fit(X_train_norm, y_train)
 
-    y_pred = probe.predict(X_norm)
-    r2 = r2_score(y, y_pred)
-    mae = mean_absolute_error(y, y_pred)
+    y_pred_train = probe.predict(X_train_norm)
+    y_pred_test = probe.predict(X_test_norm)
+    r2_train = r2_score(y_train, y_pred_train)
+    r2_test = r2_score(y_test, y_pred_test)
+    mae_train = mean_absolute_error(y_train, y_pred_train)
+    mae_test = mean_absolute_error(y_test, y_pred_test)
 
     # Un-normalize: probe predicts w_norm . ((h - mean) / std) + intercept
     # In raw space: w_raw = w_norm / std
@@ -133,20 +147,26 @@ def fit_steering_probe(X, y, target_name="A"):
     # Verify: w_raw . steering_direction should be ~1.0
     dot_check = np.dot(w_raw, steering_direction)
 
-    print(f"  Probe fit for {target_name}: R²={r2:.4f}, MAE={mae:.2f}, "
-          f"alpha={probe.alpha_:.1f}")
-    print(f"  ||w_raw||={np.linalg.norm(w_raw):.4f}, "
+    print(f"  Probe fit for {target_name}:")
+    print(f"    Train: R²={r2_train:.4f}, MAE={mae_train:.2f}")
+    print(f"    Test:  R²={r2_test:.4f}, MAE={mae_test:.2f}")
+    print(f"    alpha={probe.alpha_:.1f}")
+    print(f"    ||w_raw||={np.linalg.norm(w_raw):.4f}, "
           f"||steering||={np.linalg.norm(steering_direction):.6f}, "
           f"dot check={dot_check:.6f} (should be 1.0)")
 
     return steering_direction.astype(np.float32), {
         "target": target_name,
-        "r2": float(r2),
-        "mae": float(mae),
+        "r2_train": float(r2_train),
+        "r2_test": float(r2_test),
+        "mae_train": float(mae_train),
+        "mae_test": float(mae_test),
         "alpha": float(probe.alpha_),
         "w_raw_norm": float(np.linalg.norm(w_raw)),
         "steering_norm": float(np.linalg.norm(steering_direction)),
         "dot_check": float(dot_check),
+        "n_train": len(X_train),
+        "n_test": len(X_test),
         "mean": mean,
         "std": std,
     }
@@ -255,11 +275,25 @@ def generate_answer(model, tokenizer, input_ids, attention_mask,
 
 def get_intervention_positions(position_name: str, filler_start: int,
                                filler_end: int, seq_len: int) -> List[int]:
-    """Convert a position name to a list of absolute token positions to steer at."""
+    """Convert a position name to a list of absolute token positions to steer at.
+
+    Supports:
+        answer_prompt — last token before generation
+        question_end — last token before filler
+        filler_0.50 — fraction-based (50% through filler)
+        filler_k25 — absolute offset (25th filler token)
+        all_filler — every filler token
+        early_filler — first 25% of filler tokens
+    """
     if position_name == "answer_prompt":
         return [seq_len - 1]
     elif position_name == "question_end":
         return [filler_start - 1]
+    elif position_name.startswith("filler_k"):
+        # Absolute offset: filler_k25 = 25th filler token (1-indexed)
+        k = int(position_name.split("_k")[1])
+        idx = filler_start + k - 1
+        return [min(idx, filler_end)]
     elif position_name.startswith("filler_"):
         frac = float(position_name.split("_")[1])
         filler_len = filler_end - filler_start + 1
@@ -574,10 +608,10 @@ def plot_results(results: List[dict], summary: dict, output_dir: Path):
     per_delta = summary.get("per_delta", {})
     if per_delta:
         ds = sorted([float(d) for d in per_delta.keys()])
-        means = [per_delta[str(int(d)) if d == int(d) else str(d)]["mean_shift"]
-                 for d in ds]
-        medians = [per_delta[str(int(d)) if d == int(d) else str(d)]["median_shift"]
-                   for d in ds]
+        # Keys may be stored as "0.0", "-20.0", etc. — look up by original key
+        key_map = {float(k): k for k in per_delta.keys()}
+        means = [per_delta[key_map[d]]["mean_shift"] for d in ds]
+        medians = [per_delta[key_map[d]]["median_shift"] for d in ds]
 
         ax.plot(ds, means, "o-", color="#4CAF50", linewidth=2,
                 markersize=8, label="Mean shift")
@@ -635,7 +669,7 @@ def main():
                         help="Position to steer at (answer_prompt, filler_0.50, "
                              "all_filler, early_filler, etc.)")
     parser.add_argument("--target", type=str, default="A",
-                        choices=["A", "Y"],
+                        choices=["A", "Y", "sum"],
                         help="Which value's probe direction to use for steering")
 
     # Experiment config
@@ -693,6 +727,8 @@ def main():
         y = np.array([m["fact_value"] for m in meta], dtype=np.float32)
     elif args.target == "Y":
         y = np.array([m["x"] for m in meta], dtype=np.float32)
+    elif args.target == "sum":
+        y = np.array([m["answer"] for m in meta], dtype=np.float32)
 
     steering_direction, probe_info = fit_steering_probe(X, y, target_name=args.target)
 
@@ -728,10 +764,15 @@ def main():
     with open(args.categories) as f:
         cat_data = json.load(f)
 
-    # Filter by category
+    # Filter by category — use per-condition field if available
+    cat_field = f"category_{args.condition}"
+    if cat_field not in cat_data["examples"][0]:
+        cat_field = "category"
+    print(f"  Using category field: {cat_field}")
+
     example_indices = [
         e["problem_idx"] for e in cat_data["examples"]
-        if e["category"] == args.category
+        if e.get(cat_field) == args.category
     ]
     if args.max_examples and len(example_indices) > args.max_examples:
         example_indices = example_indices[:args.max_examples]

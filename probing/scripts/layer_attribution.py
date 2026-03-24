@@ -29,11 +29,6 @@ from tqdm import tqdm
 from extract_hidden_states import load_tokenizer
 
 
-def load_tokenizer(model_path: str):
-    from transformers import PreTrainedTokenizerFast
-    return PreTrainedTokenizerFast.from_pretrained(model_path)
-
-
 def get_answer_token_id(tokenizer, answer: int):
     ids = tokenizer.encode(str(answer), add_special_tokens=False)
     return ids[0] if len(ids) == 1 else None

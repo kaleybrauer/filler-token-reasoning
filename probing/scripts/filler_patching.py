@@ -709,6 +709,8 @@ def run_phase2(
     model, tokenizer, problems, few_shot, pairs, source_data,
     layer_indices, output_dir, n_pairs=20,
 ):
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
     subset = pairs[:n_pairs]
     total = n_pairs * len(PHASE2_CONDITIONS) * len(LAYER_BANDS)
     print(f"\n{'='*60}")
@@ -913,6 +915,13 @@ def main():
     parser.add_argument("--skip-validation", action="store_true")
     parser.add_argument("--skip-phase2", action="store_true")
     parser.add_argument("--phase2-pairs", type=int, default=20)
+    parser.add_argument("--phase3-per-layer", action="store_true",
+                        help="Run per-individual-layer patching (Phase 3)")
+    parser.add_argument("--phase3-pairs", type=int, default=20)
+    parser.add_argument("--phase3-conditions", nargs="+",
+                        default=["k1", "pre_answer"],
+                        help="Start conditions for Phase 3")
+    parser.add_argument("--skip-phase1", action="store_true")
     args = parser.parse_args()
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
@@ -961,13 +970,14 @@ def main():
             print("WARNING: Null validation failed! Proceeding anyway.")
 
     # Phase 1
-    p1 = run_phase1(
-        model, tokenizer, problems, few_shot, pairs, source_data,
-        layer_indices, args.output_dir,
-    )
-    print_aggregate(p1, "Phase 1: All-layer contiguous")
-    with open(args.output_dir / "phase1_results.json", "w") as f:
-        json.dump(p1, f, indent=2)
+    if not args.skip_phase1:
+        p1 = run_phase1(
+            model, tokenizer, problems, few_shot, pairs, source_data,
+            layer_indices, args.output_dir,
+        )
+        print_aggregate(p1, "Phase 1: All-layer contiguous")
+        with open(args.output_dir / "phase1_results.json", "w") as f:
+            json.dump(p1, f, indent=2)
 
     # Phase 2
     if not args.skip_phase2:
@@ -981,6 +991,28 @@ def main():
         print_aggregate(p2, "Phase 2: Layer-band", group_key="cond_band")
         with open(args.output_dir / "phase2_results.json", "w") as f:
             json.dump(p2, f, indent=2)
+
+    # Phase 3: Per-individual-layer patching
+    if args.phase3_per_layer:
+        per_layer_bands = {f"L{i}": [i] for i in range(61)}
+        # Temporarily override module-level constants for run_phase2
+        global LAYER_BANDS, PHASE2_CONDITIONS
+        old_bands, old_conds = LAYER_BANDS, PHASE2_CONDITIONS
+        LAYER_BANDS = per_layer_bands
+        PHASE2_CONDITIONS = args.phase3_conditions
+
+        p3 = run_phase2(
+            model, tokenizer, problems, few_shot, pairs, source_data,
+            layer_indices, args.output_dir / "phase3",
+            n_pairs=args.phase3_pairs,
+        )
+        for r in p3:
+            r["cond_band"] = f"{r['start_condition']}_{r['layer_band']}"
+        print_aggregate(p3, "Phase 3: Per-layer", group_key="cond_band")
+        with open(args.output_dir / "phase3_results.json", "w") as f:
+            json.dump(p3, f, indent=2)
+
+        LAYER_BANDS, PHASE2_CONDITIONS = old_bands, old_conds
 
     print("\nDone!")
 

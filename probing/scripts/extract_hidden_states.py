@@ -92,7 +92,7 @@ def find_filler_boundaries(
     tokenizer,
     input_ids: torch.Tensor,
     k: int,
-) -> Tuple[int, int]:
+) -> Tuple[int, int, int]:
     """
     Find the start and end token positions of the TARGET question's filler.
 
@@ -101,11 +101,12 @@ def find_filler_boundaries(
     boundaries using the "Filler: <content>\\n\\nAnswer:" structure.
 
     Returns:
+        question_end: index of last non-whitespace token before "Filler"
         filler_start: index of first filler content token in target question
         filler_end: index of last filler content token in target question (inclusive)
     """
     if k == 0:
-        return -1, -1
+        return -1, -1, -1
 
     ids = input_ids[0].tolist()
     tokens = tokenizer.convert_ids_to_tokens(ids)
@@ -136,14 +137,35 @@ def find_filler_boundaries(
     # Stop when we hit ":" (the colon of "Filler:")
     # Note: space tokens ("Ġ" → " ") between counting numbers must NOT stop the scan
     filler_start = filler_end
+    colon_pos = -1
     for i in range(filler_end - 1, -1, -1):
         decoded = tokenizer.decode([ids[i]])
         stripped = decoded.strip()
         if stripped == ":":
+            colon_pos = i
             break
         filler_start = i
 
-    return filler_start, filler_end
+    # Find "Filler" token (should be right before the colon, possibly with a space)
+    filler_keyword_pos = -1
+    if colon_pos >= 0:
+        for i in range(colon_pos - 1, max(colon_pos - 3, -1), -1):
+            decoded = tokenizer.decode([ids[i]])
+            if "Filler" in decoded or "filler" in decoded:
+                filler_keyword_pos = i
+                break
+
+    # Scan backward from "Filler" keyword past whitespace to find true question end
+    question_end = -1
+    search_from = filler_keyword_pos if filler_keyword_pos >= 0 else colon_pos
+    if search_from >= 0:
+        for i in range(search_from - 1, -1, -1):
+            decoded = tokenizer.decode([ids[i]])
+            if decoded.strip():
+                question_end = i
+                break
+
+    return question_end, filler_start, filler_end
 
 
 def compute_extraction_positions(
@@ -152,6 +174,7 @@ def compute_extraction_positions(
     seq_len: int,
     fractions: List[float] = FILLER_FRACTIONS,
     absolute_positions: Optional[List[int]] = None,
+    question_end_pos: int = -1,
 ) -> Dict[str, int]:
     """
     Compute the token positions to extract hidden states from.
@@ -163,8 +186,12 @@ def compute_extraction_positions(
     """
     positions = {}
 
-    # Last token before filler (question end)
-    positions["question_end"] = filler_start - 1
+    # True question end: last content token before "Filler" keyword
+    if question_end_pos >= 0:
+        positions["question_end"] = question_end_pos
+
+    # Token right before filler content starts (the ":" or space of "Filler: ")
+    positions["pre_filler"] = filler_start - 1
 
     filler_len = filler_end - filler_start + 1
 
@@ -264,6 +291,58 @@ class HiddenStateExtractor:
         torch.cuda.empty_cache()
 
         return result
+
+    def extract_at_generation_step(
+        self,
+        model,
+        tokenizer,
+        input_ids: torch.Tensor,
+        attention_mask: torch.Tensor,
+        n_prefix_tokens: int = 3,
+    ) -> Dict[str, Dict[int, np.ndarray]]:
+        """
+        Generate n_prefix_tokens (e.g. "Answer: " = "Answer",":","Ġ"),
+        then do a forward pass on the full sequence (input + generated prefix)
+        and extract hidden states at the last token position — right before
+        the model emits the answer number.
+
+        Returns:
+            {"pre_answer": {layer_idx: np.ndarray of shape (7168,)}}
+        """
+        # Step 1: generate the prefix tokens autoregressively
+        with torch.no_grad():
+            gen_output = model.generate(
+                input_ids,
+                attention_mask=attention_mask,
+                max_new_tokens=n_prefix_tokens,
+                do_sample=False,
+            )
+
+        # gen_output includes the input + generated tokens
+        prefix_ids = gen_output[:, :input_ids.shape[1] + n_prefix_tokens]
+        prefix_mask = torch.ones_like(prefix_ids)
+
+        # Verify the prefix is "Answer: " (or close)
+        generated = tokenizer.decode(
+            prefix_ids[0, input_ids.shape[1]:], skip_special_tokens=True
+        )
+
+        # Step 2: forward pass on full sequence with hooks
+        self._captured = {}
+        with torch.no_grad():
+            model(input_ids=prefix_ids, attention_mask=prefix_mask)
+
+        # Extract at the last position (right before the number)
+        last_pos = prefix_ids.shape[1] - 1
+        result = {"pre_answer": {}}
+        for layer_idx in self.layer_indices:
+            vec = self._captured[layer_idx][last_pos]
+            result["pre_answer"][layer_idx] = vec.to(torch.float16).numpy()
+
+        self._captured = {}
+        torch.cuda.empty_cache()
+
+        return result, generated
 
 
 # ==============================================================================
@@ -395,6 +474,7 @@ def run_extraction(
     skip_existing: bool = True,
     also_generate: bool = True,
     filler_positions: Optional[List[int]] = None,
+    extract_pre_answer: bool = False,
 ):
     """
     For each (condition, problem), extract hidden states and save.
@@ -463,14 +543,15 @@ def run_extraction(
             seq_len = input_ids.shape[1]
 
             # Find positions
-            filler_start, filler_end = None, None
+            filler_start, filler_end, question_end_pos = None, None, None
             if k > 0:
-                filler_start, filler_end = find_filler_boundaries(
+                question_end_pos, filler_start, filler_end = find_filler_boundaries(
                     tokenizer, input_ids, k
                 )
                 positions = compute_extraction_positions(
                     filler_start, filler_end, seq_len,
                     absolute_positions=filler_positions,
+                    question_end_pos=question_end_pos,
                 )
             else:
                 positions = compute_baseline_positions(seq_len)
@@ -485,7 +566,22 @@ def run_extraction(
             # Extract hidden states (forward pass 1)
             states = extractor.extract(input_ids, attention_mask, positions)
 
-            # Get model's answer (forward pass 2)
+            # Extract at pre-answer position (after "Answer: " generated)
+            gen_prefix = None
+            if extract_pre_answer:
+                pre_answer_states, gen_prefix = extractor.extract_at_generation_step(
+                    model, tokenizer, input_ids, attention_mask,
+                    n_prefix_tokens=3,
+                )
+                # Merge into states dict
+                for pos_name, layer_dict in pre_answer_states.items():
+                    states[pos_name] = layer_dict
+                positions["pre_answer"] = seq_len + 2  # index of space token (for reference)
+                # Print prefix for first few examples and every 100th
+                if prob_idx < 3 or prob_idx % 100 == 0:
+                    tqdm.write(f"  [{cond_name} #{prob_idx}] generated prefix: {repr(gen_prefix)}")
+
+            # Get model's answer (forward pass 2, or reuse generation)
             model_response, model_answer, is_correct = None, None, None
             if also_generate:
                 model_response, model_answer = get_model_answer(
@@ -511,6 +607,7 @@ def run_extraction(
                 "seq_len": seq_len,
                 "filler_start": filler_start,
                 "filler_end": filler_end,
+                "gen_prefix": gen_prefix,
             }
 
             with open(save_path, "wb") as f:
@@ -594,6 +691,9 @@ def main():
     parser.add_argument("--filler-positions", type=str, default=None,
                         help="Comma-separated absolute filler token offsets "
                              "(e.g. '1,5,10,25,50'). Overrides fraction-based positions.")
+    parser.add_argument("--extract-pre-answer", action="store_true",
+                        help="Also extract hidden states after model generates "
+                             "'Answer: ' prefix (right before the number token)")
     args = parser.parse_args()
 
     # Load dataset
@@ -655,6 +755,7 @@ def main():
         skip_existing=not args.no_skip_existing,
         also_generate=not args.no_generate,
         filler_positions=filler_pos,
+        extract_pre_answer=args.extract_pre_answer,
     )
 
     # Verify

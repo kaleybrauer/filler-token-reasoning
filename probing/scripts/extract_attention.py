@@ -221,6 +221,7 @@ def load_model_eager(model_path: str):
     }
 
     t0 = time.time()
+    print(f"Calling from_pretrained with max_memory={max_memory}...", flush=True)
     model = AutoModelForCausalLM.from_pretrained(
         model_path,
         device_map="auto",

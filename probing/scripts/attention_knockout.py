@@ -1,0 +1,421 @@
+"""
+attention_knockout.py
+
+Causal test: zero out attention to filler positions and measure accuracy.
+
+Tests whether the model needs to READ from filler KV entries to get the
+accuracy benefit. Unlike removing filler entirely, this preserves:
+- Sequence length (same number of tokens)
+- Positional encoding (answer_prompt at the same position)
+- Filler KV entries exist (filler was processed), just not read
+
+Three conditions:
+1. dots_50: normal filler (control, ~75%)
+2. dots_50 + knockout at answer_prompt only: block filler reading at the
+   last prefill position, but generation tokens can still read filler
+3. dots_50 + knockout at ALL positions: block filler reading everywhere
+   (answer_prompt + all generation steps)
+
+Requires eager attention (not flash). Uses monkey-patched forward method
+to modify attention weights between softmax and V matmul.
+
+Usage:
+    source /workspace/config/probing_env.sh
+    PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
+    python probing/scripts/attention_knockout.py \
+        --model-path /workspace/models/deepseek-v3-awq \
+        --max-examples 500 \
+        --output-dir probing/results/attention_knockout
+"""
+
+import argparse
+import json
+import random
+import re
+import sys
+import time
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple
+
+import torch
+from tqdm import tqdm
+
+# Patch for autoawq compat
+import transformers.activations as _act
+if not hasattr(_act, "PytorchGELUTanh"):
+    _act.PytorchGELUTanh = _act.GELUTanh
+
+sys.path.insert(0, str(Path(__file__).parent))
+from extract_hidden_states import (
+    build_messages_for_condition,
+    find_filler_boundaries,
+    load_tokenizer,
+)
+from extract_attention import load_model_eager
+from generate_1hop_dataset import build_system_message, build_user_turn
+
+
+def build_messages_pre_padding(few_shot_items, target, k):
+    """Build messages with k dots BEFORE the question (pre-padding).
+
+    Format: "Padding: . . . ...\n\nQuestion: ...\n\nAnswer:"
+    Few-shot examples also get pre-padding for consistency.
+    """
+    system_msg = build_system_message("dots", k)
+    messages = [{"role": "system", "content": system_msg}]
+
+    for fs in few_shot_items:
+        padding = " ".join(["."] * k)
+        user_content = (
+            f"Padding: {padding}\n\n"
+            f"Question: What is {fs['fact_phrase']} plus {fs['x']}?\n\n"
+            f"Answer:"
+        )
+        messages.append({"role": "user", "content": user_content})
+        messages.append({"role": "assistant", "content": f"Answer: {fs['answer']}"})
+
+    padding = " ".join(["."] * k)
+    user_content = (
+        f"Padding: {padding}\n\n"
+        f"Question: What is {target['fact_phrase']} plus {target['x']}?\n\n"
+        f"Answer:"
+    )
+    messages.append({"role": "user", "content": user_content})
+
+    return messages
+
+
+def find_pre_padding_boundaries(tokenizer, input_ids, k):
+    """Find the start and end positions of pre-padding dots in the LAST user turn."""
+    ids = input_ids[0].tolist()
+    tokens = [tokenizer.decode([tid]) for tid in ids]
+    seq_len = len(tokens)
+
+    # Find the last "Padding" token
+    last_padding_pos = -1
+    for i in range(seq_len - 1, -1, -1):
+        if "Padding" in tokens[i]:
+            last_padding_pos = i
+            break
+
+    if last_padding_pos < 0:
+        return -1, -1
+
+    # Find the colon after "Padding"
+    colon_pos = -1
+    for i in range(last_padding_pos + 1, min(last_padding_pos + 3, seq_len)):
+        if ":" in tokenizer.decode([ids[i]]):
+            colon_pos = i
+            break
+
+    # First dot after colon
+    pad_start = colon_pos + 1 if colon_pos >= 0 else last_padding_pos + 1
+
+    # Find "Question" token after padding
+    question_pos = -1
+    for i in range(pad_start, seq_len):
+        if "Question" in tokenizer.decode([ids[i]]):
+            question_pos = i
+            break
+
+    # Last dot before Question (scan backward past whitespace)
+    pad_end = pad_start
+    if question_pos >= 0:
+        for i in range(question_pos - 1, pad_start - 1, -1):
+            decoded = tokenizer.decode([ids[i]])
+            if decoded.strip() and "." in decoded:
+                pad_end = i
+                break
+
+    return pad_start, pad_end
+
+
+def build_messages_format_only(few_shot_items, target, k):
+    """Build messages with filler FORMAT but zero dots.
+
+    Produces "Filler:\n\nAnswer:" with the system prompt describing k filler tokens,
+    matching the few-shot format of the filler condition but with no actual dots.
+    """
+    system_msg = build_system_message("dots", k)
+    messages = [{"role": "system", "content": system_msg}]
+
+    for fs in few_shot_items:
+        # Few-shots get the FULL filler (k dots) so format is consistent
+        user_content = build_user_turn(
+            fs["fact_phrase"], fs["x"], "dots", k, rng=random.Random(42)
+        )
+        messages.append({"role": "user", "content": user_content})
+        messages.append({"role": "assistant", "content": f"Answer: {fs['answer']}"})
+
+    # Target gets filler format but 0 dots
+    user_content = build_user_turn(
+        target["fact_phrase"], target["x"], "dots", 0
+    )
+    # Insert "Filler:\n\n" before "Answer:"
+    user_content = user_content.replace("\n\nAnswer:", "\n\nFiller:\n\nAnswer:")
+    messages.append({"role": "user", "content": user_content})
+
+    return messages
+
+
+# ==============================================================================
+# Attention knockout via attention mask modification
+# ==============================================================================
+
+def generate_with_knockout(
+    model,
+    tokenizer,
+    input_ids: torch.Tensor,
+    attention_mask: torch.Tensor,
+    filler_start: int,
+    filler_end: int,
+    mode: str = "all",
+    max_new_tokens: int = 20,
+) -> Tuple[str, Optional[int]]:
+    """
+    Generate with attention to filler positions knocked out.
+
+    Uses persistent pre-forward hooks on self_attn to modify the 4D attention
+    mask, setting filler columns to -inf so they get zero weight after softmax.
+    Works with KV cache (model.generate) — hooks fire on both prefill and
+    each generation step.
+
+    Modes:
+        "all": block filler attention at every step (prefill + generation)
+        "answer_only": block only during prefill, generation can read filler
+    """
+    seq_len = input_ids.shape[1]
+    step_counter = [0]  # mutable for closure
+
+    def mask_hook(module, args, kwargs):
+        if 'attention_mask' in kwargs and kwargs['attention_mask'] is not None:
+            mask = kwargs['attention_mask']
+            if mask.dim() == 4 and mask.shape[-1] > filler_end:
+                should_block = False
+                is_prefill = (mask.shape[2] > 1)  # q_len > 1 means prefill
+
+                if mode == "all":
+                    should_block = True
+                elif mode == "answer_only" and is_prefill:
+                    should_block = True
+
+                if should_block:
+                    mask = mask.clone()
+                    neg_inf = torch.finfo(mask.dtype).min
+                    if mode == "answer_only":
+                        # Only block the last query position from reading filler
+                        mask[:, :, -1, filler_start:filler_end + 1] = neg_inf
+                    else:
+                        mask[:, :, :, filler_start:filler_end + 1] = neg_inf
+                    kwargs['attention_mask'] = mask
+        return args, kwargs
+
+    # Register hooks
+    hook_handles = []
+    for layer in model.model.layers:
+        h = layer.self_attn.register_forward_pre_hook(mask_hook, with_kwargs=True)
+        hook_handles.append(h)
+
+    try:
+        with torch.no_grad():
+            gen_output = model.generate(
+                input_ids,
+                attention_mask=attention_mask,
+                max_new_tokens=max_new_tokens,
+                do_sample=False,
+                use_cache=True,
+            )
+    finally:
+        for h in hook_handles:
+            h.remove()
+
+    new_tokens = gen_output[0, seq_len:]
+    raw = tokenizer.decode(new_tokens, skip_special_tokens=True).strip()
+
+    m = re.search(r"Answer:\s*(-?\d+)", raw)
+    if m:
+        return raw, int(m.group(1))
+    m = re.search(r"(-?\d+)", raw)
+    if m:
+        return raw, int(m.group(1))
+    return raw, None
+
+
+def extract_answer(text: str) -> Optional[int]:
+    m = re.search(r"Answer:\s*(-?\d+)", text)
+    if m:
+        return int(m.group(1))
+    m = re.search(r"(-?\d+)", text)
+    if m:
+        return int(m.group(1))
+    return None
+
+
+# ==============================================================================
+# Main
+# ==============================================================================
+
+def main():
+    parser = argparse.ArgumentParser(description="Attention knockout causal test")
+    parser.add_argument("--model-path", type=str,
+                        default="/workspace/models/deepseek-v3-awq")
+    parser.add_argument("--dataset", type=Path,
+                        default=Path("probing/data/1hop_addition_dataset.json"))
+    parser.add_argument("--output-dir", type=Path,
+                        default=Path("probing/results/attention_knockout"))
+    parser.add_argument("--max-examples", type=int, default=500)
+    parser.add_argument("--filler-k", type=int, default=50)
+    parser.add_argument("--max-new-tokens", type=int, default=5,
+                        help="Max tokens to generate (5 is enough for single-number answers)")
+    args = parser.parse_args()
+
+    args.output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Load dataset
+    with open(args.dataset) as f:
+        dataset = json.load(f)
+    few_shot = dataset["few_shot_facts"]
+    problems = dataset["examples"][:args.max_examples]
+    print(f"Loaded {len(problems)} problems")
+
+    # Load model (eager attention required)
+    model, tokenizer = load_model_eager(args.model_path)
+    first_param = next(model.parameters())
+    input_device = first_param.device
+
+    conditions = [
+        # (name, filler_k, ko_mode, do_knockout)
+        ("baseline_k0", 0, None, False),                    # true baseline, no filler format
+        ("format_only_k0", 0, None, False),                 # filler format with 0 dots
+        ("dots_50_normal", args.filler_k, None, False),     # normal filler, no knockout
+        ("dots_50_ko_all", args.filler_k, "all", True),     # knockout at all positions
+        ("dots_50_ko_answer", args.filler_k, "answer_only", True),  # knockout at answer_prompt only
+        ("pre_padding_normal", args.filler_k, None, False), # dots before question, no knockout
+        ("pre_padding_ko", args.filler_k, "all", True),     # dots before question, attention blocked
+    ]
+
+    all_results = {}
+
+    for cond_name, cond_k, ko_mode, do_knockout in conditions:
+        # Skip conditions that already have results
+        results_file = args.output_dir / f"{cond_name}.json"
+        if results_file.exists():
+            with open(results_file) as f:
+                existing = json.load(f)
+            if existing["total"] >= len(problems):
+                print(f"\n  {cond_name}: already done ({existing['total']} examples), skipping")
+                all_results[cond_name] = existing
+                continue
+
+        print(f"\n{'='*60}")
+        print(f"  {cond_name} (k={cond_k}, knockout={ko_mode})")
+        print(f"{'='*60}")
+
+        results = []
+        correct = 0
+        t0 = time.time()
+
+        for prob_idx, problem in enumerate(tqdm(problems, desc=cond_name)):
+            example_rng = random.Random(prob_idx)
+            if cond_name == "format_only_k0":
+                messages = build_messages_format_only(
+                    few_shot[:5], problem, args.filler_k
+                )
+            elif cond_name.startswith("pre_padding"):
+                messages = build_messages_pre_padding(
+                    few_shot[:5], problem, args.filler_k
+                )
+            else:
+                messages = build_messages_for_condition(
+                    few_shot[:5], problem, "dots", cond_k, rng=example_rng
+                )
+            full_text = tokenizer.apply_chat_template(
+                messages, tokenize=False, add_generation_prompt=True
+            )
+            inputs = tokenizer(full_text, return_tensors="pt")
+            input_ids = inputs["input_ids"].to(input_device)
+            attention_mask = inputs["attention_mask"].to(input_device)
+            seq_len = input_ids.shape[1]
+
+            filler_start, filler_end = -1, -1
+            if cond_k > 0 and cond_name.startswith("pre_padding"):
+                filler_start, filler_end = find_pre_padding_boundaries(
+                    tokenizer, input_ids, cond_k
+                )
+            elif cond_k > 0:
+                _, filler_start, filler_end = find_filler_boundaries(
+                    tokenizer, input_ids, cond_k
+                )
+
+            if do_knockout and filler_start >= 0:
+                raw, answer = generate_with_knockout(
+                    model, tokenizer, input_ids, attention_mask,
+                    filler_start, filler_end,
+                    mode=ko_mode,
+                    max_new_tokens=args.max_new_tokens,
+                )
+            else:
+                # Normal generation
+                with torch.no_grad():
+                    gen_output = model.generate(
+                        input_ids,
+                        attention_mask=attention_mask,
+                        max_new_tokens=args.max_new_tokens,
+                        do_sample=False,
+                    )
+                new_tokens = gen_output[0, seq_len:]
+                raw = tokenizer.decode(new_tokens, skip_special_tokens=True).strip()
+                answer = extract_answer(raw)
+
+            is_correct = answer is not None and answer == problem["answer"]
+            if is_correct:
+                correct += 1
+
+            results.append({
+                "idx": prob_idx,
+                "expected": problem["answer"],
+                "predicted": answer,
+                "correct": is_correct,
+                "raw_response": raw,
+                "fact_value": problem["fact_value"],
+                "x": problem["x"],
+            })
+
+            del input_ids, attention_mask
+            torch.cuda.empty_cache()
+
+        elapsed = time.time() - t0
+        acc = correct / len(problems)
+        print(f"\n  {cond_name}: {correct}/{len(problems)} ({acc:.1%})")
+        print(f"  Time: {elapsed:.0f}s ({elapsed/len(problems):.1f}s/example)")
+
+        all_results[cond_name] = {
+            "accuracy": acc,
+            "correct": correct,
+            "total": len(problems),
+            "time": elapsed,
+            "results": results,
+        }
+
+        # Save incrementally
+        with open(args.output_dir / f"{cond_name}.json", "w") as f:
+            json.dump(all_results[cond_name], f, indent=2)
+
+    # Summary
+    print(f"\n{'='*60}")
+    print("SUMMARY")
+    print(f"{'='*60}")
+    for cond_name, data in all_results.items():
+        print(f"  {cond_name:<25} {data['accuracy']:.1%} ({data['correct']}/{data['total']})")
+
+    # Save combined results
+    summary = {k: {sk: sv for sk, sv in v.items() if sk != "results"}
+               for k, v in all_results.items()}
+    with open(args.output_dir / "summary.json", "w") as f:
+        json.dump(summary, f, indent=2)
+
+    print(f"\nResults saved to {args.output_dir}/")
+
+
+if __name__ == "__main__":
+    main()

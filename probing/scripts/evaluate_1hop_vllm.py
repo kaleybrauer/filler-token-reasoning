@@ -51,22 +51,26 @@ def build_system_message(k: int) -> str:
     return base
 
 
-def build_user_turn(fact_phrase: str, x: int, k: int) -> str:
+def build_user_turn(fact_phrase: str, x: int, k: int, pre_padding: int = 0) -> str:
     question_line = f"Question: What is {fact_phrase} plus {x}?"
+    prefix = ""
+    if pre_padding > 0:
+        padding = " ".join(["."] * pre_padding)
+        prefix = f"Padding: {padding}\n\n"
     if k > 0:
         filler = " ".join(["."] * k)
-        return f"{question_line}\n\nFiller: {filler}\n\nAnswer:"
+        return f"{prefix}{question_line}\n\nFiller: {filler}\n\nAnswer:"
     else:
-        return f"{question_line}\n\nAnswer:"
+        return f"{prefix}{question_line}\n\nAnswer:"
 
 
-def build_messages(few_shot_items: list[dict], target: dict, k: int) -> list[dict]:
+def build_messages(few_shot_items: list[dict], target: dict, k: int, pre_padding: int = 0) -> list[dict]:
     messages = [{"role": "system", "content": build_system_message(k)}]
     for fs in few_shot_items[:5]:
-        user_content = build_user_turn(fs["fact_phrase"], fs["x"], k)
+        user_content = build_user_turn(fs["fact_phrase"], fs["x"], k, pre_padding)
         messages.append({"role": "user", "content": user_content})
         messages.append({"role": "assistant", "content": f"Answer: {fs['answer']}"})
-    user_content = build_user_turn(target["fact_phrase"], target["x"], k)
+    user_content = build_user_turn(target["fact_phrase"], target["x"], k, pre_padding)
     messages.append({"role": "user", "content": user_content})
     return messages
 
@@ -101,6 +105,9 @@ def main():
                         help="TP size (default: auto-detect from GPU count)")
     parser.add_argument("--pipeline-parallel-size", type=int, default=None,
                         help="PP size (default: auto-detect from GPU count)")
+    parser.add_argument("--pre-padding", type=int, default=0,
+                        help="Number of dot tokens to insert BEFORE the question "
+                             "(positional encoding test)")
     args = parser.parse_args()
 
     import torch
@@ -143,22 +150,32 @@ def main():
         from openai import OpenAI
 
         port = 8192
-        print(f"Starting vLLM server (PP={pp_size} requires async engine)...")
-        server_cmd = [
-            sys.executable, "-m", "vllm.entrypoints.openai.api_server",
-            "--model", args.model_path,
-            "--tensor-parallel-size", str(tp_size),
-            "--pipeline-parallel-size", str(pp_size),
-            "--max-model-len", "4096",
-            "--gpu-memory-utilization", "0.95",
-            "--enforce-eager",
-            "--dtype", "float16",
-            "--port", str(port),
-            "--disable-log-requests",
-        ]
-        server_log = open("/tmp/vllm_server.log", "w")
-        server_proc = subprocess.Popen(server_cmd, stdout=server_log, stderr=subprocess.STDOUT)
-        atexit.register(lambda: server_proc.kill())
+
+        # Check if server is already running
+        client = OpenAI(base_url=f"http://localhost:{port}/v1", api_key="dummy")
+        server_proc = None
+        try:
+            client.models.list()
+            print(f"vLLM server already running on port {port}")
+        except Exception:
+            print(f"Starting vLLM server (PP={pp_size} requires async engine)...")
+            server_cmd = [
+                sys.executable, "-m", "vllm.entrypoints.openai.api_server",
+                "--model", args.model_path,
+                "--tensor-parallel-size", str(tp_size),
+                "--pipeline-parallel-size", str(pp_size),
+                "--max-model-len", "4096",
+                "--gpu-memory-utilization", "0.95",
+                "--enforce-eager",
+                "--dtype", "float16",
+                "--port", str(port),
+                "--disable-log-requests",
+                "--trust-remote-code",
+            ]
+            server_log = open("/tmp/vllm_server.log", "w")
+            server_proc = subprocess.Popen(server_cmd, stdout=server_log, stderr=subprocess.STDOUT,
+                                           env={**os.environ, "VLLM_USE_V1": "0"})
+            atexit.register(lambda: server_proc.kill())
 
         # Wait for server to be ready
         client = OpenAI(base_url=f"http://localhost:{port}/v1", api_key="dummy")
@@ -221,10 +238,10 @@ def main():
     print(f"  Response: {sanity_results[0]!r}")
 
     # Helper to run a condition
-    def evaluate_condition(k: int) -> list[dict]:
+    def evaluate_condition(k: int, pre_padding: int = 0) -> list[dict]:
         prompts = []
         for ex in examples:
-            msgs = build_messages(few_shot, ex, k)
+            msgs = build_messages(few_shot, ex, k, pre_padding)
             prompt = tokenizer.apply_chat_template(msgs, tokenize=False, add_generation_prompt=True)
             prompts.append(prompt)
 
@@ -268,6 +285,17 @@ def main():
     filler_acc = sum(r["correct"] for r in filler_results) / len(filler_results)
     print(f"Filler accuracy: {filler_acc:.1%} ({sum(r['correct'] for r in filler_results)}/{len(filler_results)})")
 
+    # Evaluate pre-padding condition if requested
+    prepad_results = None
+    prepad_acc = None
+    if args.pre_padding > 0:
+        print(f"\n{'='*60}")
+        print(f"Evaluating PRE-PADDING (k=0, {args.pre_padding} dots before question)...")
+        print(f"{'='*60}")
+        prepad_results = evaluate_condition(k=0, pre_padding=args.pre_padding)
+        prepad_acc = sum(r["correct"] for r in prepad_results) / len(prepad_results)
+        print(f"Pre-padding accuracy: {prepad_acc:.1%} ({sum(r['correct'] for r in prepad_results)}/{len(prepad_results)})")
+
     # Summary
     print(f"\n{'='*60}")
     print("SUMMARY")
@@ -275,6 +303,9 @@ def main():
     print(f"  Baseline (k=0):            {baseline_acc:.1%}")
     print(f"  Filler (k={args.filler_k} dots):  {filler_acc:.1%}")
     print(f"  Δ accuracy:                {filler_acc - baseline_acc:+.1%}")
+    if prepad_acc is not None:
+        print(f"  Pre-padding ({args.pre_padding} dots):  {prepad_acc:.1%}")
+        print(f"  Δ vs baseline:             {prepad_acc - baseline_acc:+.1%}")
 
     # Save results
     args.outdir.mkdir(parents=True, exist_ok=True)
@@ -284,6 +315,7 @@ def main():
             "dataset": str(args.dataset),
             "max_examples": args.max_examples,
             "filler_k": args.filler_k,
+            "pre_padding": args.pre_padding,
             "n_few_shot": len(few_shot),
             "tensor_parallel_size": tp_size,
             "pipeline_parallel_size": pp_size,
@@ -293,10 +325,12 @@ def main():
             "baseline_accuracy": baseline_acc,
             "filler_accuracy": filler_acc,
             "delta": filler_acc - baseline_acc,
+            "pre_padding_accuracy": prepad_acc,
             "n_examples": len(examples),
         },
         "baseline_results": baseline_results,
         "filler_results": filler_results,
+        "pre_padding_results": prepad_results,
     }
     out_path = args.outdir / "eval_1hop_baseline_vs_filler.json"
     with open(out_path, "w") as f:

@@ -41,7 +41,7 @@ from extract_hidden_states import (
     find_filler_boundaries,
 )
 from extract_attention import load_model_eager
-from attention_knockout import generate_with_knockout
+from attention_knockout import generate_with_knockout, build_messages_format_only
 
 
 def extract_answer(text: str) -> Optional[int]:
@@ -55,18 +55,25 @@ def extract_answer(text: str) -> Optional[int]:
 
 
 def run_condition(model, tokenizer, problems, few_shot, k, knockout,
-                  input_device, max_new_tokens=5):
+                  input_device, max_new_tokens=5, format_only=False,
+                  format_only_k=50):
     """Run one (k, knockout) condition. Returns list of result dicts."""
     results = []
     correct = 0
 
+    desc = "format_only" if format_only else f"k={k} {'ko' if knockout else 'normal'}"
     for prob_idx, problem in enumerate(tqdm(
-        problems, desc=f"k={k} {'ko' if knockout else 'normal'}"
+        problems, desc=desc
     )):
         example_rng = random.Random(prob_idx)
-        messages = build_messages_for_condition(
-            few_shot[:5], problem, "dots", k, rng=example_rng
-        )
+        if format_only:
+            messages = build_messages_format_only(
+                few_shot[:5], problem, format_only_k
+            )
+        else:
+            messages = build_messages_for_condition(
+                few_shot[:5], problem, "dots", k, rng=example_rng
+            )
         full_text = tokenizer.apply_chat_template(
             messages, tokenize=False, add_generation_prompt=True
         )
@@ -147,57 +154,64 @@ def main():
 
     all_results = {}
 
+    # Build condition list: (name, k, knockout, format_only)
+    conditions = []
     for k in k_values:
-        for knockout in [False, True]:
-            if k == 0 and knockout:
-                continue  # no filler to knock out at k=0
+        conditions.append((f"k{k}_normal", k, False, False))
+        if k == 0:
+            # format_only: filler format with 0 dots, few-shots have full filler
+            conditions.append(("format_only_k0", 0, False, True))
+        else:
+            conditions.append((f"k{k}_ko", k, True, False))
 
-            cond_name = f"k{k}_{'ko' if knockout else 'normal'}"
+    for cond_name, k, knockout, format_only in conditions:
+        # Resume support
+        results_file = args.output_dir / f"{cond_name}.json"
+        if results_file.exists():
+            with open(results_file) as f:
+                existing = json.load(f)
+            if existing["total"] >= len(problems):
+                print(f"\n  {cond_name}: already done ({existing['accuracy']:.1%}), skipping")
+                all_results[cond_name] = existing
+                continue
 
-            # Resume support
-            results_file = args.output_dir / f"{cond_name}.json"
-            if results_file.exists():
-                with open(results_file) as f:
-                    existing = json.load(f)
-                if existing["total"] >= len(problems):
-                    print(f"\n  {cond_name}: already done ({existing['accuracy']:.1%}), skipping")
-                    all_results[cond_name] = existing
-                    continue
+        print(f"\n{'='*60}")
+        print(f"  {cond_name}")
+        print(f"{'='*60}")
 
-            print(f"\n{'='*60}")
-            print(f"  {cond_name}")
-            print(f"{'='*60}")
+        t0 = time.time()
+        results, acc, correct = run_condition(
+            model, tokenizer, problems, few_shot, k, knockout,
+            input_device, args.max_new_tokens,
+            format_only=format_only,
+            format_only_k=max(k_values),
+        )
+        elapsed = time.time() - t0
 
-            t0 = time.time()
-            results, acc, correct = run_condition(
-                model, tokenizer, problems, few_shot, k, knockout,
-                input_device, args.max_new_tokens,
-            )
-            elapsed = time.time() - t0
+        print(f"  {cond_name}: {correct}/{len(problems)} ({acc:.1%}) "
+              f"[{elapsed:.0f}s, {elapsed/len(problems):.1f}s/ex]")
 
-            print(f"  {cond_name}: {correct}/{len(problems)} ({acc:.1%}) "
-                  f"[{elapsed:.0f}s, {elapsed/len(problems):.1f}s/ex]")
+        cond_data = {
+            "k": k,
+            "knockout": knockout,
+            "format_only": format_only,
+            "accuracy": acc,
+            "correct": correct,
+            "total": len(problems),
+            "time": elapsed,
+            "results": results,
+        }
+        all_results[cond_name] = cond_data
 
-            cond_data = {
-                "k": k,
-                "knockout": knockout,
-                "accuracy": acc,
-                "correct": correct,
-                "total": len(problems),
-                "time": elapsed,
-                "results": results,
-            }
-            all_results[cond_name] = cond_data
-
-            with open(results_file, "w") as f:
-                json.dump(cond_data, f, indent=2)
+        with open(results_file, "w") as f:
+            json.dump(cond_data, f, indent=2)
 
     # Summary
     print(f"\n{'='*60}")
     print("SUMMARY")
     print(f"{'='*60}")
-    print(f"{'k':>4}  {'Normal':>8}  {'Knockout':>8}  {'Δ':>8}")
-    print(f"{'-'*34}")
+    print(f"{'Condition':<16}  {'Normal':>8}  {'Knockout':>8}  {'Δ':>8}")
+    print(f"{'-'*48}")
     for k in k_values:
         normal = all_results.get(f"k{k}_normal", {})
         ko = all_results.get(f"k{k}_ko", {})
@@ -207,7 +221,11 @@ def main():
             delta = f"{ko['accuracy'] - normal['accuracy']:+.1%}"
         else:
             delta = "-"
-        print(f"{k:>4}  {n_acc:>8}  {k_acc:>8}  {delta:>8}")
+        print(f"k={k:<13}  {n_acc:>8}  {k_acc:>8}  {delta:>8}")
+        if k == 0:
+            fmt = all_results.get("format_only_k0", {})
+            f_acc = f"{fmt['accuracy']:.1%}" if fmt else "-"
+            print(f"{'format_only':<16}  {f_acc:>8}  {'-':>8}  {'-':>8}")
 
     with open(args.output_dir / "summary.json", "w") as f:
         summary = {k: {sk: sv for sk, sv in v.items() if sk != "results"}

@@ -159,6 +159,33 @@ def build_messages_format_only(few_shot_items, target, k):
 
 
 # ==============================================================================
+# Position ID correction
+# ==============================================================================
+
+def build_corrected_position_ids(
+    seq_len: int,
+    filler_start: int,
+    filler_end: int,
+    device: torch.device,
+) -> torch.Tensor:
+    """Build position IDs that undo the positional shift from filler tokens.
+
+    Filler tokens keep their natural position IDs (doesn't matter if knockout
+    is also applied). Post-filler tokens get the position IDs they would have
+    had without filler — as if filler tokens were invisible to RoPE.
+
+    Example with filler at positions 479-528 (50 tokens):
+        Normal:    [0, 1, ..., 478, 479, ..., 528, 529, 530, 531]
+        Corrected: [0, 1, ..., 478, 479, ..., 528, 479, 480, 481]
+    """
+    position_ids = torch.arange(seq_len, dtype=torch.long, device=device)
+    n_filler = filler_end - filler_start + 1
+    # Shift post-filler positions back by n_filler
+    position_ids[filler_end + 1:] -= n_filler
+    return position_ids.unsqueeze(0)  # (1, seq_len)
+
+
+# ==============================================================================
 # Attention knockout via attention mask modification
 # ==============================================================================
 
@@ -171,6 +198,7 @@ def generate_with_knockout(
     filler_end: int,
     mode: str = "all",
     max_new_tokens: int = 20,
+    correct_positions: bool = False,
 ) -> Tuple[str, Optional[int]]:
     """
     Generate with attention to filler positions knocked out.
@@ -183,9 +211,12 @@ def generate_with_knockout(
     Modes:
         "all": block filler attention at every step (prefill + generation)
         "answer_only": block only during prefill, generation can read filler
+
+    If correct_positions=True, overrides position IDs so post-filler tokens
+    use the same positions they would have had without filler (undoes the
+    RoPE shift from filler tokens).
     """
     seq_len = input_ids.shape[1]
-    step_counter = [0]  # mutable for closure
 
     def mask_hook(module, args, kwargs):
         if 'attention_mask' in kwargs and kwargs['attention_mask'] is not None:
@@ -216,14 +247,24 @@ def generate_with_knockout(
         h = layer.self_attn.register_forward_pre_hook(mask_hook, with_kwargs=True)
         hook_handles.append(h)
 
+    # Build position_ids if correcting
+    generate_kwargs = dict(
+        max_new_tokens=max_new_tokens,
+        do_sample=False,
+        use_cache=True,
+    )
+    if correct_positions:
+        position_ids = build_corrected_position_ids(
+            seq_len, filler_start, filler_end, input_ids.device
+        )
+        generate_kwargs["position_ids"] = position_ids
+
     try:
         with torch.no_grad():
             gen_output = model.generate(
                 input_ids,
                 attention_mask=attention_mask,
-                max_new_tokens=max_new_tokens,
-                do_sample=False,
-                use_cache=True,
+                **generate_kwargs,
             )
     finally:
         for h in hook_handles:
@@ -284,19 +325,20 @@ def main():
     input_device = first_param.device
 
     conditions = [
-        # (name, filler_k, ko_mode, do_knockout)
-        ("baseline_k0", 0, None, False),                    # true baseline, no filler format
-        ("format_only_k0", 0, None, False),                 # filler format with 0 dots
-        ("dots_50_normal", args.filler_k, None, False),     # normal filler, no knockout
-        ("dots_50_ko_all", args.filler_k, "all", True),     # knockout at all positions
-        ("dots_50_ko_answer", args.filler_k, "answer_only", True),  # knockout at answer_prompt only
-        ("pre_padding_normal", args.filler_k, None, False), # dots before question, no knockout
-        ("pre_padding_ko", args.filler_k, "all", True),     # dots before question, attention blocked
+        # (name, filler_k, ko_mode, do_knockout, correct_pos)
+        ("baseline_k0", 0, None, False, False),                     # true baseline, no filler format
+        ("format_only_k0", 0, None, False, False),                  # filler format with 0 dots
+        ("dots_50_normal", args.filler_k, None, False, False),      # normal filler, no knockout
+        ("dots_50_ko_all", args.filler_k, "all", True, False),      # knockout at all positions
+        ("dots_50_ko_answer", args.filler_k, "answer_only", True, False),  # knockout at answer_prompt only
+        ("pre_padding_normal", args.filler_k, None, False, False),  # dots before question, no knockout
+        ("pre_padding_ko", args.filler_k, "all", True, False),      # dots before question, attention blocked
+        ("dots_50_ko_corrpos", args.filler_k, "all", True, True),   # knockout + corrected position IDs
     ]
 
     all_results = {}
 
-    for cond_name, cond_k, ko_mode, do_knockout in conditions:
+    for cond_name, cond_k, ko_mode, do_knockout, correct_pos in conditions:
         # Skip conditions that already have results
         results_file = args.output_dir / f"{cond_name}.json"
         if results_file.exists():
@@ -353,6 +395,7 @@ def main():
                     filler_start, filler_end,
                     mode=ko_mode,
                     max_new_tokens=args.max_new_tokens,
+                    correct_positions=correct_pos,
                 )
             else:
                 # Normal generation

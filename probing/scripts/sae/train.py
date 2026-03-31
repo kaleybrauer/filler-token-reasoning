@@ -25,7 +25,7 @@ import torch
 from torch.utils.data import DataLoader
 
 from configs import SAEConfig
-from data_loader import load_paired_views, PairedViewDataset
+from data_loader import load_paired_views, load_delta_views, PairedViewDataset
 from model import PairedViewSAE
 from losses import compute_total_loss
 
@@ -60,12 +60,20 @@ def train_one_config(config: SAEConfig):
     extraction_dir = Path(config.extraction_dir)
     categories_file = Path(config.categories_file)
 
-    print(f"Loading views: {config.conditions} at {config.position} L{config.layer}")
-    view_a, view_b, metadata = load_paired_views(
-        extraction_dir, config.conditions, config.position, config.layer,
-        categories_file=categories_file,
-    )
-    print(f"  {len(metadata)} examples, dim={view_a.shape[1]}")
+    if config.delta:
+        print(f"Loading delta views: {config.conditions} at {config.delta_positions} L{config.layer}")
+        view_a, view_b, metadata = load_delta_views(
+            extraction_dir, config.conditions, config.delta_positions, config.layer,
+            categories_file=categories_file,
+        )
+        print(f"  {len(metadata)} examples, dim={view_a.shape[1]} (delta mode)")
+    else:
+        print(f"Loading views: {config.conditions} at {config.position} L{config.layer}")
+        view_a, view_b, metadata = load_paired_views(
+            extraction_dir, config.conditions, config.position, config.layer,
+            categories_file=categories_file,
+        )
+        print(f"  {len(metadata)} examples, dim={view_a.shape[1]}")
 
     # Build dataset (filtered to included categories)
     include_cats = config.include_categories if config.include_categories else None
@@ -213,6 +221,11 @@ def main():
                         default="probing/results/probe_results/categories.json")
     parser.add_argument("--conditions", nargs=2, default=["baseline", "dots_50"])
     parser.add_argument("--position", type=str, default="answer_prompt")
+    parser.add_argument("--delta", action="store_true",
+                        help="Train on h(cond_b) - h(cond_a) at two positions")
+    parser.add_argument("--delta-positions", nargs=2,
+                        default=["answer_prompt", "pre_answer"],
+                        help="Two positions for delta views (default: answer_prompt pre_answer)")
     parser.add_argument("--layer", type=int, default=58)
     parser.add_argument("--layer-sweep", type=str, default=None,
                         help="Comma-separated layers to sweep (trains one SAE per layer)")
@@ -269,6 +282,8 @@ def main():
                 encoder_hidden=args.encoder_hidden,
                 dim_shared=args.dim_shared,
                 dim_view=args.dim_view,
+                delta=args.delta,
+                delta_positions=tuple(args.delta_positions),
                 topk_shared=args.topk_shared,
                 topk_view=args.topk_view,
                 lr=args.lr,

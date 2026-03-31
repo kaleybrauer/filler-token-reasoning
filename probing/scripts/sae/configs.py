@@ -10,6 +10,8 @@ class SAEConfig:
     conditions: Tuple[str, str] = ("baseline", "dots_50")
     position: str = "answer_prompt"
     layer: int = 58
+    delta: bool = False  # If True, train on h(cond_b) - h(cond_a) at two positions
+    delta_positions: Tuple[str, str] = ("answer_prompt", "pre_answer")
 
     # Model
     input_dim: int = 7168

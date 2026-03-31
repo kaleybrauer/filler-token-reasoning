@@ -130,6 +130,64 @@ def load_paired_views(
     return vecs_a, vecs_b, metadata
 
 
+def load_delta_views(
+    extraction_dir: Path,
+    conditions: Tuple[str, str],
+    positions: Tuple[str, str],
+    layer: int,
+    categories_file: Optional[Path] = None,
+) -> Tuple[np.ndarray, np.ndarray, List[ExampleMetadata]]:
+    """Load delta views: h(cond_b, pos) - h(cond_a, pos) at two positions.
+
+    This isolates the extra computation induced by the second condition
+    (e.g., filler) relative to the first (e.g., baseline).
+
+    Args:
+        conditions: (baseline_cond, filler_cond)
+        positions: (pos_a, pos_b) — two positions to compute deltas at,
+                   used as paired views
+
+    Returns:
+        delta_a: (N, D) — delta at position_a
+        delta_b: (N, D) — delta at position_b
+        metadata: list of ExampleMetadata
+    """
+    cond_a, cond_b = conditions
+    pos_a, pos_b = positions
+
+    vecs_a_pos_a, meta_a = load_view(extraction_dir, cond_a, pos_a, layer)
+    vecs_b_pos_a, meta_b = load_view(extraction_dir, cond_b, pos_a, layer)
+    vecs_a_pos_b, _ = load_view(extraction_dir, cond_a, pos_b, layer)
+    vecs_b_pos_b, _ = load_view(extraction_dir, cond_b, pos_b, layer)
+
+    assert len(meta_a) == len(meta_b)
+    for i, (ma, mb) in enumerate(zip(meta_a, meta_b)):
+        assert ma["problem_idx"] == mb["problem_idx"]
+
+    delta_a = vecs_b_pos_a - vecs_a_pos_a  # filler - baseline at pos_a
+    delta_b = vecs_b_pos_b - vecs_a_pos_b  # filler - baseline at pos_b
+
+    categories = {}
+    if categories_file and categories_file.exists():
+        categories = load_categories(categories_file, conditions[1])
+
+    metadata = []
+    for ma, mb in zip(meta_a, meta_b):
+        metadata.append(ExampleMetadata(
+            problem_idx=ma["problem_idx"],
+            fact_value=ma["fact_value"],
+            x=ma["x"],
+            answer=ma["answer"],
+            model_correct={
+                cond_a: ma["model_correct"],
+                cond_b: mb["model_correct"],
+            },
+            category=categories.get(ma["problem_idx"], "unknown"),
+        ))
+
+    return delta_a, delta_b, metadata
+
+
 class PairedViewDataset(Dataset):
     """PyTorch dataset for paired-view SAE training.
 

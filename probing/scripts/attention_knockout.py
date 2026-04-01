@@ -130,7 +130,7 @@ def find_pre_padding_boundaries(tokenizer, input_ids, k):
     return pad_start, pad_end
 
 
-def build_messages_format_only(few_shot_items, target, k):
+def build_messages_format_only(few_shot_items, target, k, bare_assistant=False):
     """Build messages with filler FORMAT but zero dots.
 
     Produces "Filler:\n\nAnswer:" with the system prompt describing k filler tokens,
@@ -138,6 +138,7 @@ def build_messages_format_only(few_shot_items, target, k):
     """
     system_msg = build_system_message("dots", k)
     messages = [{"role": "system", "content": system_msg}]
+    asst_fmt = "{ans}" if bare_assistant else "Answer: {ans}"
 
     for fs in few_shot_items:
         # Few-shots get the FULL filler (k dots) so format is consistent
@@ -145,7 +146,7 @@ def build_messages_format_only(few_shot_items, target, k):
             fs["fact_phrase"], fs["x"], "dots", k, rng=random.Random(42)
         )
         messages.append({"role": "user", "content": user_content})
-        messages.append({"role": "assistant", "content": f"Answer: {fs['answer']}"})
+        messages.append({"role": "assistant", "content": asst_fmt.format(ans=fs['answer'])})
 
     # Target gets filler format but 0 dots
     user_content = build_user_turn(
@@ -158,17 +159,18 @@ def build_messages_format_only(few_shot_items, target, k):
     return messages
 
 
-def build_messages_format_only_no_newline(few_shot_items, target, k):
+def build_messages_format_only_no_newline(few_shot_items, target, k, bare_assistant=False):
     """Like format_only but with Filler:Answer: instead of Filler:\\n\\nAnswer:."""
     system_msg = build_system_message("dots", k)
     messages = [{"role": "system", "content": system_msg}]
+    asst_fmt = "{ans}" if bare_assistant else "Answer: {ans}"
 
     for fs in few_shot_items:
         user_content = build_user_turn(
             fs["fact_phrase"], fs["x"], "dots", k, rng=random.Random(42)
         )
         messages.append({"role": "user", "content": user_content})
-        messages.append({"role": "assistant", "content": f"Answer: {fs['answer']}"})
+        messages.append({"role": "assistant", "content": asst_fmt.format(ans=fs['answer'])})
 
     user_content = build_user_turn(
         target["fact_phrase"], target["x"], "dots", 0
@@ -329,6 +331,8 @@ def main():
                         help="Max tokens to generate (5 is enough for single-number answers)")
     parser.add_argument("--only", nargs="+", default=None,
                         help="Run only these conditions (by name)")
+    parser.add_argument("--bare-assistant", action="store_true",
+                        help="Assistant turns contain just the number (no 'Answer: ' prefix)")
     args = parser.parse_args()
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
@@ -386,11 +390,13 @@ def main():
             example_rng = random.Random(prob_idx)
             if cond_name == "format_only_k0":
                 messages = build_messages_format_only(
-                    few_shot[:5], problem, args.filler_k
+                    few_shot[:5], problem, args.filler_k,
+                    bare_assistant=args.bare_assistant,
                 )
             elif cond_name == "format_only_no_newline":
                 messages = build_messages_format_only_no_newline(
-                    few_shot[:5], problem, args.filler_k
+                    few_shot[:5], problem, args.filler_k,
+                    bare_assistant=args.bare_assistant,
                 )
             elif cond_name.startswith("pre_padding"):
                 messages = build_messages_pre_padding(
@@ -400,6 +406,10 @@ def main():
                 messages = build_messages_for_condition(
                     few_shot[:5], problem, "dots", cond_k, rng=example_rng
                 )
+            if args.bare_assistant:
+                for m in messages:
+                    if m["role"] == "assistant" and m["content"].startswith("Answer: "):
+                        m["content"] = m["content"][len("Answer: "):]
             full_text = tokenizer.apply_chat_template(
                 messages, tokenize=False, add_generation_prompt=True
             )

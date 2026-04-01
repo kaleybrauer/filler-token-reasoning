@@ -263,7 +263,6 @@ def main():
         ("ko_k5", 5, "all", False, 0),
         ("ko_k10", 10, "all", False, 0),
         ("ko_k25", 25, "all", False, 0),
-        (f"ko_k{args.filler_k}", args.filler_k, "all", False, 0),
         # Partial knockout: block most dots, keep last N visible
         (f"ko_k{args.filler_k}_keep5", args.filler_k, "all", False, 5),
         (f"ko_k{args.filler_k}_keep1", args.filler_k, "all", False, 1),

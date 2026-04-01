@@ -158,6 +158,27 @@ def build_messages_format_only(few_shot_items, target, k):
     return messages
 
 
+def build_messages_format_only_no_newline(few_shot_items, target, k):
+    """Like format_only but with Filler:Answer: instead of Filler:\\n\\nAnswer:."""
+    system_msg = build_system_message("dots", k)
+    messages = [{"role": "system", "content": system_msg}]
+
+    for fs in few_shot_items:
+        user_content = build_user_turn(
+            fs["fact_phrase"], fs["x"], "dots", k, rng=random.Random(42)
+        )
+        messages.append({"role": "user", "content": user_content})
+        messages.append({"role": "assistant", "content": f"Answer: {fs['answer']}"})
+
+    user_content = build_user_turn(
+        target["fact_phrase"], target["x"], "dots", 0
+    )
+    user_content = user_content.replace("\n\nAnswer:", "\n\nFiller:Answer:")
+    messages.append({"role": "user", "content": user_content})
+
+    return messages
+
+
 # ==============================================================================
 # Position ID correction
 # ==============================================================================
@@ -247,24 +268,22 @@ def generate_with_knockout(
         h = layer.self_attn.register_forward_pre_hook(mask_hook, with_kwargs=True)
         hook_handles.append(h)
 
-    # Build position_ids if correcting
-    generate_kwargs = dict(
-        max_new_tokens=max_new_tokens,
-        do_sample=False,
-        use_cache=True,
-    )
+    # If correcting positions, zero out filler in the 2D attention_mask.
+    # This makes prepare_inputs_for_generation compute position_ids via cumsum
+    # that skip filler positions (correcting RoPE), AND blocks attention to filler
+    # in the 4D causal mask (equivalent to knockout).
     if correct_positions:
-        position_ids = build_corrected_position_ids(
-            seq_len, filler_start, filler_end, input_ids.device
-        )
-        generate_kwargs["position_ids"] = position_ids
+        attention_mask = attention_mask.clone()
+        attention_mask[0, filler_start:filler_end + 1] = 0
 
     try:
         with torch.no_grad():
             gen_output = model.generate(
                 input_ids,
                 attention_mask=attention_mask,
-                **generate_kwargs,
+                max_new_tokens=max_new_tokens,
+                do_sample=False,
+                use_cache=True,
             )
     finally:
         for h in hook_handles:
@@ -308,6 +327,8 @@ def main():
     parser.add_argument("--filler-k", type=int, default=50)
     parser.add_argument("--max-new-tokens", type=int, default=5,
                         help="Max tokens to generate (5 is enough for single-number answers)")
+    parser.add_argument("--only", nargs="+", default=None,
+                        help="Run only these conditions (by name)")
     args = parser.parse_args()
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
@@ -328,6 +349,7 @@ def main():
         # (name, filler_k, ko_mode, do_knockout, correct_pos)
         ("baseline_k0", 0, None, False, False),                     # true baseline, no filler format
         ("format_only_k0", 0, None, False, False),                  # filler format with 0 dots
+        ("format_only_no_newline", 0, None, False, False),          # Filler:Answer: (no \n\n)
         ("dots_50_normal", args.filler_k, None, False, False),      # normal filler, no knockout
         ("dots_50_ko_all", args.filler_k, "all", True, False),      # knockout at all positions
         ("dots_50_ko_answer", args.filler_k, "answer_only", True, False),  # knockout at answer_prompt only
@@ -335,6 +357,9 @@ def main():
         ("pre_padding_ko", args.filler_k, "all", True, False),      # dots before question, attention blocked
         ("dots_50_ko_corrpos", args.filler_k, "all", True, True),   # knockout + corrected position IDs
     ]
+
+    if args.only:
+        conditions = [c for c in conditions if c[0] in args.only]
 
     all_results = {}
 
@@ -361,6 +386,10 @@ def main():
             example_rng = random.Random(prob_idx)
             if cond_name == "format_only_k0":
                 messages = build_messages_format_only(
+                    few_shot[:5], problem, args.filler_k
+                )
+            elif cond_name == "format_only_no_newline":
+                messages = build_messages_format_only_no_newline(
                     few_shot[:5], problem, args.filler_k
                 )
             elif cond_name.startswith("pre_padding"):

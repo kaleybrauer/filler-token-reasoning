@@ -38,11 +38,10 @@ if not hasattr(_act, "PytorchGELUTanh"):
 
 sys.path.insert(0, str(Path(__file__).parent))
 from extract_hidden_states import (
-    build_messages_for_condition,
     find_filler_boundaries,
     load_tokenizer,
 )
-from generate_1hop_dataset import build_system_message
+from prompt_utils import build_messages
 
 
 # ==============================================================================
@@ -248,8 +247,11 @@ def load_model_eager(model_path: str):
 # ==============================================================================
 
 CONDITIONS = {
-    "baseline": (0, "dots"),
-    "dots_50": (50, "dots"),
+    "baseline": ("baseline", 0),
+    "dots_5": ("dots", 5),
+    "dots_10": ("dots", 10),
+    "dots_25": ("dots", 25),
+    "dots_100": ("dots", 100),
 }
 
 
@@ -258,11 +260,16 @@ def run_extraction(
     tokenizer,
     problems: list,
     few_shot: list,
-    conditions: Dict[str, Tuple[int, str]],
+    conditions: Dict[str, Tuple[str, int]],
     layer_indices: List[int],
     output_dir: Path,
     max_examples: int = None,
 ):
+    """Extract attention patterns at the answer position (last input token).
+
+    Uses bare assistant format (no "Answer: " prefix). Single forward pass
+    per example — no generation step needed.
+    """
     output_dir.mkdir(parents=True, exist_ok=True)
 
     extractor = AttentionExtractor(model, layer_indices)
@@ -274,12 +281,12 @@ def run_extraction(
     if max_examples:
         problems = problems[:max_examples]
 
-    for cond_name, (k, filler_type) in conditions.items():
+    for cond_name, (mode, k) in conditions.items():
         cond_dir = output_dir / cond_name
         cond_dir.mkdir(exist_ok=True)
 
         print(f"\n{'='*60}")
-        print(f"Condition: {cond_name} (k={k})")
+        print(f"Condition: {cond_name} (mode={mode}, k={k})")
         print(f"{'='*60}")
 
         t_start = time.time()
@@ -289,10 +296,7 @@ def run_extraction(
             if save_path.exists():
                 continue
 
-            example_rng = random.Random(prob_idx)
-            messages = build_messages_for_condition(
-                few_shot[:5], problem, filler_type, k, rng=example_rng
-            )
+            messages = build_messages(few_shot[:5], problem, mode, k)
             full_text = tokenizer.apply_chat_template(
                 messages, tokenize=False, add_generation_prompt=True
             )
@@ -313,10 +317,10 @@ def run_extraction(
                 tokenizer, input_ids, filler_start, filler_end, seq_len
             )
 
-            # Query positions for answer_prompt
-            answer_prompt_pos = seq_len - 1
+            # Answer position = last token
+            answer_pos = seq_len - 1
 
-            # ---- Forward pass 1: extract attention at answer_prompt ----
+            # Single forward pass with attention weights
             extractor._captured = {}
             with torch.no_grad():
                 model(
@@ -325,54 +329,14 @@ def run_extraction(
                     output_attentions=True,
                 )
 
-            answer_prompt_attn = {}
-            for layer_idx in layer_indices:
-                if layer_idx in extractor._captured:
-                    attn_w = extractor._captured[layer_idx]  # (n_heads, q_len, kv_len)
-                    agg = aggregate_attention_by_group(
-                        attn_w, position_groups, [answer_prompt_pos]
-                    )
-                    # Squeeze out the single query position dim
-                    answer_prompt_attn[layer_idx] = {
-                        g: v[:, 0] for g, v in agg.items()  # (n_heads,)
-                    }
-
-            extractor._captured = {}
-            torch.cuda.empty_cache()
-
-            # ---- Forward pass 2: generate "Answer: " then extract at pre_answer ----
-            with torch.no_grad():
-                gen_output = model.generate(
-                    input_ids,
-                    attention_mask=attention_mask,
-                    max_new_tokens=3,
-                    do_sample=False,
-                )
-
-            prefix_ids = gen_output[:, :seq_len + 3]
-            prefix_mask = torch.ones_like(prefix_ids)
-            pre_answer_pos = prefix_ids.shape[1] - 1
-
-            # Update position groups with generated tokens
-            pa_groups = dict(position_groups)
-            pa_groups["answer_prefix"] = list(range(seq_len, seq_len + 3))
-
-            extractor._captured = {}
-            with torch.no_grad():
-                model(
-                    input_ids=prefix_ids,
-                    attention_mask=prefix_mask,
-                    output_attentions=True,
-                )
-
-            pre_answer_attn = {}
+            answer_attn = {}
             for layer_idx in layer_indices:
                 if layer_idx in extractor._captured:
                     attn_w = extractor._captured[layer_idx]
                     agg = aggregate_attention_by_group(
-                        attn_w, pa_groups, [pre_answer_pos]
+                        attn_w, position_groups, [answer_pos]
                     )
-                    pre_answer_attn[layer_idx] = {
+                    answer_attn[layer_idx] = {
                         g: v[:, 0] for g, v in agg.items()
                     }
 
@@ -390,14 +354,13 @@ def run_extraction(
                 "filler_start": filler_start,
                 "filler_end": filler_end,
                 "position_groups": {g: len(idxs) for g, idxs in position_groups.items()},
-                "answer_prompt_attn": answer_prompt_attn,
-                "pre_answer_attn": pre_answer_attn,
+                "answer_attn": answer_attn,
             }
 
             with open(save_path, "wb") as f:
                 pickle.dump(result, f)
 
-            del input_ids, attention_mask, prefix_ids, prefix_mask
+            del input_ids, attention_mask
             torch.cuda.empty_cache()
 
         elapsed = time.time() - t_start
@@ -411,19 +374,11 @@ def run_extraction(
 # Analysis
 # ==============================================================================
 
-def analyze_results(output_dir: Path, conditions: list, categories_file: Path = None):
+def analyze_results(output_dir: Path, conditions: list):
     """Load results and print summary tables."""
 
-    categories = {}
-    if categories_file and categories_file.exists():
-        with open(categories_file) as f:
-            cat_data = json.load(f)
-        for ex in cat_data["examples"]:
-            cat_field = "category_dots_50" if "category_dots_50" in ex else "category"
-            categories[ex["problem_idx"]] = ex.get(cat_field, "unknown")
-
     group_order = ["system", "few_shot", "question", "filler", "format",
-                   "assistant", "answer_prefix", "other"]
+                   "assistant", "other"]
 
     for cond_name in conditions:
         cond_dir = output_dir / cond_name
@@ -435,77 +390,60 @@ def analyze_results(output_dir: Path, conditions: list, categories_file: Path = 
         print(f"  {cond_name} — {len(files)} examples")
         print(f"{'='*80}")
 
-        for pos_key in ["answer_prompt_attn", "pre_answer_attn"]:
-            # Collect per-layer, per-group mean attention (averaged over heads and examples)
-            layer_group_attn = defaultdict(lambda: defaultdict(list))
-            # Also per-head for finding filler-reading heads
-            layer_head_filler = defaultdict(list)
+        layer_group_attn = defaultdict(lambda: defaultdict(list))
+        layer_head_filler = defaultdict(list)
 
-            by_cat = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
+        for f in files:
+            with open(f, "rb") as fp:
+                data = pickle.load(fp)
+            attn_data = data["answer_attn"]
 
-            for f in files:
-                with open(f, "rb") as fp:
-                    data = pickle.load(fp)
-                attn_data = data[pos_key]
-                cat = categories.get(data["problem_idx"], "unknown")
+            for layer, groups in attn_data.items():
+                for group, head_values in groups.items():
+                    mean_across_heads = float(np.mean(head_values))
+                    layer_group_attn[layer][group].append(mean_across_heads)
 
-                for layer, groups in attn_data.items():
-                    for group, head_values in groups.items():
-                        mean_across_heads = float(np.mean(head_values))
-                        layer_group_attn[layer][group].append(mean_across_heads)
-                        by_cat[cat][layer][group].append(mean_across_heads)
+                if "filler" in groups:
+                    layer_head_filler[layer].append(groups["filler"])
 
-                    if "filler" in groups:
-                        layer_head_filler[layer].append(groups["filler"])
+        print(f"\n--- answer position (mean attention to each group, averaged over heads) ---")
 
-            pos_label = pos_key.replace("_attn", "")
-            print(f"\n--- {pos_label} (mean attention to each group, averaged over heads) ---")
+        layers = sorted(layer_group_attn.keys())
+        present_groups = [g for g in group_order
+                          if any(g in layer_group_attn[l] for l in layers)]
 
-            layers = sorted(layer_group_attn.keys())
-            present_groups = [g for g in group_order
-                              if any(g in layer_group_attn[l] for l in layers)]
+        header = f"{'Layer':>6}"
+        for g in present_groups:
+            header += f"  {g[:8]:>8}"
+        print(header)
+        print("-" * len(header))
 
-            header = f"{'Layer':>6}"
+        for layer in layers:
+            if layer % 5 != 0 and layer < 55 and layer not in [53]:
+                continue
+            row = f"L{layer:>4}"
             for g in present_groups:
-                header += f"  {g[:8]:>8}"
-            print(header)
-            print("-" * len(header))
+                vals = layer_group_attn[layer].get(g, [])
+                mean = np.mean(vals) if vals else 0
+                row += f"  {mean:>8.4f}"
+            print(row)
 
+        # Top filler-attending heads
+        if layer_head_filler:
+            print(f"\n  Top filler-attending heads:")
+            head_scores = []
             for layer in layers:
-                if layer % 5 != 0 and layer < 55 and layer not in [53]:
+                if layer not in layer_head_filler:
                     continue
-                row = f"L{layer:>4}"
-                for g in present_groups:
-                    vals = layer_group_attn[layer].get(g, [])
-                    mean = np.mean(vals) if vals else 0
-                    row += f"  {mean:>8.4f}"
-                print(row)
+                stacked = np.stack(layer_head_filler[layer], axis=0)
+                mean_per_head = stacked.mean(axis=0)
+                for head_idx, score in enumerate(mean_per_head):
+                    head_scores.append((layer, head_idx, score))
 
-            # Top filler-attending heads
-            if layer_head_filler:
-                print(f"\n  Top filler-attending heads at {pos_label}:")
-                head_scores = []
-                for layer in layers:
-                    if layer not in layer_head_filler:
-                        continue
-                    stacked = np.stack(layer_head_filler[layer], axis=0)  # (n_examples, n_heads)
-                    mean_per_head = stacked.mean(axis=0)
-                    for head_idx, score in enumerate(mean_per_head):
-                        head_scores.append((layer, head_idx, score))
-
-                head_scores.sort(key=lambda x: -x[2])
-                print(f"  {'Layer':>6} {'Head':>6} {'MeanAttnToFiller':>18}")
-                for layer, head, score in head_scores[:20]:
-                    print(f"  L{layer:>4}  H{head:>4}  {score:>18.4f}")
-
-            # By category (filler attention only)
-            if "filler" in present_groups:
-                print(f"\n  Filler attention by category at {pos_label} (L53):")
-                for cat in ["filler_helped", "both_correct", "both_wrong"]:
-                    if cat in by_cat and 53 in by_cat[cat] and "filler" in by_cat[cat][53]:
-                        vals = by_cat[cat][53]["filler"]
-                        print(f"    {cat:<25} n={len(vals):>3}  "
-                              f"mean={np.mean(vals):.4f}  med={np.median(vals):.4f}")
+            head_scores.sort(key=lambda x: -x[2])
+            print(f"  {'Layer':>6} {'Head':>6} {'MeanAttnToFiller':>18}")
+            for layer, head, score in head_scores[:20]:
+                print(f"  L{layer:>4}  H{head:>4}  {score:>18.4f}")
 
 
 def main():
@@ -514,51 +452,39 @@ def main():
                         default="/workspace/models/deepseek-v3-awq")
     parser.add_argument("--dataset", type=Path,
                         default=Path("probing/data/1hop_addition_dataset.json"))
-    parser.add_argument("--conditions", nargs="+", default=["baseline", "dots_50"])
+    parser.add_argument("--conditions", nargs="+", default=["baseline", "dots_100"])
     parser.add_argument("--output-dir", type=Path,
-                        default=Path("probing/attention_results"))
-    parser.add_argument("--categories", type=Path,
-                        default=Path("probing/probe_results/categories.json"))
-    parser.add_argument("--max-examples", type=int, default=None)
-    parser.add_argument("--layers", default="all",
-                        help="'all' or comma-separated layer indices")
+                        default=Path("probing/results/attention"))
+    parser.add_argument("--max-examples", type=int, default=100)
+    parser.add_argument("--layers", default="0,10,20,30,40,50,55,58,60",
+                        help="Comma-separated layer indices")
     parser.add_argument("--analyze-only", action="store_true",
                         help="Skip extraction, just analyze existing results")
     args = parser.parse_args()
 
-    # Determine layers
-    num_layers = 61
-    if args.layers == "all":
-        layer_indices = list(range(num_layers))
-    else:
-        layer_indices = [int(x) for x in args.layers.split(",")]
+    layer_indices = [int(x) for x in args.layers.split(",")]
 
     if args.analyze_only:
-        analyze_results(args.output_dir, args.conditions, args.categories)
+        analyze_results(args.output_dir, args.conditions)
         return
 
-    # Load dataset
     with open(args.dataset) as f:
         dataset = json.load(f)
     few_shot = dataset["few_shot_facts"]
     problems = dataset["examples"]
     print(f"Loaded {len(problems)} problems")
 
-    # Select conditions
-    selected = {k: CONDITIONS[k] for k in args.conditions}
+    selected = {k: CONDITIONS[k] for k in args.conditions if k in CONDITIONS}
 
-    # Load model with eager attention
     model, tokenizer = load_model_eager(args.model_path)
 
-    # Run extraction
     run_extraction(
         model, tokenizer, problems, few_shot,
         selected, layer_indices, args.output_dir,
         max_examples=args.max_examples,
     )
 
-    # Analyze
-    analyze_results(args.output_dir, args.conditions, args.categories)
+    analyze_results(args.output_dir, args.conditions)
 
 
 if __name__ == "__main__":

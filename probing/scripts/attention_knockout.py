@@ -52,37 +52,7 @@ from extract_hidden_states import (
     load_tokenizer,
 )
 from extract_attention import load_model_eager
-from generate_1hop_dataset import build_system_message, build_user_turn
-
-
-def build_messages_pre_padding(few_shot_items, target, k):
-    """Build messages with k dots BEFORE the question (pre-padding).
-
-    Format: "Padding: . . . ...\n\nQuestion: ...\n\nAnswer:"
-    Few-shot examples also get pre-padding for consistency.
-    """
-    system_msg = build_system_message("dots", k)
-    messages = [{"role": "system", "content": system_msg}]
-
-    for fs in few_shot_items:
-        padding = " ".join(["."] * k)
-        user_content = (
-            f"Padding: {padding}\n\n"
-            f"Question: What is {fs['fact_phrase']} plus {fs['x']}?\n\n"
-            f"Answer:"
-        )
-        messages.append({"role": "user", "content": user_content})
-        messages.append({"role": "assistant", "content": f"Answer: {fs['answer']}"})
-
-    padding = " ".join(["."] * k)
-    user_content = (
-        f"Padding: {padding}\n\n"
-        f"Question: What is {target['fact_phrase']} plus {target['x']}?\n\n"
-        f"Answer:"
-    )
-    messages.append({"role": "user", "content": user_content})
-
-    return messages
+from prompt_utils import build_messages, extract_answer
 
 
 def find_pre_padding_boundaries(tokenizer, input_ids, k):
@@ -128,57 +98,6 @@ def find_pre_padding_boundaries(tokenizer, input_ids, k):
                 break
 
     return pad_start, pad_end
-
-
-def build_messages_format_only(few_shot_items, target, k, bare_assistant=False):
-    """Build messages with filler FORMAT but zero dots.
-
-    Produces "Filler:\n\nAnswer:" with the system prompt describing k filler tokens,
-    matching the few-shot format of the filler condition but with no actual dots.
-    """
-    system_msg = build_system_message("dots", k)
-    messages = [{"role": "system", "content": system_msg}]
-    asst_fmt = "{ans}" if bare_assistant else "Answer: {ans}"
-
-    for fs in few_shot_items:
-        # Few-shots get the FULL filler (k dots) so format is consistent
-        user_content = build_user_turn(
-            fs["fact_phrase"], fs["x"], "dots", k, rng=random.Random(42)
-        )
-        messages.append({"role": "user", "content": user_content})
-        messages.append({"role": "assistant", "content": asst_fmt.format(ans=fs['answer'])})
-
-    # Target gets filler format but 0 dots
-    user_content = build_user_turn(
-        target["fact_phrase"], target["x"], "dots", 0
-    )
-    # Insert "Filler:\n\n" before "Answer:"
-    user_content = user_content.replace("\n\nAnswer:", "\n\nFiller:\n\nAnswer:")
-    messages.append({"role": "user", "content": user_content})
-
-    return messages
-
-
-def build_messages_format_only_no_newline(few_shot_items, target, k, bare_assistant=False):
-    """Like format_only but with Filler:Answer: instead of Filler:\\n\\nAnswer:."""
-    system_msg = build_system_message("dots", k)
-    messages = [{"role": "system", "content": system_msg}]
-    asst_fmt = "{ans}" if bare_assistant else "Answer: {ans}"
-
-    for fs in few_shot_items:
-        user_content = build_user_turn(
-            fs["fact_phrase"], fs["x"], "dots", k, rng=random.Random(42)
-        )
-        messages.append({"role": "user", "content": user_content})
-        messages.append({"role": "assistant", "content": asst_fmt.format(ans=fs['answer'])})
-
-    user_content = build_user_turn(
-        target["fact_phrase"], target["x"], "dots", 0
-    )
-    user_content = user_content.replace("\n\nAnswer:", "\n\nFiller:Answer:")
-    messages.append({"role": "user", "content": user_content})
-
-    return messages
 
 
 # ==============================================================================
@@ -303,15 +222,6 @@ def generate_with_knockout(
     return raw, None
 
 
-def extract_answer(text: str) -> Optional[int]:
-    m = re.search(r"Answer:\s*(-?\d+)", text)
-    if m:
-        return int(m.group(1))
-    m = re.search(r"(-?\d+)", text)
-    if m:
-        return int(m.group(1))
-    return None
-
 
 # ==============================================================================
 # Main
@@ -324,42 +234,39 @@ def main():
     parser.add_argument("--dataset", type=Path,
                         default=Path("probing/data/1hop_addition_dataset.json"))
     parser.add_argument("--output-dir", type=Path,
-                        default=Path("probing/results/attention_knockout"))
+                        default=Path("probing/results/knockout_bare"))
     parser.add_argument("--max-examples", type=int, default=500)
-    parser.add_argument("--filler-k", type=int, default=50)
-    parser.add_argument("--max-new-tokens", type=int, default=5,
-                        help="Max tokens to generate (5 is enough for single-number answers)")
+    parser.add_argument("--filler-k", type=int, default=100)
+    parser.add_argument("--max-new-tokens", type=int, default=5)
     parser.add_argument("--only", nargs="+", default=None,
                         help="Run only these conditions (by name)")
-    parser.add_argument("--bare-assistant", action="store_true",
-                        help="Assistant turns contain just the number (no 'Answer: ' prefix)")
     args = parser.parse_args()
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Load dataset
     with open(args.dataset) as f:
         dataset = json.load(f)
     few_shot = dataset["few_shot_facts"]
     problems = dataset["examples"][:args.max_examples]
     print(f"Loaded {len(problems)} problems")
 
-    # Load model (eager attention required)
     model, tokenizer = load_model_eager(args.model_path)
     first_param = next(model.parameters())
     input_device = first_param.device
 
     conditions = [
-        # (name, filler_k, ko_mode, do_knockout, correct_pos)
-        ("baseline_k0", 0, None, False, False),                     # true baseline, no filler format
-        ("format_only_k0", 0, None, False, False),                  # filler format with 0 dots
-        ("format_only_no_newline", 0, None, False, False),          # Filler:Answer: (no \n\n)
-        ("dots_50_normal", args.filler_k, None, False, False),      # normal filler, no knockout
-        ("dots_50_ko_all", args.filler_k, "all", True, False),      # knockout at all positions
-        ("dots_50_ko_answer", args.filler_k, "answer_only", True, False),  # knockout at answer_prompt only
-        ("pre_padding_normal", args.filler_k, None, False, False),  # dots before question, no knockout
-        ("pre_padding_ko", args.filler_k, "all", True, False),      # dots before question, attention blocked
-        ("dots_50_ko_corrpos", args.filler_k, "all", True, True),   # knockout + corrected position IDs
+        # (name, k, ko_mode, correct_pos, keep_last_n)
+        # keep_last_n: leave the last N filler tokens unblocked
+        (f"dots_{args.filler_k}_ko_all", args.filler_k, "all", False, 0),
+        (f"dots_{args.filler_k}_ko_corrpos", args.filler_k, "all", True, 0),
+        ("ko_k1", 1, "all", False, 0),
+        ("ko_k5", 5, "all", False, 0),
+        ("ko_k10", 10, "all", False, 0),
+        ("ko_k25", 25, "all", False, 0),
+        (f"ko_k{args.filler_k}", args.filler_k, "all", False, 0),
+        # Partial knockout: block most dots, keep last N visible
+        (f"ko_k{args.filler_k}_keep5", args.filler_k, "all", False, 5),
+        (f"ko_k{args.filler_k}_keep1", args.filler_k, "all", False, 1),
     ]
 
     if args.only:
@@ -367,19 +274,18 @@ def main():
 
     all_results = {}
 
-    for cond_name, cond_k, ko_mode, do_knockout, correct_pos in conditions:
-        # Skip conditions that already have results
+    for cond_name, k, ko_mode, correct_pos, keep_last_n in conditions:
         results_file = args.output_dir / f"{cond_name}.json"
         if results_file.exists():
             with open(results_file) as f:
                 existing = json.load(f)
             if existing["total"] >= len(problems):
-                print(f"\n  {cond_name}: already done ({existing['total']} examples), skipping")
+                print(f"\n  {cond_name}: already done, skipping")
                 all_results[cond_name] = existing
                 continue
 
         print(f"\n{'='*60}")
-        print(f"  {cond_name} (k={cond_k}, knockout={ko_mode})")
+        print(f"  {cond_name} (k={k}, ko={ko_mode}, corrpos={correct_pos}, keep_last={keep_last_n})")
         print(f"{'='*60}")
 
         results = []
@@ -387,29 +293,7 @@ def main():
         t0 = time.time()
 
         for prob_idx, problem in enumerate(tqdm(problems, desc=cond_name)):
-            example_rng = random.Random(prob_idx)
-            if cond_name == "format_only_k0":
-                messages = build_messages_format_only(
-                    few_shot[:5], problem, args.filler_k,
-                    bare_assistant=args.bare_assistant,
-                )
-            elif cond_name == "format_only_no_newline":
-                messages = build_messages_format_only_no_newline(
-                    few_shot[:5], problem, args.filler_k,
-                    bare_assistant=args.bare_assistant,
-                )
-            elif cond_name.startswith("pre_padding"):
-                messages = build_messages_pre_padding(
-                    few_shot[:5], problem, args.filler_k
-                )
-            else:
-                messages = build_messages_for_condition(
-                    few_shot[:5], problem, "dots", cond_k, rng=example_rng
-                )
-            if args.bare_assistant:
-                for m in messages:
-                    if m["role"] == "assistant" and m["content"].startswith("Answer: "):
-                        m["content"] = m["content"][len("Answer: "):]
+            messages = build_messages(few_shot[:5], problem, "dots", k)
             full_text = tokenizer.apply_chat_template(
                 messages, tokenize=False, add_generation_prompt=True
             )
@@ -418,26 +302,22 @@ def main():
             attention_mask = inputs["attention_mask"].to(input_device)
             seq_len = input_ids.shape[1]
 
-            filler_start, filler_end = -1, -1
-            if cond_k > 0 and cond_name.startswith("pre_padding"):
-                filler_start, filler_end = find_pre_padding_boundaries(
-                    tokenizer, input_ids, cond_k
-                )
-            elif cond_k > 0:
-                _, filler_start, filler_end = find_filler_boundaries(
-                    tokenizer, input_ids, cond_k
-                )
+            _, filler_start, filler_end = find_filler_boundaries(
+                tokenizer, input_ids, k
+            )
 
-            if do_knockout and filler_start >= 0:
+            # For partial knockout, shrink the blocked range
+            ko_filler_end = filler_end - keep_last_n if keep_last_n > 0 else filler_end
+
+            if ko_mode and filler_start >= 0 and filler_start <= ko_filler_end:
                 raw, answer = generate_with_knockout(
                     model, tokenizer, input_ids, attention_mask,
-                    filler_start, filler_end,
+                    filler_start, ko_filler_end,
                     mode=ko_mode,
                     max_new_tokens=args.max_new_tokens,
                     correct_positions=correct_pos,
                 )
             else:
-                # Normal generation
                 with torch.no_grad():
                     gen_output = model.generate(
                         input_ids,
@@ -471,26 +351,25 @@ def main():
         print(f"\n  {cond_name}: {correct}/{len(problems)} ({acc:.1%})")
         print(f"  Time: {elapsed:.0f}s ({elapsed/len(problems):.1f}s/example)")
 
-        all_results[cond_name] = {
+        cond_result = {
             "accuracy": acc,
             "correct": correct,
             "total": len(problems),
             "time": elapsed,
             "results": results,
         }
+        all_results[cond_name] = cond_result
 
-        # Save incrementally
-        with open(args.output_dir / f"{cond_name}.json", "w") as f:
-            json.dump(all_results[cond_name], f, indent=2)
+        with open(results_file, "w") as f:
+            json.dump(cond_result, f, indent=2)
 
     # Summary
     print(f"\n{'='*60}")
     print("SUMMARY")
     print(f"{'='*60}")
     for cond_name, data in all_results.items():
-        print(f"  {cond_name:<25} {data['accuracy']:.1%} ({data['correct']}/{data['total']})")
+        print(f"  {cond_name:<25} {data['accuracy']:.1%}")
 
-    # Save combined results
     summary = {k: {sk: sv for sk, sv in v.items() if sk != "results"}
                for k, v in all_results.items()}
     with open(args.output_dir / "summary.json", "w") as f:

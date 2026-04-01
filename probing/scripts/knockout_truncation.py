@@ -36,22 +36,10 @@ if not hasattr(_act, "PytorchGELUTanh"):
     _act.PytorchGELUTanh = _act.GELUTanh
 
 sys.path.insert(0, str(Path(__file__).parent))
-from extract_hidden_states import (
-    build_messages_for_condition,
-    find_filler_boundaries,
-)
+from extract_hidden_states import find_filler_boundaries
 from extract_attention import load_model_eager
-from attention_knockout import generate_with_knockout, build_messages_format_only
-
-
-def extract_answer(text: str) -> Optional[int]:
-    m = re.search(r"Answer:\s*(-?\d+)", text)
-    if m:
-        return int(m.group(1))
-    m = re.search(r"(-?\d+)", text)
-    if m:
-        return int(m.group(1))
-    return None
+from attention_knockout import generate_with_knockout
+from prompt_utils import build_messages, extract_answer
 
 
 def run_condition(model, tokenizer, problems, few_shot, k, knockout,
@@ -65,15 +53,10 @@ def run_condition(model, tokenizer, problems, few_shot, k, knockout,
     for prob_idx, problem in enumerate(tqdm(
         problems, desc=desc
     )):
-        example_rng = random.Random(prob_idx)
         if format_only:
-            messages = build_messages_format_only(
-                few_shot[:5], problem, format_only_k
-            )
+            messages = build_messages(few_shot[:5], problem, "format_only", format_only_k)
         else:
-            messages = build_messages_for_condition(
-                few_shot[:5], problem, "dots", k, rng=example_rng
-            )
+            messages = build_messages(few_shot[:5], problem, "dots", k)
         full_text = tokenizer.apply_chat_template(
             messages, tokenize=False, add_generation_prompt=True
         )

@@ -43,9 +43,7 @@ from generate_1hop_dataset import build_system_message, build_user_turn
 def build_messages_for_condition(few_shot_items, target, filler_type, k, rng=None):
     """Build chat messages for any filler condition.
 
-    Uses generate_1hop_dataset's prompt helpers (which support all filler types)
-    but matches the assistant turn format ("Answer: {answer}") used by the
-    eval script and existing extractions.
+    Uses bare assistant format by default (assistant outputs just the number).
     """
     system_msg = build_system_message(filler_type, k)
     messages = [{"role": "system", "content": system_msg}]
@@ -55,7 +53,7 @@ def build_messages_for_condition(few_shot_items, target, filler_type, k, rng=Non
             fs["fact_phrase"], fs["x"], filler_type, k, rng=rng
         )
         messages.append({"role": "user", "content": user_content})
-        messages.append({"role": "assistant", "content": f"Answer: {fs['answer']}"})
+        messages.append({"role": "assistant", "content": str(fs['answer'])})
 
     user_content = build_user_turn(
         target["fact_phrase"], target["x"], filler_type, k, rng=rng

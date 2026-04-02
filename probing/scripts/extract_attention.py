@@ -39,6 +39,7 @@ if not hasattr(_act, "PytorchGELUTanh"):
 sys.path.insert(0, str(Path(__file__).parent))
 from extract_hidden_states import (
     find_filler_boundaries,
+    load_model,
     load_tokenizer,
 )
 from prompt_utils import build_messages
@@ -60,14 +61,15 @@ def classify_positions(
     Classify each token position into a group.
 
     Groups:
-        system    — system prompt tokens
-        few_shot  — few-shot example tokens
-        question  — target question tokens (user turn)
-        filler    — filler tokens (dots)
-        format    — "Filler:", "Answer:", newlines between sections
+        system       — system prompt tokens
+        few_shot     — few-shot example tokens
+        question     — target question tokens (user turn)
+        filler       — filler tokens (dots)
+        filler_label — "Filler:", newlines before dots
+        answer_label — "Answer:", newlines after dots (present in both conditions)
         answer_prefix — generated "Answer: " tokens (only for pre_answer)
-        assistant — assistant header token
-        other     — anything not classified above
+        assistant    — assistant header token
+        other        — anything not classified above
 
     Returns dict mapping group name -> list of token indices.
     """
@@ -96,18 +98,50 @@ def classify_positions(
     # Simple approach: classify based on known boundaries
     input_len = seq_len  # prefill length
 
+    # Find "Answer" and "Filler"/"iller" token positions in last user turn
+    answer_token_pos = -1
+    filler_label_start = -1
+    if len(user_turns) > 0:
+        for i in range(seq_len - 1, user_turns[-1] - 1, -1):
+            if "Answer" in tokens[i]:
+                answer_token_pos = i
+                break
+        if filler_start >= 0:
+            # Find the "Filler" / "F" token before filler_start
+            # Walk back from filler_start to find where the label begins
+            for i in range(filler_start - 1, user_turns[-1] - 1, -1):
+                t = tokens[i].strip()
+                if t in ("F", "Filler", "iller", ":") or "Filler" in tokens[i]:
+                    filler_label_start = i
+                elif "\n" in tokens[i] and filler_label_start > 0:
+                    # newline before "Filler:" — include it
+                    filler_label_start = i
+                    break
+                else:
+                    break
+
     for i in range(input_len):
         if filler_start >= 0 and filler_start <= i <= filler_end:
             groups["filler"].append(i)
         elif len(user_turns) > 0 and i >= user_turns[-1]:
             # Last user turn = target question region
-            if filler_start >= 0 and i < filler_start:
-                groups["question"].append(i)
-            elif filler_start < 0:
-                # Baseline: no filler, everything in last user turn is question
-                groups["question"].append(i)
+            if filler_start < 0:
+                # Baseline: no filler
+                if answer_token_pos >= 0 and i >= answer_token_pos:
+                    groups["answer_label"].append(i)
+                else:
+                    groups["question"].append(i)
             else:
-                groups["format"].append(i)
+                # Has filler — split into question, filler_label, answer_label
+                if answer_token_pos >= 0 and i >= answer_token_pos:
+                    groups["answer_label"].append(i)
+                elif filler_label_start >= 0 and i >= filler_label_start:
+                    groups["filler_label"].append(i)
+                elif i < filler_start:
+                    groups["question"].append(i)
+                else:
+                    # After filler_end but before answer — filler_label
+                    groups["filler_label"].append(i)
         elif any(role == "assistant" and pos == i for role, pos in role_boundaries):
             groups["assistant"].append(i)
         elif len(user_turns) > 1 and i >= user_turns[0] and i < user_turns[-1]:
@@ -202,44 +236,8 @@ class AttentionExtractor:
 # ==============================================================================
 
 def load_model_eager(model_path: str):
-    """Load model with eager attention to get attention weights."""
-    from transformers import AutoModelForCausalLM
-
-    tokenizer = load_tokenizer(model_path)
-
-    n_gpus = torch.cuda.device_count()
-    print(f"Loading model (EAGER attention) on {n_gpus} GPUs...")
-    for i in range(n_gpus):
-        name = torch.cuda.get_device_name(i)
-        mem = torch.cuda.get_device_properties(i).total_memory / 1e9
-        print(f"  GPU {i}: {name}, {mem:.0f} GB")
-
-    max_memory = {
-        i: f"{int(torch.cuda.get_device_properties(i).total_memory * 0.80 / 1e9)}GiB"
-        for i in range(n_gpus)
-    }
-
-    t0 = time.time()
-    print(f"Calling from_pretrained with max_memory={max_memory}...", flush=True)
-    model = AutoModelForCausalLM.from_pretrained(
-        model_path,
-        device_map="auto",
-        max_memory=max_memory,
-        torch_dtype=torch.float16,
-        trust_remote_code=True,
-        attn_implementation="eager",
-    )
-    model.eval()
-    elapsed = time.time() - t0
-    print(f"Model loaded in {elapsed:.0f}s")
-
-    # Verify eager attention
-    attn_class = type(model.model.layers[0].self_attn).__name__
-    print(f"Attention class: {attn_class}")
-    if "Flash" in attn_class:
-        raise RuntimeError("Flash attention detected — need eager for attention weights")
-
-    return model, tokenizer
+    """Deprecated: use load_model from extract_hidden_states instead."""
+    return load_model(model_path)
 
 
 # ==============================================================================
@@ -377,8 +375,8 @@ def run_extraction(
 def analyze_results(output_dir: Path, conditions: list):
     """Load results and print summary tables."""
 
-    group_order = ["system", "few_shot", "question", "filler", "format",
-                   "assistant", "other"]
+    group_order = ["system", "few_shot", "question", "filler", "filler_label",
+                   "answer_label", "assistant", "other"]
 
     for cond_name in conditions:
         cond_dir = output_dir / cond_name
@@ -476,7 +474,7 @@ def main():
 
     selected = {k: CONDITIONS[k] for k in args.conditions if k in CONDITIONS}
 
-    model, tokenizer = load_model_eager(args.model_path)
+    model, tokenizer = load_model(args.model_path)
 
     run_extraction(
         model, tokenizer, problems, few_shot,

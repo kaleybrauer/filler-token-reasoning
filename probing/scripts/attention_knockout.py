@@ -51,7 +51,7 @@ from extract_hidden_states import (
     find_filler_boundaries,
     load_tokenizer,
 )
-from extract_attention import load_model_eager
+from extract_hidden_states import load_model
 from prompt_utils import build_messages, extract_answer
 
 
@@ -250,7 +250,7 @@ def main():
     problems = dataset["examples"][:args.max_examples]
     print(f"Loaded {len(problems)} problems")
 
-    model, tokenizer = load_model_eager(args.model_path)
+    model, tokenizer = load_model(args.model_path)
     first_param = next(model.parameters())
     input_device = first_param.device
 

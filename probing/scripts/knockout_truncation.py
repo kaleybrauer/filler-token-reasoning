@@ -37,7 +37,7 @@ if not hasattr(_act, "PytorchGELUTanh"):
 
 sys.path.insert(0, str(Path(__file__).parent))
 from extract_hidden_states import find_filler_boundaries
-from extract_attention import load_model_eager
+from extract_hidden_states import load_model
 from attention_knockout import generate_with_knockout
 from prompt_utils import build_messages, extract_answer
 
@@ -132,7 +132,7 @@ def main():
     problems = dataset["examples"][:args.max_examples]
     print(f"Loaded {len(problems)} problems, k_values={k_values}")
 
-    model, tokenizer = load_model_eager(args.model_path)
+    model, tokenizer = load_model(args.model_path)
     input_device = next(model.parameters()).device
 
     all_results = {}

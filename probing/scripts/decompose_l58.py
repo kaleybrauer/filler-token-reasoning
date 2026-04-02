@@ -49,7 +49,7 @@ from extract_hidden_states import (
     find_filler_boundaries,
     load_tokenizer,
 )
-from extract_attention import load_model_eager
+from extract_hidden_states import load_model
 
 
 def get_token_id(tokenizer, val: int) -> Optional[int]:
@@ -293,7 +293,7 @@ def main():
     few_shot = dataset["few_shot_facts"]
     problems = dataset["examples"]
 
-    model, tokenizer = load_model_eager(args.model_path)
+    model, tokenizer = load_model(args.model_path)
 
     lm_head = np.load(args.lm_head).astype(np.float32)
     norm_weight = np.load(args.rms_norm).astype(np.float32)

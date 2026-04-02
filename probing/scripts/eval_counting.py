@@ -1,29 +1,19 @@
 """
-compare_prompts_eval.py
+eval_counting.py
 
-Run a systematic comparison of prompt formats with bare assistant turns
-(assistant just outputs the number, no "Answer: " prefix).
-
-Conditions:
-  1. baseline (k=0, no filler)
-  2. dots k=1,10,50 (few-shots match k)
-  3. format_only with few-shot k=10,50
-  4. pre_padding with k=10,50
-  5. no_newline with few-shot k=10,50
+Evaluate counting filler (1 2 3 4 5 ...) at various k values.
 
 Usage:
     source /workspace/config/probing_env.sh
     PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
-    python probing/scripts/compare_prompts_eval.py \
+    python probing/scripts/eval_counting.py \
         --model-path /workspace/models/deepseek-v3-awq \
         --max-examples 500 \
-        --output-dir probing/results/prompt_comparison
+        --output-dir probing/results/counting
 """
 
 import argparse
 import json
-import random
-import re
 import sys
 import time
 from pathlib import Path
@@ -36,7 +26,6 @@ if not hasattr(_act, "PytorchGELUTanh"):
     _act.PytorchGELUTanh = _act.GELUTanh
 
 sys.path.insert(0, str(Path(__file__).parent))
-from extract_hidden_states import load_tokenizer
 from extract_hidden_states import load_model
 from prompt_utils import build_messages, extract_answer
 
@@ -47,11 +36,13 @@ def main():
     parser.add_argument("--dataset", type=Path,
                         default=Path("probing/data/1hop_addition_dataset.json"))
     parser.add_argument("--output-dir", type=Path,
-                        default=Path("probing/results/prompt_comparison"))
+                        default=Path("probing/results/counting"))
     parser.add_argument("--max-examples", type=int, default=500)
     parser.add_argument("--max-new-tokens", type=int, default=5)
+    parser.add_argument("--ks", type=str, default="5,10,25,50")
     args = parser.parse_args()
 
+    k_values = [int(x) for x in args.ks.split(",")]
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
     with open(args.dataset) as f:
@@ -64,48 +55,29 @@ def main():
     first_param = next(model.parameters())
     input_device = first_param.device
 
-    conditions = [
-        # (name, mode, k)
-        ("baseline", "baseline", 0),
-        ("dots_k1", "dots", 1),
-        ("dots_k10", "dots", 10),
-        ("dots_k50", "dots", 50),
-        ("format_only_fs10", "format_only", 10),
-        ("format_only_fs50", "format_only", 50),
-        ("pre_padding_k10", "pre_padding", 10),
-        ("pre_padding_k50", "pre_padding", 50),
-        ("no_newline_fs10", "no_newline", 10),
-        ("no_newline_fs50", "no_newline", 50),
-    ]
-
     all_results = {}
 
-    for cond_name, mode, k in conditions:
-        results_file = args.output_dir / f"{cond_name}.json"
+    for k in k_values:
+        name = f"counting_k{k}"
+        results_file = args.output_dir / f"{name}.json"
         if results_file.exists():
             with open(results_file) as f:
                 existing = json.load(f)
             if existing["total"] >= len(problems):
-                print(f"\n  {cond_name}: already done ({existing['total']} examples), skipping")
-                all_results[cond_name] = existing
+                print(f"\n  {name}: already done, skipping")
+                all_results[name] = existing
                 continue
 
         print(f"\n{'='*60}")
-        print(f"  {cond_name} (mode={mode}, k={k})")
+        print(f"  {name}")
         print(f"{'='*60}")
-
-        # Print first example prompt for verification
-        prob0 = problems[0]
-        msgs0 = build_messages(few_shot[:5], prob0, mode, k)
-        print(f"  Example target: {msgs0[-1]['content']!r}")
-        print(f"  Example asst[0]: {msgs0[2]['content']!r}")
 
         results = []
         correct = 0
         t0 = time.time()
 
-        for prob_idx, problem in enumerate(tqdm(problems, desc=cond_name)):
-            messages = build_messages(few_shot[:5], problem, mode, k)
+        for prob_idx, problem in enumerate(tqdm(problems, desc=name)):
+            messages = build_messages(few_shot[:5], problem, "counting", k)
             full_text = tokenizer.apply_chat_template(
                 messages, tokenize=False, add_generation_prompt=True
             )
@@ -135,8 +107,6 @@ def main():
                 "predicted": answer,
                 "correct": is_correct,
                 "raw_response": raw,
-                "fact_value": problem["fact_value"],
-                "x": problem["x"],
             })
 
             del input_ids, attention_mask
@@ -144,8 +114,7 @@ def main():
 
         elapsed = time.time() - t0
         acc = correct / len(problems)
-        print(f"\n  {cond_name}: {correct}/{len(problems)} ({acc:.1%})")
-        print(f"  Time: {elapsed:.0f}s ({elapsed/len(problems):.1f}s/example)")
+        print(f"\n  {name}: {correct}/{len(problems)} ({acc:.1%})")
 
         cond_result = {
             "accuracy": acc,
@@ -154,7 +123,7 @@ def main():
             "time": elapsed,
             "results": results,
         }
-        all_results[cond_name] = cond_result
+        all_results[name] = cond_result
 
         with open(results_file, "w") as f:
             json.dump(cond_result, f, indent=2)
@@ -163,14 +132,12 @@ def main():
     print(f"\n{'='*60}")
     print("SUMMARY")
     print(f"{'='*60}")
-    for cond_name, data in all_results.items():
-        acc = data["accuracy"] if isinstance(data["accuracy"], float) else data["accuracy"]
-        print(f"  {cond_name:<25} {acc:.1%}")
+    for name, data in all_results.items():
+        print(f"  {name:<25} {data['accuracy']:.1%}")
 
-    summary = {k: {sk: sv for sk, sv in v.items() if sk != "results"}
-               for k, v in all_results.items()}
     with open(args.output_dir / "summary.json", "w") as f:
-        json.dump(summary, f, indent=2)
+        json.dump({k: {sk: sv for sk, sv in v.items() if sk != "results"}
+                   for k, v in all_results.items()}, f, indent=2)
 
     print(f"\nResults saved to {args.output_dir}/")
 

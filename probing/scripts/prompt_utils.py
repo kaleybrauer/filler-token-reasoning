@@ -48,17 +48,20 @@ def build_messages_pre_padding(few_shot_items, target, k, bare_assistant=True):
     return messages
 
 
-def build_messages(few_shot_items, target, mode, k, bare_assistant=True):
+def build_messages(few_shot_items, target, mode, k, bare_assistant=True,
+                   filler_type="dots"):
     """Build chat messages for any condition.
 
     Args:
         few_shot_items: list of few-shot fact dicts
         target: target problem dict
-        mode: "dots", "format_only", "no_newline", "pre_padding", "baseline"
-        k: filler length (used for few-shots and target in dots/pre_padding;
+        mode: "dots", "counting", "format_only", "no_newline", "pre_padding", "baseline"
+        k: filler length (used for few-shots and target in dots/counting/pre_padding;
            few-shots only in format_only/no_newline)
         bare_assistant: if True (default), assistant turns are just the number.
             if False, assistant turns are "Answer: {number}" (legacy format).
+        filler_type: "dots" or "counting". Used for dots/counting modes.
+            For mode="counting", this is set automatically.
 
     Returns:
         list of message dicts with role/content keys
@@ -66,19 +69,23 @@ def build_messages(few_shot_items, target, mode, k, bare_assistant=True):
     if mode == "baseline":
         k = 0
 
+    if mode == "counting":
+        filler_type = "counting"
+        mode = "dots"  # same prompt structure, different filler content
+
     if mode == "pre_padding":
         return build_messages_pre_padding(few_shot_items, target, k,
                                           bare_assistant=bare_assistant)
 
-    system_msg = build_system_message("dots", k)
+    system_msg = build_system_message(filler_type, k)
     messages = [{"role": "system", "content": system_msg}]
 
     asst_fmt = "{ans}" if bare_assistant else "Answer: {ans}"
 
-    # Few-shots: always have k dots (except baseline which has k=0)
+    # Few-shots: always have k filler tokens (except baseline which has k=0)
     for fs in few_shot_items:
         user_content = build_user_turn(
-            fs["fact_phrase"], fs["x"], "dots", k, rng=random.Random(42)
+            fs["fact_phrase"], fs["x"], filler_type, k, rng=random.Random(42)
         )
         messages.append({"role": "user", "content": user_content})
         messages.append({"role": "assistant", "content": asst_fmt.format(ans=fs["answer"])})
@@ -86,7 +93,7 @@ def build_messages(few_shot_items, target, mode, k, bare_assistant=True):
     # Target turn depends on mode
     if mode in ("dots", "baseline"):
         user_content = build_user_turn(
-            target["fact_phrase"], target["x"], "dots", k
+            target["fact_phrase"], target["x"], filler_type, k
         )
     elif mode == "format_only":
         user_content = build_user_turn(

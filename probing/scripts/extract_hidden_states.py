@@ -74,11 +74,9 @@ FILLER_ABSOLUTE_POSITIONS = None  # Set via --filler-positions; uses fractions i
 
 CONDITIONS = {
     "baseline": (0, "dots"),
-    "dots_50": (50, "dots"),
-    "dots_250": (250, "dots"),
-    "dots_500": (500, "dots"),
-    "counting_150": (150, "counting"),
-    "counting_scrambled_150": (150, "counting-scrambled"),
+    "dots_10": (10, "dots"),
+    "dots_100": (100, "dots"),
+    "counting_25": (25, "counting"),
 }
 
 
@@ -230,7 +228,9 @@ class HiddenStateExtractor:
     Hook point: model.model.layers[i]
     Output format: DeepseekV2DecoderLayer returns (hidden_states, residual)
     We capture output[0] = hidden_states (post-layer residual stream).
-    Shape: (batch=1, seq_len, 7168)
+    Shape: (batch, seq_len, 7168)
+
+    Supports batched extraction: captures full batch, then indexes per-example.
     """
 
     def __init__(self, model, layer_indices: List[int]):
@@ -245,7 +245,8 @@ class HiddenStateExtractor:
                 hidden = output[0]
             else:
                 hidden = output
-            self._captured[layer_idx] = hidden[0].detach().cpu()
+            # Keep full batch on CPU
+            self._captured[layer_idx] = hidden.detach().cpu()
         return hook_fn
 
     def register_hooks(self):
@@ -268,7 +269,7 @@ class HiddenStateExtractor:
         positions: Dict[str, int],
     ) -> Dict[str, Dict[int, np.ndarray]]:
         """
-        Run one forward pass and extract hidden states at specified positions.
+        Run one forward pass (batch=1) and extract hidden states at specified positions.
 
         Returns:
             {position_name: {layer_idx: np.ndarray of shape (7168,)}}
@@ -282,13 +283,52 @@ class HiddenStateExtractor:
         for pos_name, pos_idx in positions.items():
             result[pos_name] = {}
             for layer_idx in self.layer_indices:
-                vec = self._captured[layer_idx][pos_idx]  # shape: (7168,)
+                vec = self._captured[layer_idx][0, pos_idx]  # batch=0
                 result[pos_name][layer_idx] = vec.to(torch.float16).numpy()
 
         self._captured = {}
         torch.cuda.empty_cache()
 
         return result
+
+    def extract_batch(
+        self,
+        input_ids: torch.Tensor,
+        attention_mask: torch.Tensor,
+        batch_positions: List[Dict[str, int]],
+    ) -> List[Dict[str, Dict[int, np.ndarray]]]:
+        """
+        Run one forward pass on a left-padded batch and extract per-example positions.
+
+        Args:
+            input_ids: (batch_size, max_seq_len) — left-padded
+            attention_mask: (batch_size, max_seq_len) — 0 for padding, 1 for real tokens
+            batch_positions: list of {position_name: token_index} per example,
+                where indices are relative to the PADDED sequence
+
+        Returns:
+            list of {position_name: {layer_idx: np.ndarray of shape (7168,)}}
+        """
+        self._captured = {}
+        batch_size = input_ids.shape[0]
+
+        with torch.no_grad():
+            self.model(input_ids=input_ids, attention_mask=attention_mask)
+
+        results = []
+        for b in range(batch_size):
+            result = {}
+            for pos_name, pos_idx in batch_positions[b].items():
+                result[pos_name] = {}
+                for layer_idx in self.layer_indices:
+                    vec = self._captured[layer_idx][b, pos_idx]
+                    result[pos_name][layer_idx] = vec.to(torch.float16).numpy()
+            results.append(result)
+
+        self._captured = {}
+        torch.cuda.empty_cache()
+
+        return results
 
     def extract_at_generation_step(
         self,
@@ -414,6 +454,7 @@ def load_model(model_path: str):
         max_memory=max_memory,
         torch_dtype=torch.float16,
         trust_remote_code=True,
+        attn_implementation="eager",
     )
     model.eval()
     elapsed = time.time() - t0
@@ -461,6 +502,75 @@ def get_model_answer(
 # Main extraction pipeline
 # ==============================================================================
 
+def _prepare_batch(
+    tokenizer,
+    problems: list,
+    few_shot: list,
+    prob_indices: List[int],
+    filler_type: str,
+    k: int,
+    filler_positions: Optional[List[int]],
+    input_device: torch.device,
+):
+    """Tokenize and left-pad a batch of examples. Returns padded tensors and per-example metadata."""
+    batch_ids = []
+    batch_meta = []
+
+    for prob_idx in prob_indices:
+        problem = problems[prob_idx]
+        example_rng = random.Random(prob_idx)
+        messages = build_messages_for_condition(
+            few_shot[:5], problem, filler_type, k, rng=example_rng
+        )
+        full_text = tokenizer.apply_chat_template(
+            messages, tokenize=False, add_generation_prompt=True
+        )
+        ids = tokenizer(full_text, return_tensors="pt")["input_ids"][0]
+
+        # Find positions (on un-padded sequence)
+        seq_len = len(ids)
+        filler_start, filler_end, question_end_pos = None, None, None
+        if k > 0:
+            question_end_pos, filler_start, filler_end = find_filler_boundaries(
+                tokenizer, ids.unsqueeze(0), k
+            )
+            positions = compute_extraction_positions(
+                filler_start, filler_end, seq_len,
+                absolute_positions=filler_positions,
+                question_end_pos=question_end_pos,
+            )
+        else:
+            positions = compute_baseline_positions(seq_len)
+
+        batch_ids.append(ids)
+        batch_meta.append({
+            "prob_idx": prob_idx,
+            "seq_len": seq_len,
+            "positions": positions,
+            "filler_start": filler_start,
+            "filler_end": filler_end,
+        })
+
+    # Left-pad to max length
+    max_len = max(len(ids) for ids in batch_ids)
+    pad_id = tokenizer.pad_token_id or 0
+
+    padded_ids = torch.full((len(batch_ids), max_len), pad_id, dtype=torch.long)
+    attn_mask = torch.zeros((len(batch_ids), max_len), dtype=torch.long)
+
+    batch_positions = []
+    for b, ids in enumerate(batch_ids):
+        pad_len = max_len - len(ids)
+        padded_ids[b, pad_len:] = ids
+        attn_mask[b, pad_len:] = 1
+        # Shift positions by pad_len
+        shifted = {name: idx + pad_len for name, idx in batch_meta[b]["positions"].items()}
+        batch_positions.append(shifted)
+        batch_meta[b]["pad_len"] = pad_len
+
+    return padded_ids.to(input_device), attn_mask.to(input_device), batch_positions, batch_meta
+
+
 def run_extraction(
     model,
     tokenizer,
@@ -473,23 +583,19 @@ def run_extraction(
     also_generate: bool = True,
     filler_positions: Optional[List[int]] = None,
     extract_pre_answer: bool = False,
+    batch_size: int = 1,
 ):
     """
     For each (condition, problem), extract hidden states and save.
 
-    Directory structure:
-        output_dir/
-            {condition_name}/
-                prob_0000.pkl
-                ...
-            metadata.json
+    Supports batched extraction (batch_size > 1) for better GPU utilization.
+    Examples are left-padded to the same length within each batch.
     """
     output_dir.mkdir(parents=True, exist_ok=True)
 
     extractor = HiddenStateExtractor(model, layer_indices)
     extractor.register_hooks()
 
-    # Find the device for input tensors (first parameter's device)
     first_param = next(model.parameters())
     input_device = first_param.device
 
@@ -512,112 +618,169 @@ def run_extraction(
         cond_dir.mkdir(exist_ok=True)
 
         print(f"\n{'='*60}")
-        print(f"Condition: {cond_name} (k={k}, filler_type={filler_type})")
+        print(f"Condition: {cond_name} (k={k}, filler_type={filler_type}, batch_size={batch_size})")
         print(f"{'='*60}")
+
+        # Filter to un-extracted problems
+        todo_indices = []
+        for prob_idx in range(len(problems)):
+            save_path = cond_dir / f"prob_{prob_idx:04d}.pkl"
+            if skip_existing and save_path.exists():
+                continue
+            todo_indices.append(prob_idx)
+
+        if not todo_indices:
+            print(f"  All {len(problems)} problems already extracted, skipping")
+            continue
+
+        print(f"  {len(todo_indices)} problems to extract")
 
         correct_count = 0
         total_count = 0
         t_start = time.time()
 
-        for prob_idx, problem in enumerate(tqdm(problems, desc=cond_name)):
-            save_path = cond_dir / f"prob_{prob_idx:04d}.pkl"
+        # Process in batches
+        for batch_start in tqdm(range(0, len(todo_indices), batch_size),
+                                desc=cond_name,
+                                total=(len(todo_indices) + batch_size - 1) // batch_size):
+            batch_indices = todo_indices[batch_start:batch_start + batch_size]
 
-            if skip_existing and save_path.exists():
-                continue
-
-            # Per-example deterministic RNG (for scrambled filler reproducibility)
-            example_rng = random.Random(prob_idx)
-
-            # Build prompt (supports all filler types, matches eval format)
-            messages = build_messages_for_condition(
-                few_shot[:5], problem, filler_type, k, rng=example_rng
-            )
-            full_text = tokenizer.apply_chat_template(
-                messages, tokenize=False, add_generation_prompt=True
-            )
-            inputs = tokenizer(full_text, return_tensors="pt")
-            input_ids = inputs["input_ids"].to(input_device)
-            attention_mask = inputs["attention_mask"].to(input_device)
-            seq_len = input_ids.shape[1]
-
-            # Find positions
-            filler_start, filler_end, question_end_pos = None, None, None
-            if k > 0:
-                question_end_pos, filler_start, filler_end = find_filler_boundaries(
-                    tokenizer, input_ids, k
+            if batch_size > 1:
+                padded_ids, attn_mask, batch_positions, batch_meta = _prepare_batch(
+                    tokenizer, problems, few_shot, batch_indices,
+                    filler_type, k, filler_positions, input_device,
                 )
-                positions = compute_extraction_positions(
-                    filler_start, filler_end, seq_len,
-                    absolute_positions=filler_positions,
-                    question_end_pos=question_end_pos,
-                )
+                batch_states = extractor.extract_batch(padded_ids, attn_mask, batch_positions)
+
+                for b, prob_idx in enumerate(batch_indices):
+                    problem = problems[prob_idx]
+                    meta = batch_meta[b]
+
+                    # Generate answer individually (generation doesn't batch well with different lengths)
+                    model_response, model_answer, is_correct = None, None, None
+                    if also_generate:
+                        ids_single = padded_ids[b:b+1, meta["pad_len"]:]
+                        mask_single = attn_mask[b:b+1, meta["pad_len"]:]
+                        model_response, model_answer = get_model_answer(
+                            model, tokenizer, ids_single, mask_single
+                        )
+                        is_correct = (model_answer == problem["answer"])
+                        correct_count += int(is_correct)
+                        total_count += 1
+
+                    result = {
+                        "problem_idx": prob_idx,
+                        "condition": cond_name,
+                        "k": k,
+                        "fact_value": problem["fact_value"],
+                        "x": problem["x"],
+                        "answer": problem["answer"],
+                        "positions": meta["positions"],
+                        "states": batch_states[b],
+                        "model_response": model_response,
+                        "model_answer": model_answer,
+                        "model_correct": is_correct,
+                        "seq_len": meta["seq_len"],
+                        "filler_start": meta["filler_start"],
+                        "filler_end": meta["filler_end"],
+                        "gen_prefix": None,
+                    }
+
+                    save_path = cond_dir / f"prob_{prob_idx:04d}.pkl"
+                    with open(save_path, "wb") as f:
+                        pickle.dump(result, f)
+
+                del padded_ids, attn_mask
+                torch.cuda.empty_cache()
+
             else:
-                positions = compute_baseline_positions(seq_len)
+                # Single-example path (original behavior)
+                prob_idx = batch_indices[0]
+                problem = problems[prob_idx]
+                example_rng = random.Random(prob_idx)
 
-            # Sanity check bounds
-            for pos_name, pos_idx in positions.items():
-                assert 0 <= pos_idx < seq_len, (
-                    f"Position '{pos_name}' = {pos_idx} out of bounds "
-                    f"(seq_len={seq_len}) for problem {prob_idx}"
+                messages = build_messages_for_condition(
+                    few_shot[:5], problem, filler_type, k, rng=example_rng
                 )
-
-            # Extract hidden states (forward pass 1)
-            states = extractor.extract(input_ids, attention_mask, positions)
-
-            # Extract at pre-answer position (after "Answer: " generated)
-            gen_prefix = None
-            if extract_pre_answer:
-                pre_answer_states, gen_prefix = extractor.extract_at_generation_step(
-                    model, tokenizer, input_ids, attention_mask,
-                    n_prefix_tokens=3,
+                full_text = tokenizer.apply_chat_template(
+                    messages, tokenize=False, add_generation_prompt=True
                 )
-                # Merge into states dict
-                for pos_name, layer_dict in pre_answer_states.items():
-                    states[pos_name] = layer_dict
-                positions["pre_answer"] = seq_len + 2  # index of space token (for reference)
-                # Print prefix for first few examples and every 100th
-                if prob_idx < 3 or prob_idx % 100 == 0:
-                    tqdm.write(f"  [{cond_name} #{prob_idx}] generated prefix: {repr(gen_prefix)}")
+                inputs = tokenizer(full_text, return_tensors="pt")
+                input_ids = inputs["input_ids"].to(input_device)
+                attention_mask = inputs["attention_mask"].to(input_device)
+                seq_len = input_ids.shape[1]
 
-            # Get model's answer (forward pass 2, or reuse generation)
-            model_response, model_answer, is_correct = None, None, None
-            if also_generate:
-                model_response, model_answer = get_model_answer(
-                    model, tokenizer, input_ids, attention_mask
-                )
-                is_correct = (model_answer == problem["answer"])
-                correct_count += int(is_correct)
-                total_count += 1
+                filler_start, filler_end, question_end_pos = None, None, None
+                if k > 0:
+                    question_end_pos, filler_start, filler_end = find_filler_boundaries(
+                        tokenizer, input_ids, k
+                    )
+                    positions = compute_extraction_positions(
+                        filler_start, filler_end, seq_len,
+                        absolute_positions=filler_positions,
+                        question_end_pos=question_end_pos,
+                    )
+                else:
+                    positions = compute_baseline_positions(seq_len)
 
-            # Save
-            result = {
-                "problem_idx": prob_idx,
-                "condition": cond_name,
-                "k": k,
-                "fact_value": problem["fact_value"],
-                "x": problem["x"],
-                "answer": problem["answer"],
-                "positions": positions,
-                "states": states,
-                "model_response": model_response,
-                "model_answer": model_answer,
-                "model_correct": is_correct,
-                "seq_len": seq_len,
-                "filler_start": filler_start,
-                "filler_end": filler_end,
-                "gen_prefix": gen_prefix,
-            }
+                for pos_name, pos_idx in positions.items():
+                    assert 0 <= pos_idx < seq_len, (
+                        f"Position '{pos_name}' = {pos_idx} out of bounds "
+                        f"(seq_len={seq_len}) for problem {prob_idx}"
+                    )
 
-            with open(save_path, "wb") as f:
-                pickle.dump(result, f)
+                states = extractor.extract(input_ids, attention_mask, positions)
 
-            del input_ids, attention_mask, states
-            torch.cuda.empty_cache()
+                gen_prefix = None
+                if extract_pre_answer:
+                    pre_answer_states, gen_prefix = extractor.extract_at_generation_step(
+                        model, tokenizer, input_ids, attention_mask,
+                        n_prefix_tokens=3,
+                    )
+                    for pos_name, layer_dict in pre_answer_states.items():
+                        states[pos_name] = layer_dict
+                    positions["pre_answer"] = seq_len + 2
+                    if prob_idx < 3 or prob_idx % 100 == 0:
+                        tqdm.write(f"  [{cond_name} #{prob_idx}] generated prefix: {repr(gen_prefix)}")
+
+                model_response, model_answer, is_correct = None, None, None
+                if also_generate:
+                    model_response, model_answer = get_model_answer(
+                        model, tokenizer, input_ids, attention_mask
+                    )
+                    is_correct = (model_answer == problem["answer"])
+                    correct_count += int(is_correct)
+                    total_count += 1
+
+                result = {
+                    "problem_idx": prob_idx,
+                    "condition": cond_name,
+                    "k": k,
+                    "fact_value": problem["fact_value"],
+                    "x": problem["x"],
+                    "answer": problem["answer"],
+                    "positions": positions,
+                    "states": states,
+                    "model_response": model_response,
+                    "model_answer": model_answer,
+                    "model_correct": is_correct,
+                    "seq_len": seq_len,
+                    "filler_start": filler_start,
+                    "filler_end": filler_end,
+                    "gen_prefix": gen_prefix,
+                }
+
+                save_path = cond_dir / f"prob_{prob_idx:04d}.pkl"
+                with open(save_path, "wb") as f:
+                    pickle.dump(result, f)
+
+                del input_ids, attention_mask, states
+                torch.cuda.empty_cache()
 
         elapsed = time.time() - t_start
         if total_count > 0:
             print(f"\n  Accuracy: {correct_count}/{total_count} = {correct_count/total_count:.1%}")
-        print(f"  Time: {elapsed:.0f}s ({elapsed/len(problems):.1f}s per problem)")
+        print(f"  Time: {elapsed:.0f}s ({elapsed/len(todo_indices):.1f}s per problem)")
 
     extractor.remove_hooks()
     print("\nExtraction complete!")
@@ -678,7 +841,7 @@ def main():
     parser.add_argument("--layers", default="all",
                         help="'all', 'every4', or comma-separated indices")
     parser.add_argument("--conditions", nargs="+",
-                        default=["baseline", "dots_250"])
+                        default=["baseline", "dots_100"])
     parser.add_argument("--max-problems", type=int, default=None)
     parser.add_argument("--no-skip-existing", action="store_true",
                         help="Re-extract even if output files exist")
@@ -692,6 +855,8 @@ def main():
     parser.add_argument("--extract-pre-answer", action="store_true",
                         help="Also extract hidden states after model generates "
                              "'Answer: ' prefix (right before the number token)")
+    parser.add_argument("--batch-size", type=int, default=1,
+                        help="Batch size for extraction (>1 for better GPU utilization)")
     args = parser.parse_args()
 
     # Load dataset
@@ -754,6 +919,7 @@ def main():
         also_generate=not args.no_generate,
         filler_positions=filler_pos,
         extract_pre_answer=args.extract_pre_answer,
+        batch_size=args.batch_size,
     )
 
     # Verify

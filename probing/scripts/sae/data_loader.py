@@ -78,6 +78,54 @@ def load_categories(categories_file: Path, condition: str = "dots_50") -> Dict[i
     return categories
 
 
+def load_averaged_filler_view(
+    extraction_dir: Path,
+    condition: str,
+    layer: int,
+    max_examples: Optional[int] = None,
+) -> Tuple[np.ndarray, List[dict]]:
+    """Load hidden states averaged across all filler positions for one condition.
+
+    Averages across all positions starting with 'filler_k' and 'pre_filler'.
+
+    Returns:
+        vectors: (N, 7168) float32 — averaged across filler positions
+        metadata: list of dicts with problem info
+    """
+    cond_dir = extraction_dir / condition
+    files = sorted(cond_dir.glob("prob_*.pkl"))
+    if max_examples:
+        files = files[:max_examples]
+
+    vectors = []
+    metadata = []
+    for f in files:
+        with open(f, "rb") as fp:
+            data = pickle.load(fp)
+
+        filler_positions = [p for p in data["states"]
+                            if p.startswith("filler_k") or p == "pre_filler"]
+        if not filler_positions:
+            raise ValueError(f"No filler positions in {f.name}. "
+                             f"Available: {list(data['states'].keys())}")
+
+        vecs = [data["states"][p][layer].astype(np.float32)
+                for p in filler_positions if layer in data["states"][p]]
+        avg_vec = np.mean(vecs, axis=0)
+        vectors.append(avg_vec)
+
+        metadata.append({
+            "problem_idx": data["problem_idx"],
+            "fact_value": data["fact_value"],
+            "x": data["x"],
+            "answer": data["answer"],
+            "model_correct": data.get("model_correct"),
+            "model_answer": data.get("model_answer"),
+        })
+
+    return np.stack(vectors, axis=0), metadata
+
+
 def load_paired_views(
     extraction_dir: Path,
     conditions: Tuple[str, str],
@@ -94,8 +142,21 @@ def load_paired_views(
     """
     cond_a, cond_b = conditions
 
-    vecs_a, meta_a = load_view(extraction_dir, cond_a, position, layer)
-    vecs_b, meta_b = load_view(extraction_dir, cond_b, position, layer)
+    if position == "avg_filler":
+        # For conditions without filler positions, fall back to answer_prompt
+        try:
+            vecs_a, meta_a = load_averaged_filler_view(extraction_dir, cond_a, layer)
+        except (ValueError, KeyError):
+            print(f"  {cond_a} has no filler positions, using answer_prompt")
+            vecs_a, meta_a = load_view(extraction_dir, cond_a, "answer_prompt", layer)
+        try:
+            vecs_b, meta_b = load_averaged_filler_view(extraction_dir, cond_b, layer)
+        except (ValueError, KeyError):
+            print(f"  {cond_b} has no filler positions, using answer_prompt")
+            vecs_b, meta_b = load_view(extraction_dir, cond_b, "answer_prompt", layer)
+    else:
+        vecs_a, meta_a = load_view(extraction_dir, cond_a, position, layer)
+        vecs_b, meta_b = load_view(extraction_dir, cond_b, position, layer)
 
     assert len(meta_a) == len(meta_b), (
         f"Mismatched example counts: {cond_a}={len(meta_a)}, {cond_b}={len(meta_b)}"

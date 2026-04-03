@@ -44,6 +44,23 @@ from extract_hidden_states import find_filler_boundaries, load_model
 from prompt_utils import build_messages, extract_answer
 
 
+def find_question_boundaries(tokenizer, input_ids):
+    """Find start and end of the target question (last user turn content)."""
+    ids = input_ids[0].tolist()
+    tokens = [tokenizer.decode([tid]) for tid in ids]
+
+    # Find last User token
+    last_user = -1
+    for i in range(len(tokens) - 1, -1, -1):
+        if "User" in tokens[i] and "｜" in tokens[i]:
+            last_user = i
+            break
+
+    # Question starts after the User token
+    q_start = last_user + 1 if last_user >= 0 else 0
+    return q_start
+
+
 def find_y_matched_pairs(problems, min_a_diff=10, max_pairs=100):
     """Find pairs with same Y but different A (|ΔA| >= min_a_diff)."""
     from collections import defaultdict
@@ -76,18 +93,18 @@ def prefill_and_cache(model, tokenizer, input_ids, attention_mask):
     return outputs.past_key_values, outputs.logits
 
 
-def transplant_filler_kv(target_cache, donor_cache,
-                         target_filler_start, target_filler_end,
-                         donor_filler_start, donor_filler_end,
-                         truncate_last=True):
-    """Replace filler KV entries in target cache with donor's.
+def transplant_kv(target_cache, donor_cache,
+                  target_start, target_end,
+                  donor_start, donor_end,
+                  truncate_last=True):
+    """Replace a range of KV entries in target cache with donor's.
 
-    Supports different filler positions (different sequence lengths).
-    Copies donor filler[i] → target filler[i] for matching offsets.
+    Copies donor[donor_start:donor_start+n] → target[target_start:target_start+n]
+    where n = min of the two ranges.
     """
-    n_filler_target = target_filler_end - target_filler_start + 1
-    n_filler_donor = donor_filler_end - donor_filler_start + 1
-    n_copy = min(n_filler_target, n_filler_donor)
+    n_target = target_end - target_start + 1
+    n_donor = donor_end - donor_start + 1
+    n_copy = min(n_target, n_donor)
 
     new_cache = []
     for layer_idx in range(len(target_cache)):
@@ -96,10 +113,8 @@ def transplant_filler_kv(target_cache, donor_cache,
 
         new_k = target_k.clone()
         new_v = target_v.clone()
-        ts = target_filler_start
-        ds = donor_filler_start
-        new_k[:, :, ts:ts + n_copy, :] = donor_k[:, :, ds:ds + n_copy, :]
-        new_v[:, :, ts:ts + n_copy, :] = donor_v[:, :, ds:ds + n_copy, :]
+        new_k[:, :, target_start:target_start + n_copy, :] = donor_k[:, :, donor_start:donor_start + n_copy, :]
+        new_v[:, :, target_start:target_start + n_copy, :] = donor_v[:, :, donor_start:donor_start + n_copy, :]
 
         if truncate_last:
             new_k = new_k[:, :, :-1, :]
@@ -117,24 +132,24 @@ def transplant_filler_kv(target_cache, donor_cache,
 def generate_from_cache(model, tokenizer, last_token_id, past_key_values, max_new_tokens=5):
     """Re-run the last token with a (possibly modified) KV cache, then generate.
 
-    By feeding the last input token with the KV cache, we re-compute its
-    attention over all cached positions. This is how we test what happens
-    when filler KV entries are swapped — the answer position re-attends
-    to the modified cache.
-
-    Args:
-        last_token_id: token id of the last input token (int)
-        past_key_values: KV cache (may have transplanted filler entries)
+    Returns:
+        raw: decoded generation text
+        answer: parsed integer answer
+        first_logits: (vocab_size,) numpy array — logits at the answer position
     """
     device = next(model.parameters()).device
     input_id = torch.tensor([[last_token_id]], device=device)
+    cache_len = past_key_values[0][0].shape[2]
+    attn_mask = torch.ones(1, cache_len + 1, dtype=torch.long, device=device)
 
     with torch.no_grad():
         outputs = model(
             input_ids=input_id,
+            attention_mask=attn_mask,
             past_key_values=past_key_values,
             use_cache=True,
         )
+    first_logits = outputs.logits[0, -1, :].float().cpu().numpy()
     logits = outputs.logits[:, -1, :]
     past = outputs.past_key_values
 
@@ -145,9 +160,12 @@ def generate_from_cache(model, tokenizer, last_token_id, past_key_values, max_ne
             break
         generated.append(next_token.item())
 
+        cur_len = past[0][0].shape[2] + 1
+        step_mask = torch.ones(1, cur_len, dtype=torch.long, device=device)
         with torch.no_grad():
             outputs = model(
                 input_ids=next_token,
+                attention_mask=step_mask,
                 past_key_values=past,
                 use_cache=True,
             )
@@ -156,7 +174,7 @@ def generate_from_cache(model, tokenizer, last_token_id, past_key_values, max_ne
 
     raw = tokenizer.decode(generated, skip_special_tokens=True).strip()
     answer = extract_answer(raw)
-    return raw, answer
+    return raw, answer, first_logits
 
 
 def main():
@@ -171,6 +189,9 @@ def main():
     parser.add_argument("--max-pairs", type=int, default=100)
     parser.add_argument("--min-a-diff", type=int, default=10)
     parser.add_argument("--max-new-tokens", type=int, default=5)
+    parser.add_argument("--mode", choices=["filler", "question"], default="filler",
+                        help="Which KV entries to transplant: filler dots or question tokens")
+    parser.add_argument("--filler-type", choices=["dots", "counting"], default="dots")
     args = parser.parse_args()
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
@@ -198,8 +219,9 @@ def main():
         prob_b = problems[idx_b]
 
         # Build prompts
-        msgs_a = build_messages(few_shot[:5], prob_a, "dots", args.filler_k)
-        msgs_b = build_messages(few_shot[:5], prob_b, "dots", args.filler_k)
+        filler_mode = "counting" if args.filler_type == "counting" else "dots"
+        msgs_a = build_messages(few_shot[:5], prob_a, filler_mode, args.filler_k)
+        msgs_b = build_messages(few_shot[:5], prob_b, filler_mode, args.filler_k)
 
         text_a = tokenizer.apply_chat_template(msgs_a, tokenize=False, add_generation_prompt=True)
         text_b = tokenizer.apply_chat_template(msgs_b, tokenize=False, add_generation_prompt=True)
@@ -212,9 +234,9 @@ def main():
         ids_b = inputs_b["input_ids"].to(device)
         mask_b = inputs_b["attention_mask"].to(device)
 
-        # Find filler boundaries for each
-        _, filler_start_a, filler_end_a = find_filler_boundaries(tokenizer, ids_a, args.filler_k)
-        _, filler_start_b, filler_end_b = find_filler_boundaries(tokenizer, ids_b, args.filler_k)
+        # Find boundaries
+        qend_a, filler_start_a, filler_end_a = find_filler_boundaries(tokenizer, ids_a, args.filler_k)
+        qend_b, filler_start_b, filler_end_b = find_filler_boundaries(tokenizer, ids_b, args.filler_k)
 
         # Prefill both separately (different seq lengths)
         cache_a, _ = prefill_and_cache(model, tokenizer, ids_a, mask_a)
@@ -223,22 +245,67 @@ def main():
         # Get last token id from B (the answer position token)
         last_token_b = ids_b[0, -1].item()
 
-        # Normal generation for B (control): re-run last token with B's cache
-        raw_b_normal, ans_b_normal = generate_from_cache(
-            model, tokenizer, last_token_b, cache_b, args.max_new_tokens
+        # Get token IDs for donor/target answers (A+Y) and raw fact values (A)
+        donor_ay_tok = tokenizer.encode(str(prob_a["answer"]), add_special_tokens=False)
+        target_ay_tok = tokenizer.encode(str(prob_b["answer"]), add_special_tokens=False)
+        donor_tok_id = donor_ay_tok[0] if len(donor_ay_tok) == 1 else None
+        target_tok_id = target_ay_tok[0] if len(target_ay_tok) == 1 else None
+
+        donor_a_tok = tokenizer.encode(str(prob_a["fact_value"]), add_special_tokens=False)
+        target_a_tok = tokenizer.encode(str(prob_b["fact_value"]), add_special_tokens=False)
+        donor_a_tok_id = donor_a_tok[0] if len(donor_a_tok) == 1 else None
+        target_a_tok_id = target_a_tok[0] if len(target_a_tok) == 1 else None
+
+        # Normal generation for B (control): truncate last KV entry and re-run
+        # so control and transplant are computed at the same position
+        from transformers.cache_utils import DynamicCache
+        cache_b_trunc = DynamicCache()
+        for layer_idx in range(len(cache_b)):
+            k, v = cache_b[layer_idx]
+            cache_b_trunc.update(k[:, :, :-1, :], v[:, :, :-1, :], layer_idx=layer_idx)
+        raw_b_normal, ans_b_normal, logits_normal = generate_from_cache(
+            model, tokenizer, last_token_b, cache_b_trunc, args.max_new_tokens
         )
 
-        # Transplant: replace B's filler KV with A's filler KV
-        cache_transplant = transplant_filler_kv(
-            cache_b, cache_a,
-            filler_start_b, filler_end_b,
-            filler_start_a, filler_end_a,
-        )
+        # Transplant based on mode
+        if args.mode == "filler":
+            cache_transplant = transplant_kv(
+                cache_b, cache_a,
+                filler_start_b, filler_end_b,
+                filler_start_a, filler_end_a,
+            )
+        elif args.mode == "question":
+            q_start_a = find_question_boundaries(tokenizer, ids_a)
+            q_start_b = find_question_boundaries(tokenizer, ids_b)
+            cache_transplant = transplant_kv(
+                cache_b, cache_a,
+                q_start_b, qend_b,
+                q_start_a, qend_a,
+            )
 
         # Generate from transplanted cache: re-run last token with modified KV
-        raw_transplant, ans_transplant = generate_from_cache(
+        raw_transplant, ans_transplant, logits_transplant = generate_from_cache(
             model, tokenizer, last_token_b, cache_transplant, args.max_new_tokens
         )
+
+        # Compute ranks and logits for donor/target answer tokens
+        def get_rank_and_logit(logits_arr, tok_id):
+            if tok_id is None:
+                return None, None
+            logit = float(logits_arr[tok_id])
+            rank = int((logits_arr > logit).sum()) + 1
+            return rank, logit
+
+        # A+Y token ranks
+        donor_rank_normal, donor_logit_normal = get_rank_and_logit(logits_normal, donor_tok_id)
+        donor_rank_transplant, donor_logit_transplant = get_rank_and_logit(logits_transplant, donor_tok_id)
+        target_rank_normal, target_logit_normal = get_rank_and_logit(logits_normal, target_tok_id)
+        target_rank_transplant, target_logit_transplant = get_rank_and_logit(logits_transplant, target_tok_id)
+        # Raw A token ranks
+        donor_a_rank_normal, _ = get_rank_and_logit(logits_normal, donor_a_tok_id)
+        donor_a_rank_transplant, _ = get_rank_and_logit(logits_transplant, donor_a_tok_id)
+        target_a_rank_normal, _ = get_rank_and_logit(logits_normal, target_a_tok_id)
+        target_a_rank_transplant, _ = get_rank_and_logit(logits_transplant, target_a_tok_id)
 
         # Classify result
         n_valid += 1
@@ -268,6 +335,18 @@ def main():
             "transplant_answer": ans_transplant,
             "transplant_raw": raw_transplant,
             "outcome": outcome,
+            "donor_rank_normal": donor_rank_normal,
+            "donor_rank_transplant": donor_rank_transplant,
+            "target_rank_normal": target_rank_normal,
+            "target_rank_transplant": target_rank_transplant,
+            "donor_logit_normal": donor_logit_normal,
+            "donor_logit_transplant": donor_logit_transplant,
+            "target_logit_normal": target_logit_normal,
+            "target_logit_transplant": target_logit_transplant,
+            "donor_a_rank_normal": donor_a_rank_normal,
+            "donor_a_rank_transplant": donor_a_rank_transplant,
+            "target_a_rank_normal": target_a_rank_normal,
+            "target_a_rank_transplant": target_a_rank_transplant,
         }
         results.append(result)
 
@@ -276,10 +355,24 @@ def main():
 
         # Print periodic summary
         if (pair_idx + 1) % 20 == 0:
+            # Compute median rank shift so far
+            valid_donor_shifts = [
+                r["donor_rank_normal"] - r["donor_rank_transplant"]
+                for r in results if r["donor_rank_normal"] is not None
+            ]
+            med_shift = np.median(valid_donor_shifts) if valid_donor_shifts else 0
             print(f"  [{pair_idx+1}/{len(pairs)}] donor={donor_adopted} "
-                  f"target={target_kept} novel={novel}")
+                  f"target={target_kept} novel={novel} "
+                  f"median_donor_rank_shift={med_shift:+.0f}")
 
     # Summary
+    valid_results = [r for r in results if r["donor_rank_normal"] is not None]
+
+    donor_ranks_normal = [r["donor_rank_normal"] for r in valid_results]
+    donor_ranks_transplant = [r["donor_rank_transplant"] for r in valid_results]
+    target_ranks_normal = [r["target_rank_normal"] for r in valid_results]
+    target_ranks_transplant = [r["target_rank_transplant"] for r in valid_results]
+
     print(f"\n{'='*60}")
     print("SUMMARY")
     print(f"{'='*60}")
@@ -287,6 +380,31 @@ def main():
     print(f"  Donor adopted: {donor_adopted} ({donor_adopted/max(n_valid,1):.1%})")
     print(f"  Target kept:   {target_kept} ({target_kept/max(n_valid,1):.1%})")
     print(f"  Novel:         {novel} ({novel/max(n_valid,1):.1%})")
+    print(f"\n  Donor answer (A_donor + Y) rank:")
+    print(f"    Normal:      median={np.median(donor_ranks_normal):.0f}, "
+          f"mean={np.mean(donor_ranks_normal):.0f}")
+    print(f"    Transplant:  median={np.median(donor_ranks_transplant):.0f}, "
+          f"mean={np.mean(donor_ranks_transplant):.0f}")
+    print(f"    Shift:       median={np.median([n-t for n,t in zip(donor_ranks_normal, donor_ranks_transplant)]):.0f}")
+    print(f"\n  Target answer (A_target + Y) rank:")
+    print(f"    Normal:      median={np.median(target_ranks_normal):.0f}, "
+          f"mean={np.mean(target_ranks_normal):.0f}")
+    print(f"    Transplant:  median={np.median(target_ranks_transplant):.0f}, "
+          f"mean={np.mean(target_ranks_transplant):.0f}")
+
+    # Raw A token ranks
+    valid_a = [r for r in results if r.get("donor_a_rank_normal") is not None]
+    if valid_a:
+        da_normal = [r["donor_a_rank_normal"] for r in valid_a]
+        da_transplant = [r["donor_a_rank_transplant"] for r in valid_a]
+        ta_normal = [r["target_a_rank_normal"] for r in valid_a]
+        ta_transplant = [r["target_a_rank_transplant"] for r in valid_a]
+        print(f"\n  Donor fact value (A_donor) rank:")
+        print(f"    Normal:      median={np.median(da_normal):.0f}, mean={np.mean(da_normal):.0f}")
+        print(f"    Transplant:  median={np.median(da_transplant):.0f}, mean={np.mean(da_transplant):.0f}")
+        print(f"\n  Target fact value (A_target) rank:")
+        print(f"    Normal:      median={np.median(ta_normal):.0f}, mean={np.mean(ta_normal):.0f}")
+        print(f"    Transplant:  median={np.median(ta_transplant):.0f}, mean={np.mean(ta_transplant):.0f}")
 
     # Save
     with open(args.output_dir / "transplant_results.json", "w") as f:

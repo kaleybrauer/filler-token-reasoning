@@ -44,6 +44,23 @@ from extract_hidden_states import find_filler_boundaries, load_model
 from prompt_utils import build_messages, extract_answer
 
 
+def find_filler_label_start(tokenizer, input_ids, filler_start):
+    """Return the index of the first token of the 'Filler:' label.
+
+    'Filler' may be split across several tokens (e.g. ['F', 'iller', ':']).
+    We try expanding windows of 1–6 tokens before filler_start until the
+    decoded text contains 'Filler:'.
+    """
+    ids = input_ids[0].tolist()
+    for window in range(1, 7):
+        start = filler_start - window
+        if start < 0:
+            break
+        if "Filler:" in tokenizer.decode(ids[start:filler_start]):
+            return start
+    return filler_start  # fallback: no label tokens found
+
+
 def find_question_boundaries(tokenizer, input_ids):
     """Find start and end of the target question (last user turn content)."""
     ids = input_ids[0].tolist()
@@ -189,9 +206,9 @@ def main():
     parser.add_argument("--max-pairs", type=int, default=100)
     parser.add_argument("--min-a-diff", type=int, default=10)
     parser.add_argument("--max-new-tokens", type=int, default=5)
-    parser.add_argument("--mode", choices=["filler", "filler_with_labels", "question"], default="filler",
+    parser.add_argument("--mode", choices=["filler", "filler_with_label", "question"], default="filler",
                         help="Which KV entries to transplant: filler dots only, "
-                             "filler+labels (everything between question and assistant header), "
+                             "filler label + filler dots (stops before 'Answer:'), "
                              "or question tokens")
     parser.add_argument("--filler-type", choices=["dots", "counting", "alphabet"], default="dots")
     args = parser.parse_args()
@@ -276,17 +293,14 @@ def main():
                 filler_start_b, filler_end_b,
                 filler_start_a, filler_end_a,
             )
-        elif args.mode == "filler_with_labels":
-            # Everything between question and assistant header:
-            # includes "Filler:", dots, "\n\n", "Answer:"
-            label_start_b = qend_b + 1
-            label_end_b = ids_b.shape[1] - 2  # last token before <|Assistant|>
-            label_start_a = qend_a + 1
-            label_end_a = ids_a.shape[1] - 2
+        elif args.mode == "filler_with_label":
+            # "Filler:" label through the last filler token (excludes "Answer:")
+            label_start_b = find_filler_label_start(tokenizer, ids_b, filler_start_b)
+            label_start_a = find_filler_label_start(tokenizer, ids_a, filler_start_a)
             cache_transplant = transplant_kv(
                 cache_b, cache_a,
-                label_start_b, label_end_b,
-                label_start_a, label_end_a,
+                label_start_b, filler_end_b,
+                label_start_a, filler_end_a,
             )
         elif args.mode == "question":
             q_start_a = find_question_boundaries(tokenizer, ids_a)

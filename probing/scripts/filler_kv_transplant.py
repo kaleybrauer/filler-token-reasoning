@@ -189,8 +189,10 @@ def main():
     parser.add_argument("--max-pairs", type=int, default=100)
     parser.add_argument("--min-a-diff", type=int, default=10)
     parser.add_argument("--max-new-tokens", type=int, default=5)
-    parser.add_argument("--mode", choices=["filler", "question"], default="filler",
-                        help="Which KV entries to transplant: filler dots or question tokens")
+    parser.add_argument("--mode", choices=["filler", "filler_with_labels", "question"], default="filler",
+                        help="Which KV entries to transplant: filler dots only, "
+                             "filler+labels (everything between question and assistant header), "
+                             "or question tokens")
     parser.add_argument("--filler-type", choices=["dots", "counting"], default="dots")
     args = parser.parse_args()
 
@@ -273,6 +275,18 @@ def main():
                 cache_b, cache_a,
                 filler_start_b, filler_end_b,
                 filler_start_a, filler_end_a,
+            )
+        elif args.mode == "filler_with_labels":
+            # Everything between question and assistant header:
+            # includes "Filler:", dots, "\n\n", "Answer:"
+            label_start_b = qend_b + 1
+            label_end_b = ids_b.shape[1] - 2  # last token before <|Assistant|>
+            label_start_a = qend_a + 1
+            label_end_a = ids_a.shape[1] - 2
+            cache_transplant = transplant_kv(
+                cache_b, cache_a,
+                label_start_b, label_end_b,
+                label_start_a, label_end_a,
             )
         elif args.mode == "question":
             q_start_a = find_question_boundaries(tokenizer, ids_a)

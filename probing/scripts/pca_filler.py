@@ -493,15 +493,17 @@ def main():
             str(l): v for l, v in layer_sweep_results.items()
         }
 
-        # Print best layers
-        best_am = max(layer_sweep_results.items(),
-                      key=lambda x: x[1]["reconstruct_top20"]["argmax"]["r"])
-        best_sm = max(layer_sweep_results.items(),
-                      key=lambda x: x[1]["reconstruct_top10"]["softmax"]["r"])
-        print(f"\n  Best top-20 argmax:  L{best_am[0]} r={best_am[1]['reconstruct_top20']['argmax']['r']:.3f}"
-              f"  MAE={best_am[1]['reconstruct_top20']['argmax']['mae']:.1f}")
-        print(f"  Best top-10 softmax: L{best_sm[0]} r={best_sm[1]['reconstruct_top10']['softmax']['r']:.3f}"
-              f"  MAE={best_sm[1]['reconstruct_top10']['softmax']['mae']:.1f}")
+        # Print best layers (by lowest MAE)
+        best_am = min(layer_sweep_results.items(),
+                      key=lambda x: x[1]["reconstruct_top20"]["argmax"]["mae"])
+        best_sm = min(layer_sweep_results.items(),
+                      key=lambda x: x[1]["reconstruct_top10"]["softmax"]["mae"])
+        print(f"\n  Best top-20 argmax:  L{best_am[0]} MAE={best_am[1]['reconstruct_top20']['argmax']['mae']:.1f}"
+              f"  ±10={best_am[1]['reconstruct_top20']['argmax']['frac_within_10']:.1%}"
+              f"  r={best_am[1]['reconstruct_top20']['argmax']['r']:.3f}")
+        print(f"  Best top-10 softmax: L{best_sm[0]} MAE={best_sm[1]['reconstruct_top10']['softmax']['mae']:.1f}"
+              f"  ±10={best_sm[1]['reconstruct_top10']['softmax']['frac_within_10']:.1%}"
+              f"  r={best_sm[1]['reconstruct_top10']['softmax']['r']:.3f}")
     else:
         print(f"\n  Skipping logit lens (no lm_head at {args.lm_head})")
 

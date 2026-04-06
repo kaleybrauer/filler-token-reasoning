@@ -1,5 +1,6 @@
 """Quick standalone: logit lens layer sweep on avg_filler. No permutations."""
 
+import argparse
 import pickle
 import numpy as np
 from pathlib import Path
@@ -12,12 +13,22 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent))
 from pca_filler import load_data, logit_lens_decode
 
-extraction_dir = Path("probing/extracted_states")
-condition = "dots_100"
-n_components = 20
-lm_head_path = Path("probing/lm_head_weight.npy")
-tokenizer_path = "/workspace/models/deepseek-v3-awq"
-output_dir = Path("probing/results/pca_filler")
+parser = argparse.ArgumentParser()
+parser.add_argument("--condition", type=str, default="dots_100")
+parser.add_argument("--extraction-dir", type=Path, default=Path("probing/extracted_states"))
+parser.add_argument("--output-dir", type=Path, default=None)
+parser.add_argument("--lm-head", type=Path, default=Path("probing/lm_head_weight.npy"))
+parser.add_argument("--tokenizer", type=str, default="/workspace/models/deepseek-v3-awq")
+parser.add_argument("--n-components", type=int, default=20)
+args = parser.parse_args()
+
+extraction_dir = args.extraction_dir
+condition = args.condition
+n_components = args.n_components
+lm_head_path = args.lm_head
+tokenizer_path = args.tokenizer
+output_dir = args.output_dir or Path(f"probing/results/pca_filler_{condition}")
+output_dir = Path(output_dir)
 output_dir.mkdir(parents=True, exist_ok=True)
 
 from transformers import AutoTokenizer
@@ -78,18 +89,63 @@ for layer in tqdm(layers, desc="Logit lens sweep"):
           f"  {sm10['mae']:>12.1f} {sm10['frac_within_10']:>6.1%} {sm10['r']:>7.3f}"
           f"  {sm5['mae']:>12.1f} {sm5['frac_within_10']:>6.1%} {sm5['r']:>7.3f}")
 
-# Best layers
+# Best layers (by lowest MAE)
 for method_label, method_key in [("top-20 argmax", ("reconstruct_top20", "argmax")),
+                                   ("top-10 argmax", ("reconstruct_top10", "argmax")),
                                    ("top-10 softmax", ("reconstruct_top10", "softmax")),
                                    ("top-5 softmax", ("reconstruct_top5", "softmax")),
                                    ("top-3 softmax", ("reconstruct_top3", "softmax")),
                                    ("top-1 softmax", ("reconstruct_top1", "softmax"))]:
-    best = max(results.items(), key=lambda x: x[1][method_key[0]][method_key[1]]["r"])
+    best = min(results.items(), key=lambda x: x[1][method_key[0]][method_key[1]]["mae"])
     r = best[1][method_key[0]][method_key[1]]
-    print(f"\n  Best {method_label}: L{best[0]}  r={r['r']:.3f}  MAE={r['mae']:.1f}  ±10={r['frac_within_10']:.1%}")
+    print(f"\n  Best {method_label}: L{best[0]}  MAE={r['mae']:.1f}  ±10={r['frac_within_10']:.1%}  r={r['r']:.3f}")
 
 # Save
 serializable = {str(k): v for k, v in results.items()}
 with open(output_dir / "logit_lens_layer_sweep.json", "w") as f:
     json.dump(serializable, f)
 print(f"\nSaved to {output_dir / 'logit_lens_layer_sweep.json'}")
+
+# Plot
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+
+layer_list = sorted(results.keys())
+methods = [
+    ("top-20 argmax", "reconstruct_top20", "argmax"),
+    ("top-10 argmax", "reconstruct_top10", "argmax"),
+    ("top-10 softmax", "reconstruct_top10", "softmax"),
+    ("top-5 softmax", "reconstruct_top5", "softmax"),
+]
+
+fig, axes = plt.subplots(2, 1, figsize=(14, 8), sharex=True)
+
+# MAE plot
+ax = axes[0]
+for label, rkey, skey in methods:
+    maes = [results[l][rkey][skey]["mae"] for l in layer_list]
+    ax.plot(layer_list, maes, marker=".", markersize=4, label=label)
+ax.set_ylabel("MAE(A)")
+ax.set_title(f"Logit lens unsupervised decoder — avg filler, by layer ({condition})")
+ax.legend(fontsize=9)
+ax.set_ylim(0, None)
+ax.axhline(y=30, color="gray", linestyle="--", alpha=0.4, label="MAE=30 ref")
+ax.grid(alpha=0.3)
+
+# ±10 plot
+ax = axes[1]
+for label, rkey, skey in methods:
+    frac = [results[l][rkey][skey]["frac_within_10"] * 100 for l in layer_list]
+    ax.plot(layer_list, frac, marker=".", markersize=4, label=label)
+ax.set_ylabel("% within ±10")
+ax.set_xlabel("Layer")
+ax.legend(fontsize=9)
+ax.set_ylim(0, None)
+ax.grid(alpha=0.3)
+
+plt.tight_layout()
+plt.savefig(output_dir / "logit_lens_layer_sweep.png", dpi=150, bbox_inches="tight")
+plt.savefig(output_dir / "logit_lens_layer_sweep.pdf", bbox_inches="tight")
+plt.close()
+print(f"Plot saved to {output_dir / 'logit_lens_layer_sweep.png'}")

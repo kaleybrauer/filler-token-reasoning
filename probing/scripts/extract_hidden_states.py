@@ -75,8 +75,14 @@ FILLER_ABSOLUTE_POSITIONS = None  # Set via --filler-positions; uses fractions i
 CONDITIONS = {
     "baseline": (0, "dots"),
     "dots_10": (10, "dots"),
+    "dots_25": (25, "dots"),
     "dots_100": (100, "dots"),
+    "counting_5": (5, "counting"),
     "counting_25": (25, "counting"),
+    "counting_50": (50, "counting"),
+    "alphabet_10": (10, "alphabet"),
+    "alphabet_25": (25, "alphabet"),
+    "alphabet_100": (100, "alphabet"),
 }
 
 

@@ -1,12 +1,21 @@
 #!/usr/bin/env python3
 """Evaluate DeepSeek V3 (quantized) on 1-hop addition using vLLM.
 
+Supports all filler types: dots, counting, alphabet.
+
 Usage:
     source /workspace/config/probing_env.sh
-    uv run --project /workspace/filler-token-reasoning/probing python \
-        probing/scripts/evaluate_1hop_vllm.py \
+    python probing/scripts/evaluate_1hop_vllm.py \
         --model-path /workspace/models/deepseek-v3-awq \
-        --max-examples 200 --filler-k 250
+        --max-examples 500 --filler-k 100
+
+    # Counting filler:
+    python probing/scripts/evaluate_1hop_vllm.py \
+        --filler-type counting --filler-k 25
+
+    # Multiple k values:
+    python probing/scripts/evaluate_1hop_vllm.py \
+        --filler-type dots --filler-k 10,25,100
 """
 
 from __future__ import annotations
@@ -14,7 +23,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import re
 import sys
 import time
 from pathlib import Path
@@ -24,69 +32,15 @@ _compat = "/usr/local/cuda-12.8/compat"
 if os.path.isdir(_compat):
     os.environ["LD_LIBRARY_PATH"] = _compat + ":" + os.environ.get("LD_LIBRARY_PATH", "")
 
+sys.path.insert(0, str(Path(__file__).parent))
+from prompt_utils import build_messages, extract_answer
+
 # ---------------------------------------------------------------------------
 # Defaults
 # ---------------------------------------------------------------------------
 MODEL_PATH = "/workspace/models/deepseek-v3-awq"
 DATASET_PATH = Path("/workspace/filler-token-reasoning/probing/data/1hop_addition_dataset.json")
 RESULTS_DIR = Path("/workspace/filler-token-reasoning/probing/results")
-
-
-# ---------------------------------------------------------------------------
-# Prompt building (identical to evaluate_1hop.py)
-# ---------------------------------------------------------------------------
-
-def build_system_message(k: int) -> str:
-    base = (
-        "You will be given a question. Answer immediately using the format "
-        "'Answer: [ANSWER]' where [ANSWER] is just the number, nothing else. "
-        "No explanation, no words, no reasoning, just the number."
-    )
-    if k > 0:
-        base += (
-            f" After the question, there will be {k} filler tokens "
-            f"(a sequence of dots) to give you extra space to process "
-            f"the problem before answering."
-        )
-    return base
-
-
-def build_user_turn(fact_phrase: str, x: int, k: int, pre_padding: int = 0) -> str:
-    question_line = f"Question: What is {fact_phrase} plus {x}?"
-    prefix = ""
-    if pre_padding > 0:
-        padding = " ".join(["."] * pre_padding)
-        prefix = f"Padding: {padding}\n\n"
-    if k > 0:
-        filler = " ".join(["."] * k)
-        return f"{prefix}{question_line}\n\nFiller: {filler}\n\nAnswer:"
-    else:
-        return f"{prefix}{question_line}\n\nAnswer:"
-
-
-def build_messages(few_shot_items: list[dict], target: dict, k: int, pre_padding: int = 0) -> list[dict]:
-    messages = [{"role": "system", "content": build_system_message(k)}]
-    for fs in few_shot_items[:5]:
-        user_content = build_user_turn(fs["fact_phrase"], fs["x"], k, pre_padding)
-        messages.append({"role": "user", "content": user_content})
-        messages.append({"role": "assistant", "content": f"Answer: {fs['answer']}"})
-    user_content = build_user_turn(target["fact_phrase"], target["x"], k, pre_padding)
-    messages.append({"role": "user", "content": user_content})
-    return messages
-
-
-# ---------------------------------------------------------------------------
-# Answer extraction
-# ---------------------------------------------------------------------------
-
-def extract_answer(text: str) -> int | None:
-    m = re.search(r"Answer:\s*(-?\d+)", text)
-    if m:
-        return int(m.group(1))
-    m = re.search(r"(-?\d+)", text)
-    if m:
-        return int(m.group(1))
-    return None
 
 
 # ---------------------------------------------------------------------------
@@ -99,15 +53,15 @@ def main():
     parser.add_argument("--dataset", type=Path, default=DATASET_PATH)
     parser.add_argument("--outdir", type=Path, default=RESULTS_DIR)
     parser.add_argument("--max-examples", type=int, default=200)
-    parser.add_argument("--filler-k", type=int, default=250,
-                        help="Number of dot filler tokens for the filler condition")
+    parser.add_argument("--filler-k", type=str, default="100",
+                        help="Filler length(s), comma-separated (e.g. '10,25,100')")
+    parser.add_argument("--filler-type", type=str, default="dots",
+                        choices=["dots", "counting", "alphabet"],
+                        help="Filler type (default: dots)")
     parser.add_argument("--tensor-parallel-size", type=int, default=None,
                         help="TP size (default: auto-detect from GPU count)")
     parser.add_argument("--pipeline-parallel-size", type=int, default=None,
                         help="PP size (default: auto-detect from GPU count)")
-    parser.add_argument("--pre-padding", type=int, default=0,
-                        help="Number of dot tokens to insert BEFORE the question "
-                             "(positional encoding test)")
     args = parser.parse_args()
 
     import torch
@@ -237,11 +191,15 @@ def main():
     sanity_results = generate_batch([sanity_prompt])
     print(f"  Response: {sanity_results[0]!r}")
 
+    k_values = [int(x) for x in args.filler_k.split(",")]
+    filler_type = args.filler_type
+
     # Helper to run a condition
-    def evaluate_condition(k: int, pre_padding: int = 0) -> list[dict]:
+    def evaluate_condition(k: int, filler_type: str = "dots") -> list[dict]:
+        mode = "baseline" if k == 0 else filler_type
         prompts = []
         for ex in examples:
-            msgs = build_messages(few_shot, ex, k, pre_padding)
+            msgs = build_messages(few_shot[:5], ex, mode, k)
             prompt = tokenizer.apply_chat_template(msgs, tokenize=False, add_generation_prompt=True)
             prompts.append(prompt)
 
@@ -277,35 +235,25 @@ def main():
     baseline_acc = sum(r["correct"] for r in baseline_results) / len(baseline_results)
     print(f"Baseline accuracy: {baseline_acc:.1%} ({sum(r['correct'] for r in baseline_results)}/{len(baseline_results)})")
 
-    # Evaluate filler (k=args.filler_k)
-    print(f"\n{'='*60}")
-    print(f"Evaluating FILLER (k={args.filler_k} dots) on {len(examples)} examples...")
-    print(f"{'='*60}")
-    filler_results = evaluate_condition(k=args.filler_k)
-    filler_acc = sum(r["correct"] for r in filler_results) / len(filler_results)
-    print(f"Filler accuracy: {filler_acc:.1%} ({sum(r['correct'] for r in filler_results)}/{len(filler_results)})")
-
-    # Evaluate pre-padding condition if requested
-    prepad_results = None
-    prepad_acc = None
-    if args.pre_padding > 0:
+    # Evaluate each filler k
+    all_filler_results = {}
+    for k in k_values:
+        label = f"{filler_type}_{k}"
         print(f"\n{'='*60}")
-        print(f"Evaluating PRE-PADDING (k=0, {args.pre_padding} dots before question)...")
+        print(f"Evaluating {label} on {len(examples)} examples...")
         print(f"{'='*60}")
-        prepad_results = evaluate_condition(k=0, pre_padding=args.pre_padding)
-        prepad_acc = sum(r["correct"] for r in prepad_results) / len(prepad_results)
-        print(f"Pre-padding accuracy: {prepad_acc:.1%} ({sum(r['correct'] for r in prepad_results)}/{len(prepad_results)})")
+        results = evaluate_condition(k=k, filler_type=filler_type)
+        acc = sum(r["correct"] for r in results) / len(results)
+        print(f"{label} accuracy: {acc:.1%} ({sum(r['correct'] for r in results)}/{len(results)})")
+        all_filler_results[label] = {"accuracy": acc, "results": results}
 
     # Summary
     print(f"\n{'='*60}")
     print("SUMMARY")
     print(f"{'='*60}")
     print(f"  Baseline (k=0):            {baseline_acc:.1%}")
-    print(f"  Filler (k={args.filler_k} dots):  {filler_acc:.1%}")
-    print(f"  Δ accuracy:                {filler_acc - baseline_acc:+.1%}")
-    if prepad_acc is not None:
-        print(f"  Pre-padding ({args.pre_padding} dots):  {prepad_acc:.1%}")
-        print(f"  Δ vs baseline:             {prepad_acc - baseline_acc:+.1%}")
+    for label, data in all_filler_results.items():
+        print(f"  {label:<25} {data['accuracy']:.1%}  (Δ {data['accuracy'] - baseline_acc:+.1%})")
 
     # Save results
     args.outdir.mkdir(parents=True, exist_ok=True)
@@ -314,8 +262,8 @@ def main():
             "model_path": args.model_path,
             "dataset": str(args.dataset),
             "max_examples": args.max_examples,
-            "filler_k": args.filler_k,
-            "pre_padding": args.pre_padding,
+            "filler_type": filler_type,
+            "filler_k_values": k_values,
             "n_few_shot": len(few_shot),
             "tensor_parallel_size": tp_size,
             "pipeline_parallel_size": pp_size,
@@ -323,16 +271,13 @@ def main():
         },
         "summary": {
             "baseline_accuracy": baseline_acc,
-            "filler_accuracy": filler_acc,
-            "delta": filler_acc - baseline_acc,
-            "pre_padding_accuracy": prepad_acc,
             "n_examples": len(examples),
+            **{label: data["accuracy"] for label, data in all_filler_results.items()},
         },
         "baseline_results": baseline_results,
-        "filler_results": filler_results,
-        "pre_padding_results": prepad_results,
+        **{label: data["results"] for label, data in all_filler_results.items()},
     }
-    out_path = args.outdir / "eval_1hop_baseline_vs_filler.json"
+    out_path = args.outdir / f"eval_{filler_type}.json"
     with open(out_path, "w") as f:
         json.dump(output, f, indent=2)
     print(f"\nResults saved to {out_path}")

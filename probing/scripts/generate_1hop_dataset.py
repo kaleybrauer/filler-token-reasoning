@@ -87,6 +87,10 @@ def make_filler_tokens(filler_type: str, k: int, rng: random.Random | None = Non
         else:
             random.shuffle(nums)
         return " ".join(str(i) for i in nums)
+    elif filler_type == "alphabet":
+        import string
+        letters = string.ascii_lowercase
+        return " ".join(letters[i % 26] for i in range(k))
     else:
         raise ValueError(f"Unknown filler type: {filler_type!r}")
 
@@ -99,6 +103,8 @@ def filler_description(filler_type: str) -> str:
         return "sequential integers"
     elif filler_type == "counting-scrambled":
         return "shuffled integers"
+    elif filler_type == "alphabet":
+        return "cycling lowercase letters (a-z)"
     else:
         raise ValueError(f"Unknown filler type: {filler_type!r}")
 

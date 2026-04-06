@@ -73,6 +73,10 @@ def build_messages(few_shot_items, target, mode, k, bare_assistant=True,
         filler_type = "counting"
         mode = "dots"  # same prompt structure, different filler content
 
+    if mode == "alphabet":
+        filler_type = "alphabet"
+        mode = "dots"  # same prompt structure, different filler content
+
     if mode == "pre_padding":
         return build_messages_pre_padding(few_shot_items, target, k,
                                           bare_assistant=bare_assistant)

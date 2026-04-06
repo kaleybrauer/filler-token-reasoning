@@ -193,7 +193,7 @@ def main():
                         help="Which KV entries to transplant: filler dots only, "
                              "filler+labels (everything between question and assistant header), "
                              "or question tokens")
-    parser.add_argument("--filler-type", choices=["dots", "counting"], default="dots")
+    parser.add_argument("--filler-type", choices=["dots", "counting", "alphabet"], default="dots")
     args = parser.parse_args()
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
@@ -221,7 +221,7 @@ def main():
         prob_b = problems[idx_b]
 
         # Build prompts
-        filler_mode = "counting" if args.filler_type == "counting" else "dots"
+        filler_mode = args.filler_type if args.filler_type in ("counting", "alphabet") else "dots"
         msgs_a = build_messages(few_shot[:5], prob_a, filler_mode, args.filler_k)
         msgs_b = build_messages(few_shot[:5], prob_b, filler_mode, args.filler_k)
 
@@ -366,6 +366,21 @@ def main():
 
         del cache_a, cache_b, cache_transplant
         torch.cuda.empty_cache()
+
+        # Incremental save every 10 pairs
+        if (pair_idx + 1) % 10 == 0 or pair_idx == len(pairs) - 1:
+            with open(args.output_dir / "transplant_results.json", "w") as f:
+                json.dump({
+                    "summary": {
+                        "n_valid": n_valid,
+                        "donor_adopted": donor_adopted,
+                        "target_kept": target_kept,
+                        "novel": novel,
+                        "n_completed": pair_idx + 1,
+                        "n_total": len(pairs),
+                    },
+                    "results": results,
+                }, f, indent=2)
 
         # Print periodic summary
         if (pair_idx + 1) % 20 == 0:

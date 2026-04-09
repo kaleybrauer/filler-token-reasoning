@@ -4,8 +4,8 @@ Unsupervised metrics first, post-hoc ground-truth evaluation second.
 
 Usage:
     uv run --project /workspace/filler-token-reasoning/probing \
-        python probing/scripts/sae/evaluate.py \
-        --model-dir probing/sae_results/answer_prompt_L58
+        python scripts/sae/evaluate.py \
+        --model-dir sae_results/answer_prompt_L58
 
     # Or called from train.py with --evaluate flag.
 """

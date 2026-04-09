@@ -1,7 +1,7 @@
 """
 Unit tests for filler_patching.py logic functions.
 Run without GPU: uv run --project /workspace/filler-token-reasoning/probing \
-    python -m pytest probing/scripts/test_filler_patching.py -v
+    python -m pytest scripts/test_filler_patching.py -v
 """
 
 import sys

@@ -14,10 +14,10 @@ Conditions:
 Usage:
     source /workspace/config/probing_env.sh
     PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
-    python probing/scripts/compare_prompts_eval.py \
+    python scripts/compare_prompts_eval.py \
         --model-path /workspace/models/deepseek-v3-awq \
         --max-examples 500 \
-        --output-dir probing/results/prompt_comparison
+        --output-dir results/prompt_comparison
 """
 
 import argparse
@@ -45,9 +45,9 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--model-path", default="/workspace/models/deepseek-v3-awq")
     parser.add_argument("--dataset", type=Path,
-                        default=Path("probing/data/1hop_addition_dataset.json"))
+                        default=Path("data/1hop_addition_dataset.json"))
     parser.add_argument("--output-dir", type=Path,
-                        default=Path("probing/results/prompt_comparison"))
+                        default=Path("results/prompt_comparison"))
     parser.add_argument("--max-examples", type=int, default=500)
     parser.add_argument("--max-new-tokens", type=int, default=5)
     args = parser.parse_args()

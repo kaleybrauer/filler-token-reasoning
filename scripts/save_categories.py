@@ -12,11 +12,11 @@ from pathlib import Path
 
 # (condition_name, extraction_dir) pairs
 CONDITION_SOURCES = [
-    ("baseline",                "probing/extracted_states"),
-    ("dots_250",                "probing/extracted_states"),
-    ("counting_150",            "probing/extracted_states"),
-    ("counting_scrambled_150",  "probing/extracted_states"),
-    ("dots_50",                 "probing/extracted_states_dots50"),
+    ("baseline",                "data/extracted_states"),
+    ("dots_250",                "data/extracted_states"),
+    ("counting_150",            "data/extracted_states"),
+    ("counting_scrambled_150",  "data/extracted_states"),
+    ("dots_50",                 "data/extracted_states_dots50"),
 ]
 
 
@@ -51,7 +51,7 @@ def _categorize(bl_correct, filler_correct):
 
 
 def main():
-    output_dir = Path("probing/probe_results")
+    output_dir = Path("probe_results")
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Load all conditions

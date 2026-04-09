@@ -22,10 +22,10 @@ to modify attention weights between softmax and V matmul.
 Usage:
     source /workspace/config/probing_env.sh
     PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
-    python probing/scripts/attention_knockout.py \
+    python scripts/attention_knockout.py \
         --model-path /workspace/models/deepseek-v3-awq \
         --max-examples 500 \
-        --output-dir probing/results/attention_knockout
+        --output-dir results/attention_knockout
 """
 
 import argparse
@@ -232,9 +232,9 @@ def main():
     parser.add_argument("--model-path", type=str,
                         default="/workspace/models/deepseek-v3-awq")
     parser.add_argument("--dataset", type=Path,
-                        default=Path("probing/data/1hop_addition_dataset.json"))
+                        default=Path("data/1hop_addition_dataset.json"))
     parser.add_argument("--output-dir", type=Path,
-                        default=Path("probing/results/knockout_bare"))
+                        default=Path("results/knockout_bare"))
     parser.add_argument("--max-examples", type=int, default=500)
     parser.add_argument("--filler-k", type=int, default=100)
     parser.add_argument("--max-new-tokens", type=int, default=5)

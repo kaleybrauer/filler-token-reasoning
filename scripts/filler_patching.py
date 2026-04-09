@@ -14,8 +14,8 @@ doesn't matter. If contiguous-from-k1 is needed, the model reads filler KV entri
 Usage:
     source /workspace/config/probing_env.sh
     PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
-    python probing/scripts/filler_patching.py \
-        --output-dir probing/patching_results_v2
+    python scripts/filler_patching.py \
+        --output-dir patching_results_v2
 
 Phases:
     0: Null validation (inject own states, verify answer preserved)
@@ -905,11 +905,11 @@ def main():
     parser = argparse.ArgumentParser(description="Cross-example filler patching")
     parser.add_argument("--model-path", default="/workspace/models/deepseek-v3-awq")
     parser.add_argument("--dataset", type=Path,
-                        default=Path("probing/data/1hop_addition_dataset.json"))
+                        default=Path("data/1hop_addition_dataset.json"))
     parser.add_argument("--categories", type=Path,
-                        default=Path("probing/probe_results/categories.json"))
+                        default=Path("probe_results/categories.json"))
     parser.add_argument("--output-dir", type=Path,
-                        default=Path("probing/patching_results_v2"))
+                        default=Path("patching_results_v2"))
     parser.add_argument("--max-pairs", type=int, default=200)
     parser.add_argument("--min-delta-a", type=int, default=10)
     parser.add_argument("--skip-validation", action="store_true")

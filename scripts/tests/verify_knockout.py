@@ -9,12 +9,12 @@ Verify the attention knockout mechanism:
 Usage:
     source /workspace/config/probing_env.sh
     PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
-    python probing/scripts/verify_knockout.py \
+    python scripts/verify_knockout.py \
         --model-path /workspace/models/deepseek-v3-awq \
         --verify-n 10 \
         --run-nocache-k 25 \
         --max-examples 500 \
-        --output-dir probing/results/verify_knockout
+        --output-dir results/verify_knockout
 """
 
 import argparse
@@ -255,9 +255,9 @@ def main():
     parser.add_argument("--model-path", type=str,
                         default="/workspace/models/deepseek-v3-awq")
     parser.add_argument("--dataset", type=Path,
-                        default=Path("probing/data/1hop_addition_dataset.json"))
+                        default=Path("data/1hop_addition_dataset.json"))
     parser.add_argument("--output-dir", type=Path,
-                        default=Path("probing/results/verify_knockout"))
+                        default=Path("results/verify_knockout"))
     parser.add_argument("--filler-k", type=int, default=50)
     parser.add_argument("--max-new-tokens", type=int, default=5)
 

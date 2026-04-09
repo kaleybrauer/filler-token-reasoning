@@ -5,16 +5,16 @@ Supports all filler types: dots, counting, alphabet.
 
 Usage:
     source /workspace/config/probing_env.sh
-    python probing/scripts/evaluate_1hop_vllm.py \
+    python scripts/evaluate_1hop_vllm.py \
         --model-path /workspace/models/deepseek-v3-awq \
         --max-examples 500 --filler-k 100
 
     # Counting filler:
-    python probing/scripts/evaluate_1hop_vllm.py \
+    python scripts/evaluate_1hop_vllm.py \
         --filler-type counting --filler-k 25
 
     # Multiple k values:
-    python probing/scripts/evaluate_1hop_vllm.py \
+    python scripts/evaluate_1hop_vllm.py \
         --filler-type dots --filler-k 10,25,100
 """
 
@@ -39,7 +39,7 @@ from prompt_utils import build_messages, extract_answer
 # Defaults
 # ---------------------------------------------------------------------------
 MODEL_PATH = "/workspace/models/deepseek-v3-awq"
-DATASET_PATH = Path("/workspace/filler-token-reasoning/probing/data/1hop_addition_dataset.json")
+DATASET_PATH = Path("/workspace/filler-token-reasoning/data/1hop_addition_dataset.json")
 RESULTS_DIR = Path("/workspace/filler-token-reasoning/probing/results")
 
 

@@ -10,10 +10,10 @@ DeepSeek V3: 61 layers × 128 heads × ~530 seq_len per example.
 Usage:
     source /workspace/config/probing_env.sh
     PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
-    python probing/scripts/extract_attention.py \
+    python scripts/extract_attention.py \
         --model-path /workspace/models/deepseek-v3-awq \
         --conditions baseline dots_50 \
-        --output-dir probing/attention_results
+        --output-dir attention_results
 """
 
 import argparse
@@ -449,10 +449,10 @@ def main():
     parser.add_argument("--model-path", type=str,
                         default="/workspace/models/deepseek-v3-awq")
     parser.add_argument("--dataset", type=Path,
-                        default=Path("probing/data/1hop_addition_dataset.json"))
+                        default=Path("data/1hop_addition_dataset.json"))
     parser.add_argument("--conditions", nargs="+", default=["baseline", "dots_100"])
     parser.add_argument("--output-dir", type=Path,
-                        default=Path("probing/results/attention"))
+                        default=Path("results/attention"))
     parser.add_argument("--max-examples", type=int, default=100)
     parser.add_argument("--layers", default="0,10,20,30,40,50,55,58,60",
                         help="Comma-separated layer indices")

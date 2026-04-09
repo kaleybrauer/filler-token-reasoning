@@ -10,10 +10,10 @@ and the saved lm_head weight.
 Usage:
     source /workspace/config/probing_env.sh
     uv run --project /workspace/filler-token-reasoning/probing \
-        python probing/scripts/logit_lens.py \
-        --extraction-dir probing/extracted_states_dots50 \
+        python scripts/logit_lens.py \
+        --extraction-dir data/extracted_states_dots50 \
         --condition dots_50 \
-        --output-dir probing/logit_lens_results/dots50
+        --output-dir logit_lens_results/dots50
 """
 
 import argparse
@@ -444,19 +444,19 @@ def plot_results(agg: dict, output_dir: Path):
 def main():
     parser = argparse.ArgumentParser(description="Logit lens analysis")
     parser.add_argument("--lm-head", type=Path,
-                        default=Path("probing/lm_head_weight.npy"))
+                        default=Path("lm_head_weight.npy"))
     parser.add_argument("--extraction-dir", type=Path,
-                        default=Path("probing/extracted_states_dots50"))
+                        default=Path("data/extracted_states_dots50"))
     parser.add_argument("--condition", type=str, default="dots_50")
     parser.add_argument("--model-path", type=str,
                         default="/workspace/models/deepseek-v3-awq")
     parser.add_argument("--categories", type=Path,
-                        default=Path("probing/probe_results/categories.json"))
+                        default=Path("probe_results/categories.json"))
     parser.add_argument("--output-dir", type=Path,
-                        default=Path("probing/logit_lens_results/dots50"))
+                        default=Path("logit_lens_results/dots50"))
     parser.add_argument("--max-examples", type=int, default=None)
     parser.add_argument("--rms-norm", type=Path,
-                        default=Path("probing/rms_norm_weight.npy"),
+                        default=Path("rms_norm_weight.npy"),
                         help="Path to RMSNorm weight. Omit or set to "
                              "nonexistent path to skip normalization.")
     args = parser.parse_args()

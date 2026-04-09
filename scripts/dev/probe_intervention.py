@@ -12,17 +12,17 @@ answer by ~delta.
 Usage:
     source /workspace/config/probing_env.sh
     PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
-    python probing/scripts/probe_intervention.py \
+    python scripts/probe_intervention.py \
         --model-path /workspace/models/deepseek-v3-awq \
-        --output-dir probing/intervention_results \
+        --output-dir intervention_results \
         --layer 58 \
         --position answer_prompt \
         --max-examples 50
 
     # Quick sanity test
-    python probing/scripts/probe_intervention.py \
+    python scripts/probe_intervention.py \
         --model-path /workspace/models/deepseek-v3-awq \
-        --output-dir probing/intervention_results/test \
+        --output-dir intervention_results/test \
         --max-examples 5 --deltas -20,0,20
 """
 
@@ -652,13 +652,13 @@ def main():
     parser.add_argument("--model-path", type=str,
                         default="/workspace/models/deepseek-v3-awq")
     parser.add_argument("--dataset", type=Path,
-                        default=Path("probing/data/1hop_addition_dataset.json"))
+                        default=Path("data/1hop_addition_dataset.json"))
     parser.add_argument("--categories", type=Path,
-                        default=Path("probing/probe_results/categories.json"))
+                        default=Path("probe_results/categories.json"))
     parser.add_argument("--extraction-dir", type=Path,
-                        default=Path("probing/extracted_states"))
+                        default=Path("data/extracted_states"))
     parser.add_argument("--output-dir", type=Path,
-                        default=Path("probing/intervention_results"))
+                        default=Path("intervention_results"))
 
     # Probe / steering config
     parser.add_argument("--condition", type=str, default="dots_250",

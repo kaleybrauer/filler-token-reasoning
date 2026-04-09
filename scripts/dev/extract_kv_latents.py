@@ -13,12 +13,12 @@ before it's split into compressed_kv and k_pe.
 Usage:
     source /workspace/config/probing_env.sh
     PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
-    python probing/scripts/extract_kv_latents.py \
+    python scripts/extract_kv_latents.py \
         --model-path /workspace/models/deepseek-v3-awq \
         --conditions baseline dots_100 \
         --max-examples 500 \
         --batch-size 4 \
-        --output-dir probing/extracted_kv_latents
+        --output-dir data/extracted_kv_latents
 """
 
 import argparse
@@ -109,9 +109,9 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--model-path", default="/workspace/models/deepseek-v3-awq")
     parser.add_argument("--dataset", type=Path,
-                        default=Path("probing/data/1hop_addition_dataset.json"))
+                        default=Path("data/1hop_addition_dataset.json"))
     parser.add_argument("--output-dir", type=Path,
-                        default=Path("probing/extracted_kv_latents"))
+                        default=Path("data/extracted_kv_latents"))
     parser.add_argument("--conditions", nargs="+",
                         default=["baseline", "dots_100"])
     parser.add_argument("--layers", type=str, default="all")

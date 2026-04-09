@@ -11,10 +11,10 @@ phrase, the number, or just generic context.
 Usage:
     source /workspace/config/probing_env.sh
     PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
-    python probing/scripts/extract_filler_attention.py \
+    python scripts/extract_filler_attention.py \
         --model-path /workspace/models/deepseek-v3-awq \
         --max-examples 100 \
-        --output-dir probing/results/filler_attention
+        --output-dir results/filler_attention
 """
 
 import argparse
@@ -48,9 +48,9 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--model-path", default="/workspace/models/deepseek-v3-awq")
     parser.add_argument("--dataset", type=Path,
-                        default=Path("probing/data/1hop_addition_dataset.json"))
+                        default=Path("data/1hop_addition_dataset.json"))
     parser.add_argument("--output-dir", type=Path,
-                        default=Path("probing/results/filler_attention"))
+                        default=Path("results/filler_attention"))
     parser.add_argument("--layers", type=str,
                         default="0,10,20,30,40,50,55,58,60")
     parser.add_argument("--max-examples", type=int, default=100)

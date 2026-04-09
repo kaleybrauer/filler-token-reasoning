@@ -6,10 +6,10 @@ for linear probing experiments.
 
 Usage:
     source /workspace/config/probing_env.sh
-    python probing/scripts/extract_hidden_states.py \
+    python scripts/extract_hidden_states.py \
         --model-path /workspace/models/deepseek-v3-awq \
-        --dataset probing/data/1hop_addition_dataset.json \
-        --output-dir probing/extracted_states \
+        --dataset data/1hop_addition_dataset.json \
+        --output-dir data/extracted_states \
         --conditions baseline dots_250 \
         --max-problems 400
 
@@ -842,8 +842,8 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--model-path", default="/workspace/models/deepseek-v3-awq")
     parser.add_argument("--dataset", type=Path,
-                        default=Path("probing/data/1hop_addition_dataset.json"))
-    parser.add_argument("--output-dir", type=Path, default=Path("probing/extracted_states"))
+                        default=Path("data/1hop_addition_dataset.json"))
+    parser.add_argument("--output-dir", type=Path, default=Path("data/extracted_states"))
     parser.add_argument("--layers", default="all",
                         help="'all', 'every4', or comma-separated indices")
     parser.add_argument("--conditions", nargs="+",

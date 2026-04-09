@@ -13,10 +13,10 @@ the same engine.
 Usage:
     source /workspace/config/probing_env.sh
     PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
-    python probing/scripts/knockout_truncation.py \
+    python scripts/knockout_truncation.py \
         --model-path /workspace/models/deepseek-v3-awq \
         --max-examples 500 \
-        --output-dir probing/results/knockout_truncation
+        --output-dir results/knockout_truncation
 """
 
 import argparse
@@ -114,9 +114,9 @@ def main():
     parser.add_argument("--model-path", type=str,
                         default="/workspace/models/deepseek-v3-awq")
     parser.add_argument("--dataset", type=Path,
-                        default=Path("probing/data/1hop_addition_dataset.json"))
+                        default=Path("data/1hop_addition_dataset.json"))
     parser.add_argument("--output-dir", type=Path,
-                        default=Path("probing/results/knockout_truncation"))
+                        default=Path("results/knockout_truncation"))
     parser.add_argument("--max-examples", type=int, default=500)
     parser.add_argument("--ks", type=str, default="0,1,5,10,25,50",
                         help="Comma-separated k values")

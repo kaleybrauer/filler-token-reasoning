@@ -3,7 +3,7 @@
 Outputs JSON with median/mean rank and top-K fractions, plus heatmap plots.
 
 Usage:
-    python probing/scripts/compute_ax_rank.py --condition dots_10 dots_100
+    python scripts/compute_ax_rank.py --condition dots_10 dots_100
 """
 
 import argparse
@@ -59,11 +59,11 @@ def pos_label(p):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--condition", nargs="+", default=["dots_10", "dots_100"])
-    parser.add_argument("--extraction-dir", type=Path, default=Path("probing/extracted_states"))
-    parser.add_argument("--lm-head", type=Path, default=Path("probing/lm_head_weight.npy"))
-    parser.add_argument("--rms-norm", type=Path, default=Path("probing/rms_norm_weight.npy"))
+    parser.add_argument("--extraction-dir", type=Path, default=Path("data/extracted_states"))
+    parser.add_argument("--lm-head", type=Path, default=Path("lm_head_weight.npy"))
+    parser.add_argument("--rms-norm", type=Path, default=Path("rms_norm_weight.npy"))
     parser.add_argument("--model-path", type=str, default="/workspace/models/deepseek-v3-awq")
-    parser.add_argument("--output-dir", type=Path, default=Path("probing/results/unsupervised_decode"))
+    parser.add_argument("--output-dir", type=Path, default=Path("results/unsupervised_decode"))
     parser.add_argument("--filter-category", type=str, default=None,
                         help="Filter to a category: filler_helped, both_correct, both_wrong, filler_hurt")
     args = parser.parse_args()

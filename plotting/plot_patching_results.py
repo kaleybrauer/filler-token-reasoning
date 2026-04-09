@@ -5,8 +5,8 @@ Plots for the activation patching intervention results.
 
 Usage:
     uv run --project /workspace/filler-token-reasoning/probing \
-        python probing/scripts/plot_patching_results.py \
-        --output-dir probing/plots
+        python scripts/plot_patching_results.py \
+        --output-dir plots
 """
 
 import argparse
@@ -309,12 +309,12 @@ def plot_combined(phase1_results, phase3_results, output_dir):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--phase1", type=Path,
-                        default=Path("probing/patching_results_v2/phase1_results.json"))
+                        default=Path("patching_results_v2/phase1_results.json"))
     parser.add_argument("--phase3", type=Path,
-                        default=Path("probing/patching_results_v2/phase3_results.json"))
+                        default=Path("patching_results_v2/phase3_results.json"))
     parser.add_argument("--cross", type=Path,
-                        default=Path("probing/patching_results_v2/baseline_cross/results.json"))
-    parser.add_argument("--output-dir", type=Path, default=Path("probing/plots"))
+                        default=Path("patching_results_v2/baseline_cross/results.json"))
+    parser.add_argument("--output-dir", type=Path, default=Path("plots"))
     args = parser.parse_args()
 
     args.output_dir.mkdir(parents=True, exist_ok=True)

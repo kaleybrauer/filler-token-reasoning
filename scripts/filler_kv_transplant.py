@@ -16,10 +16,10 @@ the answer should shift toward the donor's A+Y.
 Usage:
     source /workspace/config/probing_env.sh
     PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
-    python probing/scripts/filler_kv_transplant.py \
+    python scripts/filler_kv_transplant.py \
         --model-path /workspace/models/deepseek-v3-awq \
         --max-pairs 100 \
-        --output-dir probing/results/kv_transplant
+        --output-dir results/kv_transplant
 """
 
 import argparse
@@ -199,9 +199,9 @@ def main():
     parser.add_argument("--model-path", type=str,
                         default="/workspace/models/deepseek-v3-awq")
     parser.add_argument("--dataset", type=Path,
-                        default=Path("probing/data/1hop_addition_dataset.json"))
+                        default=Path("data/1hop_addition_dataset.json"))
     parser.add_argument("--output-dir", type=Path,
-                        default=Path("probing/results/kv_transplant"))
+                        default=Path("results/kv_transplant"))
     parser.add_argument("--filler-k", type=int, default=100)
     parser.add_argument("--max-pairs", type=int, default=100)
     parser.add_argument("--min-a-diff", type=int, default=10)

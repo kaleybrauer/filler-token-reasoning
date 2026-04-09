@@ -13,7 +13,7 @@ import numpy as np
 
 plt.rcParams.update({"font.size": 14})
 
-results_dir = Path("probing/results/unsupervised_decode")
+results_dir = Path("results/unsupervised_decode")
 
 
 def categorize_predictions(predictions, metadata):

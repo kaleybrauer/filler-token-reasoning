@@ -9,11 +9,11 @@ Verifies:
 
 Requires:
     - Model tokenizer files at /workspace/models/deepseek-v3-awq/
-    - Dataset at probing/data/1hop_addition_dataset.json
+    - Dataset at data/1hop_addition_dataset.json
 
 Usage:
     source /workspace/config/probing_env.sh
-    cd probing/scripts
+    cd scripts
     uv run --project /workspace/filler-token-reasoning/probing python -m pytest test_extraction.py -v
 """
 

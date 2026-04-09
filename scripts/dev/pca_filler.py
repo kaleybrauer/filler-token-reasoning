@@ -12,9 +12,9 @@ Runs on both individual filler positions and averaged-over-filler.
 
 Usage:
     uv run --project /workspace/filler-token-reasoning/probing \
-        python probing/scripts/pca_filler.py \
+        python scripts/pca_filler.py \
         --condition dots_100 \
-        --output-dir probing/results/pca_filler
+        --output-dir results/pca_filler
 """
 
 import argparse
@@ -261,11 +261,11 @@ def logit_lens_decode(X, A, pca, lm_head, tokenizer, n_components=20):
 
 def main():
     parser = argparse.ArgumentParser(description="PCA on filler hidden states")
-    parser.add_argument("--extraction-dir", type=Path, default=Path("probing/extracted_states"))
+    parser.add_argument("--extraction-dir", type=Path, default=Path("data/extracted_states"))
     parser.add_argument("--condition", type=str, default="dots_100")
-    parser.add_argument("--output-dir", type=Path, default=Path("probing/results/pca_filler"))
+    parser.add_argument("--output-dir", type=Path, default=Path("results/pca_filler"))
     parser.add_argument("--n-components", type=int, default=20)
-    parser.add_argument("--lm-head", type=Path, default=Path("probing/lm_head_weight.npy"))
+    parser.add_argument("--lm-head", type=Path, default=Path("lm_head_weight.npy"))
     parser.add_argument("--tokenizer", type=str, default="/workspace/models/deepseek-v3-awq")
     parser.add_argument("--filter-categories", nargs="+",
                         default=["both_correct", "filler_helped"],

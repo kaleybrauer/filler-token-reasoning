@@ -5,8 +5,8 @@ from typing import List, Optional, Tuple
 @dataclass
 class SAEConfig:
     # Data
-    extraction_dir: str = "probing/extracted_states"
-    categories_file: str = "probing/results/probe_results/categories.json"
+    extraction_dir: str = "data/extracted_states"
+    categories_file: str = "results/probe_results/categories.json"
     conditions: Tuple[str, str] = ("baseline", "dots_50")
     position: str = "answer_prompt"
     layer: int = 58
@@ -43,4 +43,4 @@ class SAEConfig:
     include_categories: Optional[Tuple[str, ...]] = None
 
     # Output
-    output_dir: str = "probing/sae_results"
+    output_dir: str = "sae_results"

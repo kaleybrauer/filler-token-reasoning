@@ -3,7 +3,7 @@ Unit tests for paired-view SAE.
 
 Run:
     uv run --project /workspace/filler-token-reasoning/probing \
-        python -m pytest probing/scripts/sae/test_sae.py -v
+        python -m pytest scripts/sae/test_sae.py -v
 """
 
 import numpy as np

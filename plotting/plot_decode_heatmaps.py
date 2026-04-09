@@ -11,7 +11,7 @@ import numpy as np
 
 plt.rcParams.update({"font.size": 28})
 
-results_dir = Path("probing/results/unsupervised_decode")
+results_dir = Path("results/unsupervised_decode")
 output_dir = results_dir
 
 
@@ -87,7 +87,7 @@ for metric, cmap, label, vmin, vmax, fname in [
     print(f"Saved {fname}")
 
 # --- Per-position × layer heatmaps (3-panel: dots_10, dots_100, counting_25) ---
-per_pos_dir = Path("probing/results/unsupervised_decode_per_pos")
+per_pos_dir = Path("results/unsupervised_decode_per_pos")
 
 def pos_sort_key(p):
     if p == "question_end": return -2

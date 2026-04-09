@@ -3,9 +3,9 @@ Quick test: generate one prompt, tokenize it, and print the boundaries
 that filler_with_label mode would transplant.
 
 Usage:
-    python probing/scripts/test_filler_label_boundaries.py \
+    python scripts/test_filler_label_boundaries.py \
         --model-path /workspace/models/deepseek-v3-awq \
-        --dataset probing/data/1hop_addition_dataset.json \
+        --dataset data/1hop_addition_dataset.json \
         --filler-k 10
 """
 
@@ -28,7 +28,7 @@ def main():
     parser.add_argument("--model-path", type=str,
                         default="/workspace/models/deepseek-v3-awq")
     parser.add_argument("--dataset", type=Path,
-                        default=Path("probing/data/1hop_addition_dataset.json"))
+                        default=Path("data/1hop_addition_dataset.json"))
     parser.add_argument("--filler-k", type=int, default=10)
     parser.add_argument("--filler-type", choices=["dots", "counting", "alphabet"],
                         default="dots")

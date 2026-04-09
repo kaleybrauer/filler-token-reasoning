@@ -5,9 +5,9 @@ Like unsupervised_decode_filler.py but decodes at each filler position
 separately (no averaging). Reports metrics for every (position, layer) pair.
 
 Usage:
-    python probing/scripts/unsupervised_decode_per_position.py \
+    python scripts/unsupervised_decode_per_position.py \
         --condition dots_100 \
-        --output-dir probing/results/unsupervised_decode_per_pos
+        --output-dir results/unsupervised_decode_per_pos
 """
 
 import argparse
@@ -56,12 +56,12 @@ def evaluate(predictions, A):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--extraction-dir", type=Path, default=Path("probing/extracted_states"))
+    parser.add_argument("--extraction-dir", type=Path, default=Path("data/extracted_states"))
     parser.add_argument("--condition", type=str, default="dots_100")
-    parser.add_argument("--lm-head", type=Path, default=Path("probing/lm_head_weight.npy"))
-    parser.add_argument("--rms-norm", type=Path, default=Path("probing/rms_norm_weight.npy"))
+    parser.add_argument("--lm-head", type=Path, default=Path("lm_head_weight.npy"))
+    parser.add_argument("--rms-norm", type=Path, default=Path("rms_norm_weight.npy"))
     parser.add_argument("--model-path", type=str, default="/workspace/models/deepseek-v3-awq")
-    parser.add_argument("--output-dir", type=Path, default=Path("probing/results/unsupervised_decode_per_pos"))
+    parser.add_argument("--output-dir", type=Path, default=Path("results/unsupervised_decode_per_pos"))
     parser.add_argument("--filter-categories", nargs="+", default=["both_correct", "filler_helped"])
     args = parser.parse_args()
 

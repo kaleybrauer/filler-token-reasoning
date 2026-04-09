@@ -10,17 +10,17 @@ Usage:
 
     # Dots only (fastest)
     uv run --project /workspace/filler-token-reasoning/probing python \
-        probing/scripts/evaluate_truncation.py \
+        scripts/evaluate_truncation.py \
         --model-path /workspace/models/deepseek-v3-awq \
         --filler-types dots \
-        --outdir probing/results/truncation
+        --outdir results/truncation
 
     # All filler types
     uv run --project /workspace/filler-token-reasoning/probing python \
-        probing/scripts/evaluate_truncation.py \
+        scripts/evaluate_truncation.py \
         --model-path /workspace/models/deepseek-v3-awq \
         --filler-types dots counting counting-scrambled \
-        --outdir probing/results/truncation
+        --outdir results/truncation
 """
 
 from __future__ import annotations
@@ -48,8 +48,8 @@ from generate_1hop_dataset import build_system_message, build_user_turn, make_fi
 # Defaults
 # ---------------------------------------------------------------------------
 MODEL_PATH = "/workspace/models/deepseek-v3-awq"
-DATASET_PATH = Path("/workspace/filler-token-reasoning/probing/data/1hop_addition_dataset.json")
-RESULTS_DIR = Path("/workspace/filler-token-reasoning/probing/results/truncation")
+DATASET_PATH = Path("/workspace/filler-token-reasoning/data/1hop_addition_dataset.json")
+RESULTS_DIR = Path("/workspace/filler-token-reasoning/results/truncation")
 
 # Full filler lengths per type
 FULL_K = {

@@ -338,11 +338,11 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--model-path", default="/workspace/models/deepseek-v3-awq")
     parser.add_argument("--dataset", type=Path,
-                        default=Path("probing/data/1hop_addition_dataset.json"))
+                        default=Path("data/1hop_addition_dataset.json"))
     parser.add_argument("--categories", type=Path,
-                        default=Path("probing/probe_results/categories.json"))
+                        default=Path("probe_results/categories.json"))
     parser.add_argument("--output-dir", type=Path,
-                        default=Path("probing/patching_results_v2/baseline_cross"))
+                        default=Path("patching_results_v2/baseline_cross"))
     parser.add_argument("--max-pairs", type=int, default=200)
     args = parser.parse_args()
 

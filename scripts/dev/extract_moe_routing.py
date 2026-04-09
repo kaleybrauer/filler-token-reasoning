@@ -11,11 +11,11 @@ For each MoE layer, captures top-8 expert indices at:
 Usage:
     source /workspace/config/probing_env.sh
     PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
-    python probing/scripts/dev/extract_moe_routing.py \
+    python scripts/dev/extract_moe_routing.py \
         --model-path /workspace/models/deepseek-v3-awq \
         --max-examples 500 \
         --batch-size 4 \
-        --output-dir probing/results/routing
+        --output-dir results/routing
 """
 
 import argparse
@@ -211,9 +211,9 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--model-path", default="/workspace/models/deepseek-v3-awq")
     parser.add_argument("--dataset", type=Path,
-                        default=Path("probing/data/1hop_addition_dataset.json"))
+                        default=Path("data/1hop_addition_dataset.json"))
     parser.add_argument("--output-dir", type=Path,
-                        default=Path("probing/results/routing"))
+                        default=Path("results/routing"))
     parser.add_argument("--max-examples", type=int, default=500)
     parser.add_argument("--batch-size", type=int, default=4)
     parser.add_argument("--k", type=int, default=100)

@@ -2,17 +2,17 @@
 
 Usage:
     uv run --project /workspace/filler-token-reasoning/probing \
-        python probing/scripts/sae/train.py \
-        --extraction-dir probing/extracted_states \
+        python scripts/sae/train.py \
+        --extraction-dir data/extracted_states \
         --position answer_prompt \
         --layer 58 \
-        --output-dir probing/sae_results/answer_prompt_L58
+        --output-dir sae_results/answer_prompt_L58
 
     # Layer sweep:
     uv run --project /workspace/filler-token-reasoning/probing \
-        python probing/scripts/sae/train.py \
+        python scripts/sae/train.py \
         --layer-sweep 55,56,57,58,59,60 \
-        --output-dir probing/sae_results/layer_sweep
+        --output-dir sae_results/layer_sweep
 """
 
 import argparse
@@ -216,9 +216,9 @@ def train_one_config(config: SAEConfig):
 
 def main():
     parser = argparse.ArgumentParser(description="Train paired-view SAE")
-    parser.add_argument("--extraction-dir", type=str, default="probing/extracted_states")
+    parser.add_argument("--extraction-dir", type=str, default="data/extracted_states")
     parser.add_argument("--categories", type=str,
-                        default="probing/results/probe_results/categories.json")
+                        default="results/probe_results/categories.json")
     parser.add_argument("--conditions", nargs=2, default=["baseline", "dots_50"])
     parser.add_argument("--position", type=str, default="answer_prompt")
     parser.add_argument("--delta", action="store_true",
@@ -229,7 +229,7 @@ def main():
     parser.add_argument("--layer", type=int, default=58)
     parser.add_argument("--layer-sweep", type=str, default=None,
                         help="Comma-separated layers to sweep (trains one SAE per layer)")
-    parser.add_argument("--output-dir", type=str, default="probing/sae_results")
+    parser.add_argument("--output-dir", type=str, default="sae_results")
 
     # Model
     parser.add_argument("--encoder-hidden", type=int, default=512)

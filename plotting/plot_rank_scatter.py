@@ -6,8 +6,8 @@ at pre_answer, per example. Colored by category.
 
 Usage:
     uv run --project /workspace/filler-token-reasoning/probing \
-        python probing/scripts/plot_rank_scatter.py \
-        --output-dir probing/plots
+        python scripts/plot_rank_scatter.py \
+        --output-dir plots
 """
 
 import argparse
@@ -43,12 +43,12 @@ def load_ranks(per_example_file: Path, position: str, layer: str):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--baseline-file", type=Path,
-                        default=Path("probing/logit_lens_results/all_baseline/per_example.json"))
+                        default=Path("logit_lens_results/all_baseline/per_example.json"))
     parser.add_argument("--dots50-file", type=Path,
-                        default=Path("probing/logit_lens_results/all_dots50/per_example.json"))
+                        default=Path("logit_lens_results/all_dots50/per_example.json"))
     parser.add_argument("--position", default="pre_answer")
     parser.add_argument("--layer", default="60")
-    parser.add_argument("--output-dir", type=Path, default=Path("probing/plots"))
+    parser.add_argument("--output-dir", type=Path, default=Path("plots"))
     args = parser.parse_args()
 
     args.output_dir.mkdir(parents=True, exist_ok=True)

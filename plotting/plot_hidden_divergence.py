@@ -7,8 +7,8 @@ hits the representation.
 
 Usage:
     uv run --project /workspace/filler-token-reasoning/probing \
-        python probing/scripts/plot_hidden_divergence.py \
-        --output-dir probing/plots
+        python scripts/plot_hidden_divergence.py \
+        --output-dir plots
 """
 
 import argparse
@@ -27,11 +27,11 @@ import matplotlib.pyplot as plt
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--extraction-dir", type=Path,
-                        default=Path("probing/extracted_states"))
+                        default=Path("data/extracted_states"))
     parser.add_argument("--categories-file", type=Path,
-                        default=Path("probing/logit_lens_results/all_dots50/per_example.json"))
+                        default=Path("logit_lens_results/all_dots50/per_example.json"))
     parser.add_argument("--position", default="pre_answer")
-    parser.add_argument("--output-dir", type=Path, default=Path("probing/plots"))
+    parser.add_argument("--output-dir", type=Path, default=Path("plots"))
     parser.add_argument("--no-l2", action="store_true", help="Only plot cosine similarity, skip L2")
     args = parser.parse_args()
 

@@ -7,7 +7,7 @@ is fact_value + x.
 
 Usage:
     uv run --project /workspace/filler-token-reasoning python \
-        probing/scripts/generate_1hop_dataset.py --preview
+        scripts/generate_1hop_dataset.py --preview
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ from pathlib import Path
 KNOWN_FACTS_PATH = Path(
     "data/facts/knowledge_deepseek_v3/known_facts.json"
 )
-OUTPUT_PATH = Path("probing/data/1hop_addition_dataset.json")
+OUTPUT_PATH = Path("data/1hop_addition_dataset.json")
 
 SEED = 42
 NUM_FEW_SHOT = 10

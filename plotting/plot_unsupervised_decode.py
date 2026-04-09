@@ -7,12 +7,12 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-output_dir = Path("probing/results/unsupervised_decode_plots")
+output_dir = Path("results/unsupervised_decode_plots")
 output_dir.mkdir(parents=True, exist_ok=True)
 
 # --- 1. Per-layer averaged filler line plots ---
 # Load v2 results (0-999 range)
-avg_dir = Path("probing/results/unsupervised_decode_v2")
+avg_dir = Path("results/unsupervised_decode_v2")
 conditions_avg = {}
 for f in sorted(avg_dir.glob("unsupervised_decode_*.json")):
     cond = f.stem.replace("unsupervised_decode_", "")
@@ -66,7 +66,7 @@ print(f"Saved avg_filler_by_layer.png")
 
 
 # --- 2. Per-position heatmaps (combined 3-panel) ---
-per_pos_dir = Path("probing/results/unsupervised_decode_per_pos")
+per_pos_dir = Path("results/unsupervised_decode_per_pos")
 
 def pos_sort_key(p):
     if p == "pre_filler": return -1
@@ -144,7 +144,7 @@ for metric, cmap, label, vmin, vmax in [
     print(f"Saved heatmap_{metric_short}_all.png")
 
 # --- 3. Averaged filler heatmaps (1 column per condition) ---
-avg_dir2 = Path("probing/results/unsupervised_decode_v2")
+avg_dir2 = Path("results/unsupervised_decode_v2")
 
 avg_cond_data = {}
 for f in sorted(avg_dir2.glob("unsupervised_decode_*.json")):
@@ -211,7 +211,7 @@ for metric, cmap, label, vmin, vmax in [
 # --- 4. Averaged filler: MedAE/MAE + tolerance curves ---
 # Need frac_within_0 (exactly correct) — reload and compute from predictions
 # First check if predictions are saved in results
-avg_dir2 = Path("probing/results/unsupervised_decode_v2")
+avg_dir2 = Path("results/unsupervised_decode_v2")
 
 # Load all conditions
 avg_line_data = {}

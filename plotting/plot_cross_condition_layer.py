@@ -11,7 +11,7 @@ import numpy as np
 
 plt.rcParams.update({"font.size": 28})
 
-results_dir = Path("probing/results/unsupervised_decode")
+results_dir = Path("results/unsupervised_decode")
 
 
 def sort_key(name):

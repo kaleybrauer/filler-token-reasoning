@@ -12,9 +12,9 @@ CPU-only — uses pre-extracted hidden states and saved lm_head/rms_norm weights
 
 Usage:
     uv run --project /workspace/filler-token-reasoning/probing \
-        python probing/scripts/layer_attribution.py \
-        --extraction-dir probing/extracted_states \
-        --output-dir probing/layer_attribution_results
+        python scripts/layer_attribution.py \
+        --extraction-dir data/extracted_states \
+        --output-dir layer_attribution_results
 """
 
 import argparse
@@ -299,11 +299,11 @@ def aggregate_and_print(results: dict, positions: list):
 def main():
     parser = argparse.ArgumentParser(description="Per-layer logit lens attribution")
     parser.add_argument("--lm-head", type=Path,
-                        default=Path("probing/lm_head_weight.npy"))
+                        default=Path("lm_head_weight.npy"))
     parser.add_argument("--rms-norm", type=Path,
-                        default=Path("probing/rms_norm_weight.npy"))
+                        default=Path("rms_norm_weight.npy"))
     parser.add_argument("--extraction-dir", type=Path,
-                        default=Path("probing/extracted_states"))
+                        default=Path("data/extracted_states"))
     parser.add_argument("--conditions", nargs="+",
                         default=["baseline", "dots_50"])
     parser.add_argument("--positions", nargs="+",
@@ -311,9 +311,9 @@ def main():
     parser.add_argument("--model-path", type=str,
                         default="/workspace/models/deepseek-v3-awq")
     parser.add_argument("--categories", type=Path,
-                        default=Path("probing/probe_results/categories.json"))
+                        default=Path("probe_results/categories.json"))
     parser.add_argument("--output-dir", type=Path,
-                        default=Path("probing/layer_attribution_results"))
+                        default=Path("layer_attribution_results"))
     parser.add_argument("--max-examples", type=int, default=None)
     args = parser.parse_args()
 

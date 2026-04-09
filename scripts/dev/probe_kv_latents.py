@@ -11,9 +11,9 @@ CPU-only — uses pre-extracted KV latents and hidden states.
 
 Usage:
     uv run --project /workspace/filler-token-reasoning/probing \
-        python probing/scripts/probe_kv_latents.py \
+        python scripts/probe_kv_latents.py \
         --conditions dots_100 baseline \
-        --output-dir probing/results/kv_latent_probes
+        --output-dir results/kv_latent_probes
 """
 
 import argparse
@@ -237,10 +237,10 @@ def print_head_to_head(all_results, condition, output_dir):
 
 def main():
     parser = argparse.ArgumentParser(description="Probe KV latents for A, Y, A+Y")
-    parser.add_argument("--kv-dir", type=Path, default=Path("probing/extracted_kv_latents"))
-    parser.add_argument("--hs-dir", type=Path, default=Path("probing/extracted_states"))
-    parser.add_argument("--output-dir", type=Path, default=Path("probing/results/kv_latent_probes"))
-    parser.add_argument("--norm-weights", type=Path, default=Path("probing/kv_a_layernorm_weights.npy"))
+    parser.add_argument("--kv-dir", type=Path, default=Path("data/extracted_kv_latents"))
+    parser.add_argument("--hs-dir", type=Path, default=Path("data/extracted_states"))
+    parser.add_argument("--output-dir", type=Path, default=Path("results/kv_latent_probes"))
+    parser.add_argument("--norm-weights", type=Path, default=Path("kv_a_layernorm_weights.npy"))
     parser.add_argument("--conditions", nargs="+", default=["dots_100", "baseline"])
     parser.add_argument("--compare-residual", action="store_true", default=True)
     parser.add_argument("--no-compare-residual", action="store_true")

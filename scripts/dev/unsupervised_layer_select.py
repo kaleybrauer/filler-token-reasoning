@@ -14,9 +14,9 @@ None of these use ground-truth A labels. Post-hoc MAE is reported for
 comparison but not used in any criterion.
 
 Usage:
-    python probing/scripts/unsupervised_layer_select.py \
-        --extraction-dir probing/extracted_states \
-        --output-dir probing/results/unsupervised_layer_select
+    python scripts/unsupervised_layer_select.py \
+        --extraction-dir data/extracted_states \
+        --output-dir results/unsupervised_layer_select
 """
 
 import argparse
@@ -154,12 +154,12 @@ def load_condition_data(extraction_dir, condition, filter_idx=None):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--extraction-dir", type=Path, default=Path("probing/extracted_states"))
+    parser.add_argument("--extraction-dir", type=Path, default=Path("data/extracted_states"))
     parser.add_argument("--conditions", nargs="+", default=["dots_100", "dots_10"])
-    parser.add_argument("--lm-head", type=Path, default=Path("probing/lm_head_weight.npy"))
-    parser.add_argument("--rms-norm", type=Path, default=Path("probing/rms_norm_weight.npy"))
+    parser.add_argument("--lm-head", type=Path, default=Path("lm_head_weight.npy"))
+    parser.add_argument("--rms-norm", type=Path, default=Path("rms_norm_weight.npy"))
     parser.add_argument("--model-path", type=str, default="/workspace/models/deepseek-v3-awq")
-    parser.add_argument("--output-dir", type=Path, default=Path("probing/results/unsupervised_layer_select"))
+    parser.add_argument("--output-dir", type=Path, default=Path("results/unsupervised_layer_select"))
     parser.add_argument("--filter-categories", nargs="+", default=["both_correct", "filler_helped"])
     args = parser.parse_args()
 

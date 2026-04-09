@@ -16,9 +16,9 @@ Pipeline:
 Post-hoc evaluation (optional, uses labels) checks accuracy against ground truth.
 
 Usage:
-    python probing/scripts/unsupervised_decode_filler.py \
+    python scripts/unsupervised_decode_filler.py \
         --condition dots_100 dots_10 counting_25 \
-        --output-dir probing/results/unsupervised_decode
+        --output-dir results/unsupervised_decode
 """
 
 import argparse
@@ -385,16 +385,16 @@ def main():
         description="Unsupervised decode of hidden values from filler hidden states"
     )
     parser.add_argument("--extraction-dir", type=Path,
-                        default=Path("probing/extracted_states"))
+                        default=Path("data/extracted_states"))
     parser.add_argument("--condition", type=str, nargs="+", default=["dots_100"])
     parser.add_argument("--lm-head", type=Path,
-                        default=Path("probing/lm_head_weight.npy"))
+                        default=Path("lm_head_weight.npy"))
     parser.add_argument("--rms-norm", type=Path,
-                        default=Path("probing/rms_norm_weight.npy"))
+                        default=Path("rms_norm_weight.npy"))
     parser.add_argument("--model-path", type=str,
                         default="/workspace/models/deepseek-v3-awq")
     parser.add_argument("--output-dir", type=Path,
-                        default=Path("probing/results/unsupervised_decode"))
+                        default=Path("results/unsupervised_decode"))
     parser.add_argument("--layers", type=str, default="all",
                         help="Comma-separated layers or 'all'")
     parser.add_argument("--filter-categories", nargs="+",

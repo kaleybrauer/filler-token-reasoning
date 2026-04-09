@@ -12,9 +12,9 @@ For each (target, position, layer) combo:
 This gives ~4x the effective test set compared to a single 75/25 split.
 
 Usage:
-    uv run --project probing python probing/scripts/train_probes_cv.py \
-        --extraction-dir probing/extracted_states \
-        --output-dir probing/probe_results/cv
+    uv run --project probing python scripts/train_probes_cv.py \
+        --extraction-dir data/extracted_states \
+        --output-dir probe_results/cv
 """
 
 import argparse
@@ -592,8 +592,8 @@ def print_summary_table(all_results, output_dir):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--extraction-dir", type=Path, default=Path("probing/extracted_states"))
-    parser.add_argument("--output-dir", type=Path, default=Path("probing/probe_results/cv"))
+    parser.add_argument("--extraction-dir", type=Path, default=Path("data/extracted_states"))
+    parser.add_argument("--output-dir", type=Path, default=Path("probe_results/cv"))
     parser.add_argument("--n-folds", type=int, default=5)
     parser.add_argument("--n-jobs", type=int, default=-1,
                         help="Number of parallel workers (-1 = all CPUs)")

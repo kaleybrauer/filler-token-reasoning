@@ -11,6 +11,8 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
+plt.rcParams.update({"font.size": 14})
+
 results_dir = Path("probing/results/unsupervised_decode")
 
 
@@ -43,8 +45,9 @@ def categorize_predictions(predictions, metadata):
     return {k: v / n * 100 for k, v in cats.items()}
 
 
-# Load all available decode results
-conditions = []
+# Load all available decode results, filtering to most common best_layer
+# to avoid mixing inconsistent runs
+all_conditions = []
 for f in sorted(results_dir.glob("decode_*.json")):
     cond = f.stem.replace("decode_", "")
     with open(f) as fp:
@@ -53,7 +56,16 @@ for f in sorted(results_dir.glob("decode_*.json")):
     meta = d["metadata"]
     layer = d["best_layer"]
     cats = categorize_predictions(preds, meta)
-    conditions.append({"name": cond, "layer": layer, "cats": cats, "n": len(preds)})
+    all_conditions.append({"name": cond, "layer": layer, "cats": cats, "n": len(preds)})
+
+# Keep only conditions matching the most common best_layer
+from collections import Counter
+layer_counts = Counter(c["layer"] for c in all_conditions)
+dominant_layer = layer_counts.most_common(1)[0][0]
+conditions = [c for c in all_conditions if c["layer"] == dominant_layer]
+skipped = [c["name"] for c in all_conditions if c["layer"] != dominant_layer]
+if skipped:
+    print(f"Skipping {skipped} (best_layer != L{dominant_layer})")
 
 # Sort: dots by length, alphabet by length, counting by length (last)
 def sort_key(c):
@@ -71,7 +83,7 @@ cat_labels = ["Exact A", "±5 of A", "Exact A+X", "±5 of A+X", "±6-20 of A+X",
 cat_colors = ["#228B22", "#98df8a", "#1f77b4", "#6baed6", "#c6dbef", "#d62728"]
 
 n_conds = len(conditions)
-fig, ax = plt.subplots(figsize=(max(7, n_conds * 1.5 + 2), 5.5))
+fig, ax = plt.subplots(figsize=(max(8, n_conds * 1.6 + 2), 6))
 
 x = np.arange(n_conds)
 bar_width = 0.6
@@ -81,19 +93,19 @@ for cat_key, label, color in zip(cat_names, cat_labels, cat_colors):
     vals = [c["cats"][cat_key] for c in conditions]
     bars = ax.bar(x, vals, bar_width, bottom=bottoms, color=color, label=label,
                   edgecolor="white", linewidth=0.5)
-    # Add percentage labels for segments > 4%
     for i, (v, b) in enumerate(zip(vals, bottoms)):
         if v > 4:
             ax.text(x[i], b + v / 2, f"{v:.0f}%", ha="center", va="center",
-                    fontsize=8, fontweight="bold", color="white")
+                    fontsize=11, fontweight="bold", color="white")
     bottoms += vals
 
 ax.set_xticks(x)
-ax.set_xticklabels([c["name"] for c in conditions], fontsize=10, rotation=30, ha="right")
-ax.set_ylabel("% of examples", fontsize=12)
+ax.set_xticklabels([c["name"] for c in conditions], fontsize=13, rotation=30, ha="right")
+ax.set_ylabel("% of examples", fontsize=15)
 ax.set_ylim(0, 105)
-ax.set_title("Unsupervised decode: what does the pipeline output?", fontsize=13)
-ax.legend(bbox_to_anchor=(1.02, 1), loc="upper left", fontsize=9, framealpha=0.9)
+ax.tick_params(labelsize=12)
+ax.set_title("Unsupervised decode: what does the pipeline output?", fontsize=16)
+ax.legend(bbox_to_anchor=(0.5, 1.08), loc="lower center", ncol=6, fontsize=11, framealpha=0.9)
 
 plt.tight_layout()
 for ext in ["png", "pdf"]:

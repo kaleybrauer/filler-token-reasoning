@@ -14,7 +14,7 @@ Filler: . . . . . . . . . .
 
 Answer:
 ```
-Few-shot examples (5) show the same format. The model outputs just the number (bare assistant format). Filler types: dots (`. . .`), counting (`1 2 3 ...`), alphabet (`a b c ...`).
+Few-shot examples (5) show the same format. The model outputs just the number. Filler types: dots (`. . .`), counting (`1 2 3 ...`), alphabet (`a b c ...`).
 
 ## Repository Structure
 

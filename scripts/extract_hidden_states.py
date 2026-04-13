@@ -39,7 +39,7 @@ if not hasattr(_act, "PytorchGELUTanh"):
 def problem_metadata(problem, dataset_type="1hop"):
     """Extract metadata fields from a problem dict, handling 1-hop and 2-hop."""
     meta = {"answer": problem["answer"]}
-    if dataset_type == "2hop":
+    if dataset_type == "2fact":
         meta["fact_value_1"] = problem["fact_value_1"]
         meta["fact_value_2"] = problem["fact_value_2"]
         # For compatibility with pipelines that expect "fact_value"
@@ -53,9 +53,9 @@ def problem_metadata(problem, dataset_type="1hop"):
 
 # Reuse prompt construction from the dataset generators
 from generate_1hop_dataset import build_system_message, build_user_turn
-from generate_2hop_dataset import (
-    build_system_message_2hop,
-    build_user_turn_2hop,
+from generate_2fact_dataset import (
+    build_system_message_2fact,
+    build_user_turn_2fact,
 )
 
 
@@ -66,18 +66,18 @@ def build_messages_for_condition(few_shot_items, target, filler_type, k, rng=Non
     Uses bare assistant format by default (assistant outputs just the number).
     Supports 1-hop (fact + x) and 2-hop (fact1 + fact2) tasks.
     """
-    if dataset_type == "2hop":
-        system_msg = build_system_message_2hop(filler_type, k)
+    if dataset_type == "2fact":
+        system_msg = build_system_message_2fact(filler_type, k)
         messages = [{"role": "system", "content": system_msg}]
 
         for fs in few_shot_items:
-            user_content = build_user_turn_2hop(
+            user_content = build_user_turn_2fact(
                 fs["fact_phrase_1"], fs["fact_phrase_2"], filler_type, k, rng=rng
             )
             messages.append({"role": "user", "content": user_content})
             messages.append({"role": "assistant", "content": str(fs['answer'])})
 
-        user_content = build_user_turn_2hop(
+        user_content = build_user_turn_2fact(
             target["fact_phrase_1"], target["fact_phrase_2"], filler_type, k, rng=rng
         )
         messages.append({"role": "user", "content": user_content})
@@ -648,7 +648,7 @@ def run_extraction(
     metadata = []
     for i, p in enumerate(problems):
         entry = {"idx": i, **problem_metadata(p, dataset_type)}
-        if dataset_type == "2hop":
+        if dataset_type == "2fact":
             entry["fact_phrase_1"] = p["fact_phrase_1"]
             entry["fact_phrase_2"] = p["fact_phrase_2"]
         else:
@@ -899,8 +899,8 @@ def main():
     parser.add_argument("--batch-size", type=int, default=1,
                         help="Batch size for extraction (>1 for better GPU utilization)")
     parser.add_argument("--dataset-type", type=str, default="1hop",
-                        choices=["1hop", "2hop"],
-                        help="Dataset type: 1hop (fact+x) or 2hop (fact1+fact2)")
+                        choices=["1hop", "2fact"],
+                        help="Dataset type: 1hop (fact+x) or 2fact (fact1+fact2)")
     args = parser.parse_args()
 
     # Load dataset

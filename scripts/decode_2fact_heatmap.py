@@ -31,6 +31,7 @@ def pos_sort_key(p):
     if p == "question_end": return -2
     if p == "pre_filler": return -1
     if p.startswith("filler_k"): return int(p.split("k")[1])
+    if p.startswith("pos_"): return int(p.split("_")[1])
     if p == "answer_prompt": return 99999
     return 9999
 
@@ -40,6 +41,7 @@ def pos_label(p):
     if p == "pre_filler": return "filler_label"
     if p == "answer_prompt": return "ans_prompt"
     if p.startswith("filler_k"): return f"k{p.split('k')[1]}"
+    if p.startswith("pos_"): return p.split("_")[1].lstrip("0") or "0"
     return p
 
 
@@ -76,22 +78,28 @@ def main():
         print(f"\n=== {cond} ===")
         files = sorted((args.extraction_dir / cond).glob("prob_*.pkl"))
 
-        # Load all data
+        # Load all data, filter to correct examples only
         all_data = []
+        n_total = 0
         for f in tqdm(files, desc="Loading"):
             with open(f, "rb") as fp:
                 d = pickle.load(fp)
-            all_data.append(d)
-        print(f"  {len(all_data)} examples")
+            n_total += 1
+            if d.get("model_correct", False):
+                all_data.append(d)
+        print(f"  {len(all_data)}/{n_total} correct examples")
 
         # Get positions and layers
         d0 = all_data[0]
         positions = sorted(
-            [p for p in d0["states"] if p.startswith("filler_k") or p == "pre_filler"
-             or p in ("question_end", "answer_prompt")],
+            [p for p in d0["states"] if p.startswith("filler_k") or p.startswith("pos_")
+             or p == "pre_filler" or p in ("question_end", "answer_prompt")],
             key=pos_sort_key
         )
         layers = sorted(d0["states"][positions[0]].keys())
+
+        # Get boundary info for all-positions mode
+        boundaries = d0.get("boundaries")
 
         # Ground truth
         A1 = np.array([d["fact_value_1"] for d in all_data])
@@ -101,6 +109,8 @@ def main():
         # Decode at every (layer, position)
         results = {"_positions": positions, "_layers": layers, "_condition": cond,
                     "_n": len(all_data)}
+        if boundaries:
+            results["_boundaries"] = boundaries
 
         for pos in positions:
             results[pos] = {}
@@ -144,43 +154,72 @@ def main():
             json.dump(results, f, indent=2)
         print(f"  Saved {outfile}")
 
-        # Plot: 3-panel heatmap (A1, A2, A1+A2 ±5 accuracy)
-        targets = [
-            ("frac_A1_within5", "A1 (±5)", "A₁"),
-            ("frac_A2_within5", "A2 (±5)", "A₂"),
-            ("frac_A1A2_within5", "A1+A2 (±5)", "A₁+A₂"),
-        ]
+        # Detect all-positions mode
+        is_allpos = any(p.startswith("pos_") for p in positions)
+        n_pos = len(positions)
 
-        fig, axes = plt.subplots(1, 3, figsize=(7 * 3, 11))
+        # Plot heatmaps: ±5 and exact match
+        for metric_set, suffix, cbar_label in [
+            ([("frac_A1_within5", "A₁ (±5)"),
+              ("frac_A2_within5", "A₂ (±5)"),
+              ("frac_A1A2_within5", "A₁+A₂ (±5)")],
+             "within5", "% within ±5"),
+            ([("frac_A1_exact", "A₁ (exact)"),
+              ("frac_A2_exact", "A₂ (exact)"),
+              ("frac_A1A2_exact", "A₁+A₂ (exact)")],
+             "exact", "% exact match"),
+        ]:
+            fig_width = max(7 * 3, n_pos * 0.12 * 3) if is_allpos else 7 * 3
+            fig, axes = plt.subplots(1, 3, figsize=(fig_width, 11))
 
-        for ax, (metric, title, short) in zip(axes, targets):
-            matrix = np.full((len(layers), len(positions)), np.nan)
-            for j, pos in enumerate(positions):
-                for i, layer in enumerate(layers):
-                    if str(layer) in results.get(pos, {}):
-                        matrix[i, j] = results[pos][str(layer)][metric] * 100
+            for ax, (metric, title) in zip(axes, metric_set):
+                matrix = np.full((len(layers), len(positions)), np.nan)
+                for j, pos in enumerate(positions):
+                    for i, layer in enumerate(layers):
+                        if str(layer) in results.get(pos, {}):
+                            matrix[i, j] = results[pos][str(layer)][metric] * 100
 
-            im = ax.imshow(matrix, aspect="auto", cmap="RdYlGn", vmin=0, vmax=100,
-                           interpolation="nearest")
-            ax.set_xticks(range(len(positions)))
-            ax.set_xticklabels([pos_label(p) for p in positions], rotation=45, ha="right")
-            layer_labels = [str(l) if l % 5 == 0 else "" for l in layers]
-            ax.set_yticks(range(len(layers)))
-            ax.set_yticklabels(layer_labels)
-            ax.set_title(f"Decode → {short}", fontweight="bold")
-            if ax == axes[0]:
-                ax.set_ylabel("Layer")
+                im = ax.imshow(matrix, aspect="auto", cmap="RdYlGn", vmin=0, vmax=100,
+                               interpolation="nearest")
 
-        fig.suptitle(f"{cond}: what is encoded at each (layer, position)?", fontsize=22)
-        fig.subplots_adjust(right=0.88, wspace=0.15, top=0.93)
-        cbar_ax = fig.add_axes([0.90, 0.15, 0.02, 0.65])
-        fig.colorbar(im, cax=cbar_ax, label="% within ±5")
+                if is_allpos:
+                    # Sparse x-ticks for all-positions mode
+                    tick_step = max(1, n_pos // 20)
+                    tick_idxs = list(range(0, n_pos, tick_step))
+                    if (n_pos - 1) not in tick_idxs:
+                        tick_idxs.append(n_pos - 1)
+                    ax.set_xticks(tick_idxs)
+                    ax.set_xticklabels([pos_label(positions[i]) for i in tick_idxs],
+                                       rotation=45, ha="right")
+                    ax.set_xlabel("Offset from question_end")
+                    # Annotate filler boundaries
+                    if boundaries:
+                        fs = boundaries.get("filler_start_offset")
+                        fe = boundaries.get("filler_end_offset")
+                        if fs is not None:
+                            ax.axvline(fs - 0.5, color="white", linewidth=1, linestyle="--", alpha=0.7)
+                            ax.axvline(fe + 0.5, color="white", linewidth=1, linestyle="--", alpha=0.7)
+                else:
+                    ax.set_xticks(range(n_pos))
+                    ax.set_xticklabels([pos_label(p) for p in positions], rotation=45, ha="right")
 
-        for ext in ["png", "pdf"]:
-            fig.savefig(args.output_dir / f"heatmap_2fact_{cond}.{ext}",
-                        dpi=150, bbox_inches="tight")
-        plt.close()
-        print(f"  Saved heatmap")
+                layer_labels = [str(l) if l % 5 == 0 else "" for l in layers]
+                ax.set_yticks(range(len(layers)))
+                ax.set_yticklabels(layer_labels)
+                ax.set_title(title, fontweight="bold")
+                if ax == axes[0]:
+                    ax.set_ylabel("Layer")
+
+            fig.suptitle(f"{cond}: what is encoded at each (layer, position)?", fontsize=22)
+            fig.subplots_adjust(right=0.88, wspace=0.15, top=0.93)
+            cbar_ax = fig.add_axes([0.90, 0.15, 0.02, 0.65])
+            fig.colorbar(im, cax=cbar_ax, label=cbar_label)
+
+            for ext in ["png", "pdf"]:
+                fig.savefig(args.output_dir / f"heatmap_2fact_{cond}_{suffix}.{ext}",
+                            dpi=150, bbox_inches="tight")
+            plt.close()
+            print(f"  Saved heatmap ({suffix})")
 
     print("\nDone.")
 

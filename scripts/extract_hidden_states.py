@@ -251,6 +251,35 @@ def compute_extraction_positions(
     return positions
 
 
+def compute_all_positions(
+    question_end_pos: int,
+    seq_len: int,
+    filler_start: int = -1,
+    filler_end: int = -1,
+) -> Tuple[Dict[str, int], Dict[str, int]]:
+    """
+    Every token from question_end through answer_prompt.
+
+    Returns:
+        positions: dict mapping "pos_000", "pos_001", ... -> token index
+        boundaries: dict with semantic boundary offsets (filler_start_offset, etc.)
+            so downstream scripts know which positions are filler vs label vs answer tokens
+    """
+    answer_prompt = seq_len - 1
+    positions = {}
+    for i, tok_idx in enumerate(range(question_end_pos, answer_prompt + 1)):
+        positions[f"pos_{i:03d}"] = tok_idx
+
+    boundaries = {
+        "question_end_offset": 0,
+        "answer_prompt_offset": answer_prompt - question_end_pos,
+    }
+    if filler_start >= 0:
+        boundaries["filler_start_offset"] = filler_start - question_end_pos
+        boundaries["filler_end_offset"] = filler_end - question_end_pos
+    return positions, boundaries
+
+
 def compute_baseline_positions(seq_len: int) -> Dict[str, int]:
     """For baseline (no filler): question_end and answer_prompt."""
     return {
@@ -554,6 +583,8 @@ def _prepare_batch(
     k: int,
     filler_positions: Optional[List[int]],
     input_device: torch.device,
+    dataset_type: str = "1hop",
+    all_positions: bool = False,
 ):
     """Tokenize and left-pad a batch of examples. Returns padded tensors and per-example metadata."""
     batch_ids = []
@@ -574,15 +605,22 @@ def _prepare_batch(
         # Find positions (on un-padded sequence)
         seq_len = len(ids)
         filler_start, filler_end, question_end_pos = None, None, None
+        boundaries = None
         if k > 0:
             question_end_pos, filler_start, filler_end = find_filler_boundaries(
                 tokenizer, ids.unsqueeze(0), k
             )
-            positions = compute_extraction_positions(
-                filler_start, filler_end, seq_len,
-                absolute_positions=filler_positions,
-                question_end_pos=question_end_pos,
-            )
+            if all_positions:
+                positions, boundaries = compute_all_positions(
+                    question_end_pos, seq_len,
+                    filler_start=filler_start, filler_end=filler_end,
+                )
+            else:
+                positions = compute_extraction_positions(
+                    filler_start, filler_end, seq_len,
+                    absolute_positions=filler_positions,
+                    question_end_pos=question_end_pos,
+                )
         else:
             positions = compute_baseline_positions(seq_len)
 
@@ -593,6 +631,7 @@ def _prepare_batch(
             "positions": positions,
             "filler_start": filler_start,
             "filler_end": filler_end,
+            "boundaries": boundaries,
         })
 
     # Left-pad to max length
@@ -629,6 +668,7 @@ def run_extraction(
     extract_pre_answer: bool = False,
     batch_size: int = 1,
     dataset_type: str = "1hop",
+    all_positions: bool = False,
 ):
     """
     For each (condition, problem), extract hidden states and save.
@@ -694,6 +734,7 @@ def run_extraction(
                 padded_ids, attn_mask, batch_positions, batch_meta = _prepare_batch(
                     tokenizer, problems, few_shot, batch_indices,
                     filler_type, k, filler_positions, input_device,
+                    dataset_type=dataset_type, all_positions=all_positions,
                 )
                 batch_states = extractor.extract_batch(padded_ids, attn_mask, batch_positions)
 
@@ -728,6 +769,8 @@ def run_extraction(
                         "filler_end": meta["filler_end"],
                         "gen_prefix": None,
                     }
+                    if meta.get("boundaries") is not None:
+                        result["boundaries"] = meta["boundaries"]
 
                     save_path = cond_dir / f"prob_{prob_idx:04d}.pkl"
                     with open(save_path, "wb") as f:
@@ -754,15 +797,22 @@ def run_extraction(
                 seq_len = input_ids.shape[1]
 
                 filler_start, filler_end, question_end_pos = None, None, None
+                boundaries = None
                 if k > 0:
                     question_end_pos, filler_start, filler_end = find_filler_boundaries(
                         tokenizer, input_ids, k
                     )
-                    positions = compute_extraction_positions(
-                        filler_start, filler_end, seq_len,
-                        absolute_positions=filler_positions,
-                        question_end_pos=question_end_pos,
-                    )
+                    if all_positions:
+                        positions, boundaries = compute_all_positions(
+                            question_end_pos, seq_len,
+                            filler_start=filler_start, filler_end=filler_end,
+                        )
+                    else:
+                        positions = compute_extraction_positions(
+                            filler_start, filler_end, seq_len,
+                            absolute_positions=filler_positions,
+                            question_end_pos=question_end_pos,
+                        )
                 else:
                     positions = compute_baseline_positions(seq_len)
 
@@ -810,6 +860,8 @@ def run_extraction(
                     "filler_end": filler_end,
                     "gen_prefix": gen_prefix,
                 }
+                if boundaries is not None:
+                    result["boundaries"] = boundaries
 
                 save_path = cond_dir / f"prob_{prob_idx:04d}.pkl"
                 with open(save_path, "wb") as f:
@@ -901,6 +953,9 @@ def main():
     parser.add_argument("--dataset-type", type=str, default="1hop",
                         choices=["1hop", "2fact"],
                         help="Dataset type: 1hop (fact+x) or 2fact (fact1+fact2)")
+    parser.add_argument("--all-positions", action="store_true",
+                        help="Extract every token from question_end through answer_prompt. "
+                             "Overrides --filler-positions and fraction-based positions.")
     args = parser.parse_args()
 
     # Load dataset
@@ -934,12 +989,20 @@ def main():
 
     # Parse filler positions
     filler_pos = None
-    if args.filler_positions:
+    if args.filler_positions and not args.all_positions:
         filler_pos = [int(x) for x in args.filler_positions.split(",")]
         print(f"Using absolute filler positions: {filler_pos}")
 
+    if args.all_positions:
+        print("All-positions mode: extracting every token from question_end to answer_prompt")
+
     # Storage estimate
-    if filler_pos:
+    if args.all_positions:
+        # Estimate from first condition's k value
+        first_k = list(selected.values())[0][0]
+        n_positions = first_k + 15  # filler tokens + label/answer/whitespace tokens
+        print(f"  (estimated ~{n_positions} positions per example)")
+    elif filler_pos:
         n_positions = len(filler_pos) + 2  # absolute positions + question_end + answer_prompt
     else:
         n_positions = len(FILLER_FRACTIONS) + 2  # filler fracs + question_end + answer_prompt
@@ -965,6 +1028,7 @@ def main():
         extract_pre_answer=args.extract_pre_answer,
         batch_size=args.batch_size,
         dataset_type=args.dataset_type,
+        all_positions=args.all_positions,
     )
 
     # Verify

@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""Generate a 2-hop addition dataset for probing experiments.
+"""Generate a 2-fact addition dataset for probing experiments.
 
 The task is: "What is [fact_phrase_1] plus [fact_phrase_2]?" where each
 fact_phrase maps to a known integer (atomic number). The model must retrieve
 both values A1 and A2, then compute A1 + A2.
 
 Usage:
-    python scripts/generate_2hop_dataset.py --preview
-    python scripts/generate_2hop_dataset.py --num-examples 1500
+    python scripts/generate_2fact_dataset.py --preview
+    python scripts/generate_2fact_dataset.py --num-examples 1500
 """
 
 from __future__ import annotations
@@ -28,7 +28,7 @@ from generate_1hop_dataset import (
 # Paths
 # ---------------------------------------------------------------------------
 KNOWN_FACTS_PATH = Path("finetuning/data/facts/knowledge_deepseek_v3/known_facts.json")
-OUTPUT_PATH = Path("data/2hop_addition_dataset.json")
+OUTPUT_PATH = Path("data/2fact_addition_dataset.json")
 
 SEED = 42
 NUM_FEW_SHOT = 10
@@ -52,8 +52,8 @@ def atomic_fact_phrase(question: str) -> str:
 # Prompt construction
 # ---------------------------------------------------------------------------
 
-def build_system_message_2hop(filler_type: str, k: int) -> str:
-    """Build the system message for 2-hop addition."""
+def build_system_message_2fact(filler_type: str, k: int) -> str:
+    """Build the system message for 2-fact addition."""
     base = (
         "You will be given a question that requires adding two values together. "
         "Answer immediately with just the number, nothing else. "
@@ -69,10 +69,10 @@ def build_system_message_2hop(filler_type: str, k: int) -> str:
     return base
 
 
-def build_user_turn_2hop(fact_phrase_1: str, fact_phrase_2: str,
+def build_user_turn_2fact(fact_phrase_1: str, fact_phrase_2: str,
                          filler_type: str, k: int,
                          rng: random.Random | None = None) -> str:
-    """Build the user turn for a 2-hop addition question."""
+    """Build the user turn for a 2-fact addition question."""
     question_line = f"Question: What is {fact_phrase_1} plus {fact_phrase_2}?"
     if k > 0:
         filler = make_filler_tokens(filler_type, k, rng=rng)
@@ -81,25 +81,25 @@ def build_user_turn_2hop(fact_phrase_1: str, fact_phrase_2: str,
         return f"{question_line}\n\nAnswer:"
 
 
-def build_prompt_messages_2hop(
+def build_prompt_messages_2fact(
     few_shot_items: list[dict],
     target_item: dict,
     filler_type: str,
     k: int,
     rng: random.Random | None = None,
 ) -> list[dict]:
-    """Build a full chat-style prompt for 2-hop addition."""
-    system_msg = build_system_message_2hop(filler_type, k)
+    """Build a full chat-style prompt for 2-fact addition."""
+    system_msg = build_system_message_2fact(filler_type, k)
     messages = [{"role": "system", "content": system_msg}]
 
     for fs in few_shot_items:
-        user_content = build_user_turn_2hop(
+        user_content = build_user_turn_2fact(
             fs["fact_phrase_1"], fs["fact_phrase_2"], filler_type, k, rng=rng
         )
         messages.append({"role": "user", "content": user_content})
         messages.append({"role": "assistant", "content": str(fs["answer"])})
 
-    user_content = build_user_turn_2hop(
+    user_content = build_user_turn_2fact(
         target_item["fact_phrase_1"], target_item["fact_phrase_2"],
         filler_type, k, rng=rng
     )
@@ -114,7 +114,7 @@ def build_prompt_messages_2hop(
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Generate 2-hop addition dataset (atomic numbers only)."
+        description="Generate 2-fact addition dataset (atomic numbers only)."
     )
     parser.add_argument("--known-facts", type=Path, default=KNOWN_FACTS_PATH)
     parser.add_argument("--output", type=Path, default=OUTPUT_PATH)
@@ -198,7 +198,7 @@ def main() -> None:
 
     # Save
     dataset = {
-        "task": "2hop_addition",
+        "task": "2fact_addition",
         "fact_type": "atomic_number",
         "few_shot_facts": few_shot_items,
         "examples": examples,
@@ -227,11 +227,11 @@ def main() -> None:
             print(f"{'─' * 72}")
 
             if k == 0:
-                msgs = build_prompt_messages_2hop(
+                msgs = build_prompt_messages_2fact(
                     few_shot_items, target, "none", 0, rng=preview_rng
                 )
             else:
-                msgs = build_prompt_messages_2hop(
+                msgs = build_prompt_messages_2fact(
                     few_shot_items, target, filler_type, k, rng=preview_rng
                 )
 

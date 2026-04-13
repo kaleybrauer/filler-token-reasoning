@@ -36,29 +36,66 @@ import transformers.activations as _act
 if not hasattr(_act, "PytorchGELUTanh"):
     _act.PytorchGELUTanh = _act.GELUTanh
 
-# Reuse prompt construction from the dataset generator (supports all filler types)
+def problem_metadata(problem, dataset_type="1hop"):
+    """Extract metadata fields from a problem dict, handling 1-hop and 2-hop."""
+    meta = {"answer": problem["answer"]}
+    if dataset_type == "2hop":
+        meta["fact_value_1"] = problem["fact_value_1"]
+        meta["fact_value_2"] = problem["fact_value_2"]
+        # For compatibility with pipelines that expect "fact_value"
+        meta["fact_value"] = problem["fact_value_1"]
+        meta["x"] = problem["fact_value_2"]
+    else:
+        meta["fact_value"] = problem["fact_value"]
+        meta["x"] = problem["x"]
+    return meta
+
+
+# Reuse prompt construction from the dataset generators
 from generate_1hop_dataset import build_system_message, build_user_turn
+from generate_2hop_dataset import (
+    build_system_message_2hop,
+    build_user_turn_2hop,
+)
 
 
-def build_messages_for_condition(few_shot_items, target, filler_type, k, rng=None):
+def build_messages_for_condition(few_shot_items, target, filler_type, k, rng=None,
+                                 dataset_type="1hop"):
     """Build chat messages for any filler condition.
 
     Uses bare assistant format by default (assistant outputs just the number).
+    Supports 1-hop (fact + x) and 2-hop (fact1 + fact2) tasks.
     """
-    system_msg = build_system_message(filler_type, k)
-    messages = [{"role": "system", "content": system_msg}]
+    if dataset_type == "2hop":
+        system_msg = build_system_message_2hop(filler_type, k)
+        messages = [{"role": "system", "content": system_msg}]
 
-    for fs in few_shot_items:
-        user_content = build_user_turn(
-            fs["fact_phrase"], fs["x"], filler_type, k, rng=rng
+        for fs in few_shot_items:
+            user_content = build_user_turn_2hop(
+                fs["fact_phrase_1"], fs["fact_phrase_2"], filler_type, k, rng=rng
+            )
+            messages.append({"role": "user", "content": user_content})
+            messages.append({"role": "assistant", "content": str(fs['answer'])})
+
+        user_content = build_user_turn_2hop(
+            target["fact_phrase_1"], target["fact_phrase_2"], filler_type, k, rng=rng
         )
         messages.append({"role": "user", "content": user_content})
-        messages.append({"role": "assistant", "content": str(fs['answer'])})
+    else:
+        system_msg = build_system_message(filler_type, k)
+        messages = [{"role": "system", "content": system_msg}]
 
-    user_content = build_user_turn(
-        target["fact_phrase"], target["x"], filler_type, k, rng=rng
-    )
-    messages.append({"role": "user", "content": user_content})
+        for fs in few_shot_items:
+            user_content = build_user_turn(
+                fs["fact_phrase"], fs["x"], filler_type, k, rng=rng
+            )
+            messages.append({"role": "user", "content": user_content})
+            messages.append({"role": "assistant", "content": str(fs['answer'])})
+
+        user_content = build_user_turn(
+            target["fact_phrase"], target["x"], filler_type, k, rng=rng
+        )
+        messages.append({"role": "user", "content": user_content})
 
     return messages
 
@@ -526,7 +563,8 @@ def _prepare_batch(
         problem = problems[prob_idx]
         example_rng = random.Random(prob_idx)
         messages = build_messages_for_condition(
-            few_shot[:5], problem, filler_type, k, rng=example_rng
+            few_shot[:5], problem, filler_type, k, rng=example_rng,
+            dataset_type=dataset_type
         )
         full_text = tokenizer.apply_chat_template(
             messages, tokenize=False, add_generation_prompt=True
@@ -590,6 +628,7 @@ def run_extraction(
     filler_positions: Optional[List[int]] = None,
     extract_pre_answer: bool = False,
     batch_size: int = 1,
+    dataset_type: str = "1hop",
 ):
     """
     For each (condition, problem), extract hidden states and save.
@@ -608,14 +647,14 @@ def run_extraction(
     # Save metadata
     metadata = []
     for i, p in enumerate(problems):
-        metadata.append({
-            "idx": i,
-            "fact_phrase": p["fact_phrase"],
-            "fact_value": p["fact_value"],
-            "x": p["x"],
-            "answer": p["answer"],
-            "kind": p["kind"],
-        })
+        entry = {"idx": i, **problem_metadata(p, dataset_type)}
+        if dataset_type == "2hop":
+            entry["fact_phrase_1"] = p["fact_phrase_1"]
+            entry["fact_phrase_2"] = p["fact_phrase_2"]
+        else:
+            entry["fact_phrase"] = p["fact_phrase"]
+            entry["kind"] = p["kind"]
+        metadata.append(entry)
     with open(output_dir / "metadata.json", "w") as f:
         json.dump(metadata, f, indent=2)
 
@@ -678,9 +717,7 @@ def run_extraction(
                         "problem_idx": prob_idx,
                         "condition": cond_name,
                         "k": k,
-                        "fact_value": problem["fact_value"],
-                        "x": problem["x"],
-                        "answer": problem["answer"],
+                        **problem_metadata(problem, dataset_type),
                         "positions": meta["positions"],
                         "states": batch_states[b],
                         "model_response": model_response,
@@ -762,9 +799,7 @@ def run_extraction(
                     "problem_idx": prob_idx,
                     "condition": cond_name,
                     "k": k,
-                    "fact_value": problem["fact_value"],
-                    "x": problem["x"],
-                    "answer": problem["answer"],
+                    **problem_metadata(problem, dataset_type),
                     "positions": positions,
                     "states": states,
                     "model_response": model_response,
@@ -863,6 +898,9 @@ def main():
                              "'Answer: ' prefix (right before the number token)")
     parser.add_argument("--batch-size", type=int, default=1,
                         help="Batch size for extraction (>1 for better GPU utilization)")
+    parser.add_argument("--dataset-type", type=str, default="1hop",
+                        choices=["1hop", "2hop"],
+                        help="Dataset type: 1hop (fact+x) or 2hop (fact1+fact2)")
     args = parser.parse_args()
 
     # Load dataset
@@ -926,6 +964,7 @@ def main():
         filler_positions=filler_pos,
         extract_pre_answer=args.extract_pre_answer,
         batch_size=args.batch_size,
+        dataset_type=args.dataset_type,
     )
 
     # Verify

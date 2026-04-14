@@ -1,18 +1,17 @@
 """
 analyze_results.py
 
-Reads the scored CSV from parse_outputs.py and produces:
-  1. Accuracy table: per (source_layer, source_pos, template, target_layer)
-  2. Best configuration ranking (by A2 recovery)
-  3. Positive control check: A1 recovery at known-good positions
-  4. Negative control check: early layer baseline
-  5. Surprises: unrecognized numbers and patterns
-  6. Template comparison: which templates work best
-  7. Target layer offset analysis: which offsets help
+Reads the CSV from run_experiment_grid.py (logit inspection version).
+Analyzes ranks and probabilities to determine:
+  1. Where patchscoping recovers A1, A2, sum
+  2. Best (template, target_layer) configurations
+  3. Positive/negative control validation
+  4. Template and target layer offset effects
+  5. What the model IS representing where it's not A1/A2/sum
 
 Usage:
     python analyze_results.py
-    python analyze_results.py --input results/patchscope_scored.csv
+    python analyze_results.py --input results/patchscope_grid.csv
 """
 
 import argparse
@@ -20,124 +19,171 @@ import csv
 import os
 import sys
 from collections import defaultdict, Counter
-import json
+import numpy as np
 
 
-def load_scored(path):
+# ============================================================
+# DATA LOADING
+# ============================================================
+
+def load_results(path):
     with open(path, "r", newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         rows = list(reader)
-    # Cast numeric fields
+
     for r in rows:
         for k in ["A1", "A2", "sum", "source_layer", "target_layer",
-                   "contains_A1", "contains_A2", "contains_sum",
-                   "element_matches_A1", "element_matches_A2",
-                   "contains_diff", "contains_product",
-                   "is_error", "is_empty"]:
+                   "A1_rank", "A2_rank", "sum_rank", "diff_rank"]:
+            if k in r and r[k] != "" and r[k] != "-1":
+                try:
+                    r[k] = int(r[k])
+                except ValueError:
+                    r[k] = -1
+            elif r.get(k) in ("-1", ""):
+                r[k] = -1
+
+        for k in ["A1_prob", "A2_prob", "sum_prob", "diff_prob", "top_1_prob"]:
             if k in r and r[k] != "":
-                r[k] = int(r[k])
-        if r.get("first_number") not in ("", None):
+                try:
+                    r[k] = float(r[k])
+                except ValueError:
+                    r[k] = 0.0
+            else:
+                r[k] = 0.0
+
+        if r.get("top_1_number") not in ("", None):
             try:
-                r["first_number"] = int(r["first_number"])
+                r["top_1_number"] = int(r["top_1_number"])
             except ValueError:
-                r["first_number"] = None
+                r["top_1_number"] = None
         else:
-            r["first_number"] = None
+            r["top_1_number"] = None
+
     return rows
 
 
 def group_by(rows, keys):
-    """Group rows by a tuple of keys. Returns dict of (key_tuple -> [rows])."""
     groups = defaultdict(list)
     for r in rows:
         key = tuple(r[k] for k in keys)
-        groups[key] = groups.get(key, [])
         groups[key].append(r)
     return groups
 
 
-def accuracy(rows, field):
-    """Fraction of rows where field == 1."""
-    if not rows:
-        return 0.0
-    return sum(1 for r in rows if r.get(field) == 1) / len(rows)
+# ============================================================
+# METRICS
+# ============================================================
 
+def median_rank(rows, field):
+    ranks = [r[field] for r in rows if r[field] >= 0]
+    return np.median(ranks) if ranks else -1
 
-def first_num_accuracy(rows, target_identity):
-    """Fraction of rows where first_num_identity matches target."""
-    if not rows:
+def mean_rank(rows, field):
+    ranks = [r[field] for r in rows if r[field] >= 0]
+    return np.mean(ranks) if ranks else -1
+
+def frac_top_k(rows, field, k):
+    """Fraction of rows where rank < k (i.e., in top-k)."""
+    valid = [r for r in rows if r[field] >= 0]
+    if not valid:
         return 0.0
-    return sum(1 for r in rows if r.get("first_num_identity") == target_identity) / len(rows)
+    return sum(1 for r in valid if r[field] < k) / len(valid)
+
+def mean_prob(rows, field):
+    probs = [r[field] for r in rows if r[field] > 0]
+    return np.mean(probs) if probs else 0.0
 
 
 # ============================================================
 # ANALYSIS SECTIONS
 # ============================================================
 
+def section_overview(rows):
+    print("\n" + "=" * 80)
+    print("0. OVERVIEW")
+    print("=" * 80)
+    print(f"\n  Total rows: {len(rows)}")
+    errors = [r for r in rows if str(r.get("top_1_token", "")).startswith("ERROR")]
+    print(f"  Errors: {len(errors)}")
+
+    for name, field in [("A1", "A1_rank"), ("A2", "A2_rank"), ("Sum", "sum_rank")]:
+        top1 = frac_top_k(rows, field, 1)
+        top5 = frac_top_k(rows, field, 5)
+        top10 = frac_top_k(rows, field, 10)
+        top50 = frac_top_k(rows, field, 50)
+        med = median_rank(rows, field)
+        print(f"\n  {name}:")
+        print(f"    Top-1: {top1:.1%} | Top-5: {top5:.1%} | Top-10: {top10:.1%} | Top-50: {top50:.1%}")
+        print(f"    Median rank: {med:.0f} | Mean prob: {mean_prob(rows, field.replace('rank','prob')):.4f}")
+
+
 def section_accuracy_table(rows):
     """Full accuracy table grouped by configuration."""
     print("\n" + "=" * 80)
-    print("1. ACCURACY TABLE")
-    print("   Per (source_layer, source_pos, template, target_layer)")
+    print("1. CONFIGURATION TABLE (sorted by A2 top-10 rate)")
     print("=" * 80)
 
     keys = ["source_layer", "source_pos", "template", "target_layer"]
     groups = group_by(rows, keys)
 
-    # Collect results for sorting
     results = []
     for key, group in groups.items():
         src_layer, src_pos, template, tgt_layer = key
-        n = len(group)
-        a1_acc = accuracy(group, "contains_A1")
-        a2_acc = accuracy(group, "contains_A2")
-        sum_acc = accuracy(group, "contains_sum")
-        a1_first = first_num_accuracy(group, "A1")
-        a2_first = first_num_accuracy(group, "A2")
-        sum_first = first_num_accuracy(group, "SUM")
         results.append({
             "source_layer": src_layer,
             "source_pos": src_pos,
             "template": template,
             "target_layer": tgt_layer,
-            "n": n,
-            "A1_contains": a1_acc,
-            "A2_contains": a2_acc,
-            "sum_contains": sum_acc,
-            "A1_first": a1_first,
-            "A2_first": a2_first,
-            "sum_first": sum_first,
+            "n": len(group),
+            "A1_top1": frac_top_k(group, "A1_rank", 1),
+            "A1_top10": frac_top_k(group, "A1_rank", 10),
+            "A2_top1": frac_top_k(group, "A2_rank", 1),
+            "A2_top10": frac_top_k(group, "A2_rank", 10),
+            "sum_top1": frac_top_k(group, "sum_rank", 1),
+            "sum_top10": frac_top_k(group, "sum_rank", 10),
+            "A1_med": median_rank(group, "A1_rank"),
+            "A2_med": median_rank(group, "A2_rank"),
+            "sum_med": median_rank(group, "sum_rank"),
         })
 
-    # Print sorted by A2 recovery
-    results.sort(key=lambda x: x["A2_contains"], reverse=True)
+    results.sort(key=lambda x: x["A2_top10"], reverse=True)
 
-    print(f"\n{'src_L':>5} {'src_P':>8} {'tgt_L':>5} {'n':>3} "
-          f"{'A1%':>5} {'A2%':>5} {'S%':>5} "
-          f"{'A1_1st':>6} {'A2_1st':>6} {'S_1st':>5}  template")
-    print("-" * 100)
+    print(f"\n{'srcL':>4} {'srcP':>8} {'tgtL':>4} "
+          f"{'A1@1':>5} {'A1@10':>5} {'A2@1':>5} {'A2@10':>5} {'S@1':>5} {'S@10':>5} "
+          f"{'A1md':>5} {'A2md':>5} {'Smd':>5}  template")
+    print("-" * 110)
 
-    for r in results[:40]:  # top 40 by A2
-        print(f"{r['source_layer']:>5} {r['source_pos']:>8} {r['target_layer']:>5} {r['n']:>3} "
-              f"{r['A1_contains']:>5.0%} {r['A2_contains']:>5.0%} {r['sum_contains']:>5.0%} "
-              f"{r['A1_first']:>6.0%} {r['A2_first']:>6.0%} {r['sum_first']:>5.0%}  "
+    for r in results[:50]:
+        print(f"{r['source_layer']:>4} {r['source_pos']:>8} {r['target_layer']:>4} "
+              f"{r['A1_top1']:>5.0%} {r['A1_top10']:>5.0%} "
+              f"{r['A2_top1']:>5.0%} {r['A2_top10']:>5.0%} "
+              f"{r['sum_top1']:>5.0%} {r['sum_top10']:>5.0%} "
+              f"{r['A1_med']:>5.0f} {r['A2_med']:>5.0f} {r['sum_med']:>5.0f}  "
               f"{r['template']}")
 
-    if len(results) > 40:
-        print(f"  ... ({len(results) - 40} more rows omitted, showing top 40 by A2 recovery)")
+    if len(results) > 50:
+        print(f"  ... ({len(results) - 50} more rows, showing top 50 by A2 top-10)")
 
     return results
 
 
 def section_best_configs(results):
-    """Rank the best configurations for recovering each quantity."""
+    """Top configs for each quantity."""
     print("\n" + "=" * 80)
     print("2. BEST CONFIGURATIONS")
     print("=" * 80)
 
-    for quantity, field in [("A2", "A2_contains"), ("A1", "A1_contains"), ("SUM", "sum_contains")]:
+    for quantity, field in [("A2", "A2_top10"), ("A1", "A1_top10"), ("Sum", "sum_top10")]:
         sorted_r = sorted(results, key=lambda x: x[field], reverse=True)
-        print(f"\n  Top 5 for {quantity} recovery:")
+        print(f"\n  Top 5 for {quantity} (top-10 rate):")
+        for i, r in enumerate(sorted_r[:5]):
+            print(f"    {i+1}. {r[field]:.0%} — "
+                  f"L{r['source_layer']}/{r['source_pos']} -> L{r['target_layer']}, "
+                  f"\"{r['template']}\"")
+
+    for quantity, field in [("A2", "A2_top1"), ("A1", "A1_top1"), ("Sum", "sum_top1")]:
+        sorted_r = sorted(results, key=lambda x: x[field], reverse=True)
+        print(f"\n  Top 5 for {quantity} (top-1 rate / exact match):")
         for i, r in enumerate(sorted_r[:5]):
             print(f"    {i+1}. {r[field]:.0%} — "
                   f"L{r['source_layer']}/{r['source_pos']} -> L{r['target_layer']}, "
@@ -145,227 +191,216 @@ def section_best_configs(results):
 
 
 def section_positive_control(rows):
-    """Check A1 recovery at positions where logit lens works."""
+    """A1 recovery at logit-lens-good positions."""
     print("\n" + "=" * 80)
-    print("3. POSITIVE CONTROL — A1 recovery at logit-lens-good positions")
+    print("3. POSITIVE CONTROL — A1 at (layer 50, pos_001)")
     print("=" * 80)
 
-    # Filter to source positions where logit lens decodes A1
-    control_rows = [r for r in rows
-                    if r["source_layer"] == 50 and r["source_pos"] == "pos_001"]
-
-    if not control_rows:
-        print("  No rows found for (layer=50, pos_001)")
+    control = [r for r in rows if r["source_layer"] == 50 and r["source_pos"] == "pos_001"]
+    if not control:
+        print("  No rows found.")
         return
 
-    a1_rate = accuracy(control_rows, "contains_A1")
-    a2_rate = accuracy(control_rows, "contains_A2")
-    sum_rate = accuracy(control_rows, "contains_sum")
-    print(f"\n  At (layer=50, pos_001), n={len(control_rows)}:")
-    print(f"    A1 recovery: {a1_rate:.0%}")
-    print(f"    A2 recovery: {a2_rate:.0%}")
-    print(f"    Sum recovery: {sum_rate:.0%}")
+    print(f"\n  n={len(control)}")
+    print(f"  A1 top-1: {frac_top_k(control, 'A1_rank', 1):.0%}")
+    print(f"  A1 top-5: {frac_top_k(control, 'A1_rank', 5):.0%}")
+    print(f"  A1 top-10: {frac_top_k(control, 'A1_rank', 10):.0%}")
+    print(f"  A1 median rank: {median_rank(control, 'A1_rank'):.0f}")
 
-    # Break down by template
-    by_template = group_by(control_rows, ["template"])
+    by_template = group_by(control, ["template"])
     print(f"\n  By template:")
-    for (template,), group in sorted(by_template.items(), key=lambda x: accuracy(x[1], "contains_A1"), reverse=True):
-        a1 = accuracy(group, "contains_A1")
-        a2 = accuracy(group, "contains_A2")
-        print(f"    A1={a1:.0%}, A2={a2:.0%}  \"{template}\"")
+    for (template,), group in sorted(by_template.items(),
+                                      key=lambda x: frac_top_k(x[1], "A1_rank", 1), reverse=True):
+        a1 = frac_top_k(group, "A1_rank", 1)
+        a2 = frac_top_k(group, "A2_rank", 10)
+        print(f"    A1@1={a1:.0%}, A2@10={a2:.0%}  \"{template}\"")
+
+    by_tgt = group_by(control, ["target_layer"])
+    print(f"\n  By target layer:")
+    for (tgt,), group in sorted(by_tgt.items()):
+        a1 = frac_top_k(group, "A1_rank", 1)
+        a2 = frac_top_k(group, "A2_rank", 10)
+        print(f"    target_layer={tgt}: A1@1={a1:.0%}, A2@10={a2:.0%}")
 
 
 def section_negative_control(rows):
-    """Check that early layers produce nothing useful."""
+    """Early layer should show nothing."""
     print("\n" + "=" * 80)
-    print("4. NEGATIVE CONTROL — early layer (layer=20)")
+    print("4. NEGATIVE CONTROL — layer 20")
     print("=" * 80)
 
-    control_rows = [r for r in rows if r["source_layer"] == 20]
-
-    if not control_rows:
-        print("  No rows found for source_layer=20")
+    control = [r for r in rows if r["source_layer"] == 20]
+    if not control:
+        print("  No rows found.")
         return
 
-    a1_rate = accuracy(control_rows, "contains_A1")
-    a2_rate = accuracy(control_rows, "contains_A2")
-    sum_rate = accuracy(control_rows, "contains_sum")
-    err_rate = accuracy(control_rows, "is_error")
-    empty_rate = accuracy(control_rows, "is_empty")
-    print(f"\n  At (layer=20, pos_001), n={len(control_rows)}:")
-    print(f"    A1 recovery: {a1_rate:.0%}")
-    print(f"    A2 recovery: {a2_rate:.0%}")
-    print(f"    Sum recovery: {sum_rate:.0%}")
-    print(f"    Errors: {err_rate:.0%}, Empty: {empty_rate:.0%}")
+    print(f"\n  n={len(control)}")
+    for name, field in [("A1", "A1_rank"), ("A2", "A2_rank"), ("Sum", "sum_rank")]:
+        t1 = frac_top_k(control, field, 1)
+        t10 = frac_top_k(control, field, 10)
+        med = median_rank(control, field)
+        print(f"  {name}: top-1={t1:.0%}, top-10={t10:.0%}, median_rank={med:.0f}")
 
-    # What does the model generate?
-    identity_counts = Counter(r["first_num_identity"] for r in control_rows)
-    print(f"\n  First number identity:")
-    for identity, count in identity_counts.most_common():
-        print(f"    {identity:>10}: {count:>4} ({100*count/len(control_rows):.1f}%)")
+    top1_counts = Counter(r.get("top_1_token", "?") for r in control)
+    print(f"\n  Most common top-1 tokens:")
+    for tok, count in top1_counts.most_common(10):
+        print(f"    {repr(tok):>20}: {count} ({100*count/len(control):.0f}%)")
 
 
 def section_template_comparison(rows):
-    """Which templates work best overall and per-quantity."""
+    """Template effectiveness across mid/late layers."""
     print("\n" + "=" * 80)
-    print("5. TEMPLATE COMPARISON")
+    print("5. TEMPLATE COMPARISON (source layers >= 40)")
     print("=" * 80)
 
-    # Exclude early-layer negative control
-    rows_mid_late = [r for r in rows if r["source_layer"] >= 40]
+    mid_late = [r for r in rows if r["source_layer"] >= 40]
+    by_template = group_by(mid_late, ["template"])
 
-    by_template = group_by(rows_mid_late, ["template"])
-    print(f"\n  Across all mid/late source layers (>=40):")
-    print(f"  {'A1%':>5} {'A2%':>5} {'S%':>5} {'A2_1st':>6} {'n':>5}  template")
-    print(f"  " + "-" * 70)
+    print(f"\n  {'A1@1':>5} {'A1@10':>6} {'A2@1':>5} {'A2@10':>6} {'S@1':>5} {'S@10':>5} {'n':>5}  template")
+    print("  " + "-" * 80)
 
-    sorted_templates = sorted(by_template.items(),
-                               key=lambda x: accuracy(x[1], "contains_A2"), reverse=True)
-    for (template,), group in sorted_templates:
-        a1 = accuracy(group, "contains_A1")
-        a2 = accuracy(group, "contains_A2")
-        s = accuracy(group, "contains_sum")
-        a2f = first_num_accuracy(group, "A2")
-        print(f"  {a1:>5.0%} {a2:>5.0%} {s:>5.0%} {a2f:>6.0%} {len(group):>5}  \"{template}\"")
+    sorted_t = sorted(by_template.items(),
+                       key=lambda x: frac_top_k(x[1], "A2_rank", 10), reverse=True)
+    for (template,), group in sorted_t:
+        print(f"  {frac_top_k(group, 'A1_rank', 1):>5.0%} "
+              f"{frac_top_k(group, 'A1_rank', 10):>6.0%} "
+              f"{frac_top_k(group, 'A2_rank', 1):>5.0%} "
+              f"{frac_top_k(group, 'A2_rank', 10):>6.0%} "
+              f"{frac_top_k(group, 'sum_rank', 1):>5.0%} "
+              f"{frac_top_k(group, 'sum_rank', 10):>5.0%} "
+              f"{len(group):>5}  \"{template}\"")
 
 
 def section_target_layer_offset(rows):
-    """How does target layer offset affect recovery?"""
+    """Effect of target layer offset."""
     print("\n" + "=" * 80)
-    print("6. TARGET LAYER OFFSET ANALYSIS")
+    print("6. TARGET LAYER OFFSET (source layers >= 40)")
     print("=" * 80)
 
-    rows_mid_late = [r for r in rows if r["source_layer"] >= 40]
-
-    # Compute offset for each row
-    for r in rows_mid_late:
+    mid_late = [r for r in rows if r["source_layer"] >= 40]
+    for r in mid_late:
         r["_offset"] = r["target_layer"] - r["source_layer"]
 
-    by_offset = group_by(rows_mid_late, ["_offset"])
-    print(f"\n  Across all mid/late source layers (>=40):")
-    print(f"  {'offset':>6} {'A1%':>5} {'A2%':>5} {'S%':>5} {'n':>5}")
-    print(f"  " + "-" * 35)
+    by_offset = group_by(mid_late, ["_offset"])
+
+    print(f"\n  {'offset':>6} {'A1@1':>5} {'A1@10':>6} {'A2@1':>5} {'A2@10':>6} "
+          f"{'S@1':>5} {'S@10':>5} {'n':>5}")
+    print("  " + "-" * 55)
 
     for offset in sorted(by_offset.keys()):
         group = by_offset[offset]
-        a1 = accuracy(group, "contains_A1")
-        a2 = accuracy(group, "contains_A2")
-        s = accuracy(group, "contains_sum")
-        print(f"  {offset[0]:>+6} {a1:>5.0%} {a2:>5.0%} {s:>5.0%} {len(group):>5}")
+        print(f"  {offset[0]:>+6} "
+              f"{frac_top_k(group, 'A1_rank', 1):>5.0%} "
+              f"{frac_top_k(group, 'A1_rank', 10):>6.0%} "
+              f"{frac_top_k(group, 'A2_rank', 1):>5.0%} "
+              f"{frac_top_k(group, 'A2_rank', 10):>6.0%} "
+              f"{frac_top_k(group, 'sum_rank', 1):>5.0%} "
+              f"{frac_top_k(group, 'sum_rank', 10):>5.0%} "
+              f"{len(group):>5}")
 
 
-def section_source_position_comparison(rows):
+def section_source_comparison(rows):
     """Compare source (layer, position) pairs."""
     print("\n" + "=" * 80)
     print("7. SOURCE POSITION COMPARISON")
     print("=" * 80)
 
     by_source = group_by(rows, ["source_layer", "source_pos"])
-    print(f"\n  {'src_L':>5} {'src_P':>8} {'A1%':>5} {'A2%':>5} {'S%':>5} "
-          f"{'elem_A1':>7} {'elem_A2':>7} {'n':>5}  desc")
+
+    print(f"\n  {'srcL':>4} {'srcP':>8} "
+          f"{'A1@1':>5} {'A1@10':>6} {'A2@1':>5} {'A2@10':>6} "
+          f"{'S@1':>5} {'S@10':>5} {'n':>5}  desc")
     print("  " + "-" * 75)
 
     for (src_layer, src_pos), group in sorted(by_source.items()):
-        a1 = accuracy(group, "contains_A1")
-        a2 = accuracy(group, "contains_A2")
-        s = accuracy(group, "contains_sum")
-        ea1 = accuracy(group, "element_matches_A1")
-        ea2 = accuracy(group, "element_matches_A2")
         desc = group[0].get("source_desc", "")
-        print(f"  {src_layer:>5} {src_pos:>8} {a1:>5.0%} {a2:>5.0%} {s:>5.0%} "
-              f"{ea1:>7.0%} {ea2:>7.0%} {len(group):>5}  {desc}")
+        print(f"  {src_layer:>4} {src_pos:>8} "
+              f"{frac_top_k(group, 'A1_rank', 1):>5.0%} "
+              f"{frac_top_k(group, 'A1_rank', 10):>6.0%} "
+              f"{frac_top_k(group, 'A2_rank', 1):>5.0%} "
+              f"{frac_top_k(group, 'A2_rank', 10):>6.0%} "
+              f"{frac_top_k(group, 'sum_rank', 1):>5.0%} "
+              f"{frac_top_k(group, 'sum_rank', 10):>5.0%} "
+              f"{len(group):>5}  {desc}")
 
 
-def section_surprises(rows):
-    """Find rows with unexpected numbers and look for patterns."""
+def section_what_is_top1(rows):
+    """Analyze what the model IS predicting when it's not A1/A2/sum."""
     print("\n" + "=" * 80)
-    print("8. SURPRISES — unknown numbers and unexpected outputs")
+    print("8. WHAT IS TOP-1? (source layers >= 40)")
     print("=" * 80)
 
-    # Rows with unknown numbers
-    rows_with_unknown = [r for r in rows
-                         if r.get("unknown_numbers", "") and not r.get("is_error")]
+    mid_late = [r for r in rows if r["source_layer"] >= 40]
 
-    print(f"\n  Rows with unrecognized numbers: {len(rows_with_unknown)}/{len(rows)}")
-
-    if not rows_with_unknown:
-        print("  None found.")
-        return
-
-    # Collect all unknown numbers and their frequencies
-    all_unknown = []
-    for r in rows_with_unknown:
-        nums = [int(n) for n in r["unknown_numbers"].split(";") if n]
-        all_unknown.extend(nums)
-
-    unknown_counts = Counter(all_unknown)
-    print(f"\n  Most common unknown numbers:")
-    for num, count in unknown_counts.most_common(20):
-        print(f"    {num:>6}: appears {count} times")
-
-    # Show some example rows
-    print(f"\n  Sample rows with unknown numbers (up to 15):")
-    for r in rows_with_unknown[:15]:
-        print(f"    A1={r['A1']:>3}, A2={r['A2']:>3}, sum={r['sum']:>3} | "
-              f"unknown: {r['unknown_numbers']:>15} | "
-              f"L{r['source_layer']}/{r['source_pos']}->L{r['target_layer']} | "
-              f"{repr(r['generated_text'][:60])}")
-
-    # Check if unknown numbers have any relationship to inputs
-    print(f"\n  Checking if unknown numbers relate to inputs...")
-    relationships = Counter()
-    for r in rows_with_unknown:
+    categories = Counter()
+    for r in mid_late:
+        top1_num = r["top_1_number"]
         a1, a2, s = r["A1"], r["A2"], r["sum"]
-        nums = [int(n) for n in r["unknown_numbers"].split(";") if n]
-        for n in nums:
-            if n == a1 + 1 or n == a1 - 1:
-                relationships["A1 ± 1"] += 1
-            elif n == a2 + 1 or n == a2 - 1:
-                relationships["A2 ± 1"] += 1
-            elif n == s + 1 or n == s - 1:
-                relationships["sum ± 1"] += 1
-            elif a1 != 0 and n % a1 == 0:
-                relationships[f"multiple of A1"] += 1
-            elif a2 != 0 and n % a2 == 0:
-                relationships[f"multiple of A2"] += 1
-            elif n == 2 * a1:
-                relationships["2 * A1"] += 1
-            elif n == 2 * a2:
-                relationships["2 * A2"] += 1
 
-    if relationships:
-        print(f"  Potential patterns in unknown numbers:")
-        for rel, count in relationships.most_common():
-            print(f"    {rel}: {count}")
+        if top1_num is None:
+            categories["non-numeric"] += 1
+        elif top1_num == a1:
+            categories["A1"] += 1
+        elif top1_num == a2:
+            categories["A2"] += 1
+        elif top1_num == s:
+            categories["sum"] += 1
+        elif top1_num == abs(a1 - a2):
+            categories["diff"] += 1
+        else:
+            categories["other_number"] += 1
+
+    print(f"\n  Top-1 token identity:")
+    total = len(mid_late)
+    for cat, count in categories.most_common():
+        print(f"    {cat:>15}: {count:>5} ({100*count/total:.1f}%)")
+
+    other_nums = []
+    for r in mid_late:
+        top1_num = r["top_1_number"]
+        a1, a2, s = r["A1"], r["A2"], r["sum"]
+        if top1_num is not None and top1_num not in (a1, a2, s, abs(a1-a2)):
+            other_nums.append(top1_num)
+
+    if other_nums:
+        print(f"\n  Most common 'other' top-1 numbers:")
+        for num, count in Counter(other_nums).most_common(15):
+            print(f"    {num:>6}: {count}")
+
+    non_num_tokens = [r["top_1_token"] for r in mid_late if r["top_1_number"] is None]
+    if non_num_tokens:
+        print(f"\n  Most common non-numeric top-1 tokens:")
+        for tok, count in Counter(non_num_tokens).most_common(10):
+            print(f"    {repr(tok):>20}: {count}")
 
 
-def section_element_names(rows):
-    """Check if element names appear in outputs."""
+def section_rank_distributions(rows):
+    """Show rank distributions for key source positions."""
     print("\n" + "=" * 80)
-    print("9. ELEMENT NAME ANALYSIS")
+    print("9. RANK DISTRIBUTIONS (per source position, best target layer)")
     print("=" * 80)
 
-    rows_with_elements = [r for r in rows if r.get("all_elements", "")]
-    print(f"\n  Rows containing element names: {len(rows_with_elements)}/{len(rows)}")
+    by_source = group_by(rows, ["source_layer", "source_pos"])
 
-    if not rows_with_elements:
-        print("  None found.")
-        return
+    for (src_layer, src_pos), source_group in sorted(by_source.items()):
+        desc = source_group[0].get("source_desc", "")
+        by_tgt = group_by(source_group, ["target_layer"])
 
-    all_elements = []
-    for r in rows_with_elements:
-        all_elements.extend(r["all_elements"].split(";"))
+        best_tgt = max(by_tgt.keys(), key=lambda t: frac_top_k(by_tgt[t], "A2_rank", 10))
+        best_group = by_tgt[best_tgt]
 
-    elem_counts = Counter(all_elements)
-    print(f"\n  Most common elements mentioned:")
-    for elem, count in elem_counts.most_common(15):
-        print(f"    {elem}: {count}")
+        print(f"\n  L{src_layer}/{src_pos} ({desc}), best target_layer={best_tgt[0]}:")
 
-    # Check if element names match A1 or A2
-    ea1 = sum(1 for r in rows_with_elements if r["element_matches_A1"] == 1)
-    ea2 = sum(1 for r in rows_with_elements if r["element_matches_A2"] == 1)
-    print(f"\n  Element matches A1: {ea1}")
-    print(f"  Element matches A2: {ea2}")
+        for name, field in [("A1", "A1_rank"), ("A2", "A2_rank"), ("Sum", "sum_rank")]:
+            ranks = [r[field] for r in best_group if r[field] >= 0]
+            if ranks:
+                ranks_arr = np.array(ranks)
+                print(f"    {name} rank: "
+                      f"p10={np.percentile(ranks_arr, 10):.0f}, "
+                      f"p25={np.percentile(ranks_arr, 25):.0f}, "
+                      f"median={np.median(ranks_arr):.0f}, "
+                      f"p75={np.percentile(ranks_arr, 75):.0f}, "
+                      f"p90={np.percentile(ranks_arr, 90):.0f}")
 
 
 # ============================================================
@@ -373,40 +408,37 @@ def section_element_names(rows):
 # ============================================================
 
 def main():
-    parser = argparse.ArgumentParser(description="Analyze patchscope scored results")
-    parser.add_argument("--input", default="results/patchscope_scored.csv")
-    parser.add_argument("--summary-output", default="results/patchscope_summary.csv",
-                        help="Save per-config accuracy summary")
+    parser = argparse.ArgumentParser(description="Analyze patchscope logit inspection results")
+    parser.add_argument("--input", default="results/patchscope_grid.csv")
+    parser.add_argument("--summary-output", default="results/patchscope_summary.csv")
     args = parser.parse_args()
 
     if not os.path.exists(args.input):
         print(f"Input file not found: {args.input}")
         sys.exit(1)
 
-    rows = load_scored(args.input)
-    print(f"Loaded {len(rows)} scored rows from {args.input}")
+    rows = load_results(args.input)
+    print(f"Loaded {len(rows)} rows from {args.input}")
 
-    # Filter out errors
-    valid_rows = [r for r in rows if not r.get("is_error")]
-    print(f"Valid (non-error) rows: {len(valid_rows)}")
+    valid = [r for r in rows if not str(r.get("top_1_token", "")).startswith("ERROR")]
+    print(f"Valid rows: {len(valid)}")
 
-    # Run all analyses
-    results = section_accuracy_table(valid_rows)
+    section_overview(valid)
+    results = section_accuracy_table(valid)
     section_best_configs(results)
-    section_positive_control(valid_rows)
-    section_negative_control(valid_rows)
-    section_template_comparison(valid_rows)
-    section_target_layer_offset(valid_rows)
-    section_source_position_comparison(valid_rows)
-    section_surprises(valid_rows)
-    section_element_names(valid_rows)
+    section_positive_control(valid)
+    section_negative_control(valid)
+    section_template_comparison(valid)
+    section_target_layer_offset(valid)
+    section_source_comparison(valid)
+    section_what_is_top1(valid)
+    section_rank_distributions(valid)
 
-    # Save per-config summary
     if args.summary_output:
         os.makedirs(os.path.dirname(args.summary_output) or ".", exist_ok=True)
         summary_fields = ["source_layer", "source_pos", "template", "target_layer",
-                          "n", "A1_contains", "A2_contains", "sum_contains",
-                          "A1_first", "A2_first", "sum_first"]
+                          "n", "A1_top1", "A1_top10", "A2_top1", "A2_top10",
+                          "sum_top1", "sum_top10", "A1_med", "A2_med", "sum_med"]
         with open(args.summary_output, "w", newline="") as f:
             writer = csv.DictWriter(f, fieldnames=summary_fields)
             writer.writeheader()

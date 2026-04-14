@@ -113,8 +113,10 @@ CONDITIONS = {
     "baseline": (0, "dots"),
     "dots_10": (10, "dots"),
     "dots_25": (25, "dots"),
+    "dots_50": (50, "dots"),
     "dots_100": (100, "dots"),
     "counting_5": (5, "counting"),
+    "counting_10": (10, "counting"),
     "counting_25": (25, "counting"),
     "counting_50": (50, "counting"),
     "alphabet_10": (10, "alphabet"),
@@ -185,13 +187,13 @@ def find_filler_boundaries(
             break
         filler_start = i
 
-    # Find "Filler" token (should be right before the colon, possibly with a space)
+    # Find "Filler" keyword before the colon (may be split across tokens, e.g. "F"+"iller")
     filler_keyword_pos = -1
     if colon_pos >= 0:
-        for i in range(colon_pos - 1, max(colon_pos - 3, -1), -1):
-            decoded = tokenizer.decode([ids[i]])
-            if "Filler" in decoded or "filler" in decoded:
-                filler_keyword_pos = i
+        for start in range(colon_pos - 1, max(colon_pos - 5, -1), -1):
+            combined = tokenizer.decode(ids[start:colon_pos]).strip()
+            if combined == "Filler" or combined == "filler":
+                filler_keyword_pos = start
                 break
 
     # Scan backward from "Filler" keyword past whitespace to find true question end
@@ -786,7 +788,8 @@ def run_extraction(
                 example_rng = random.Random(prob_idx)
 
                 messages = build_messages_for_condition(
-                    few_shot[:5], problem, filler_type, k, rng=example_rng
+                    few_shot[:5], problem, filler_type, k, rng=example_rng,
+                    dataset_type=dataset_type,
                 )
                 full_text = tokenizer.apply_chat_template(
                     messages, tokenize=False, add_generation_prompt=True

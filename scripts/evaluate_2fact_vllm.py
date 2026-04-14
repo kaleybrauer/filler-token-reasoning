@@ -90,6 +90,7 @@ def main():
 
     if use_server:
         import subprocess
+        import signal
         import atexit
         from openai import OpenAI
 
@@ -118,8 +119,17 @@ def main():
             server_proc = subprocess.Popen(
                 server_cmd, stdout=server_log, stderr=subprocess.STDOUT,
                 env={**os.environ, "VLLM_USE_V1": "0"},
+                start_new_session=True,
             )
-            atexit.register(lambda: server_proc.kill())
+            def _cleanup_server():
+                if server_proc and server_proc.poll() is None:
+                    # Kill entire process group to catch PP child workers
+                    try:
+                        os.killpg(os.getpgid(server_proc.pid), signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+            atexit.register(_cleanup_server)
+            signal.signal(signal.SIGTERM, lambda *_: (_cleanup_server(), sys.exit(0)))
 
         client = OpenAI(base_url=f"http://localhost:{port}/v1", api_key="dummy")
         print("Waiting for server to load model...")

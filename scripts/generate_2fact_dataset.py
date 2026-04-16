@@ -117,16 +117,26 @@ def main() -> None:
         description="Generate 2-fact addition dataset (atomic numbers only)."
     )
     parser.add_argument("--known-facts", type=Path, default=KNOWN_FACTS_PATH)
-    parser.add_argument("--output", type=Path, default=OUTPUT_PATH)
+    parser.add_argument("--output", type=Path, default=None)
     parser.add_argument("--num-examples", type=int, default=NUM_EXAMPLES)
+    parser.add_argument("--max-atomic-number", type=int, default=None,
+                        help="Only use elements with atomic number < this value")
     parser.add_argument("--preview", action="store_true")
     args = parser.parse_args()
+
+    if args.output is None:
+        if args.max_atomic_number is not None:
+            args.output = Path(f"data/2fact_addition_dataset_lt{args.max_atomic_number}.json")
+        else:
+            args.output = OUTPUT_PATH
 
     # Load atomic number facts only
     with open(args.known_facts) as f:
         all_facts = json.load(f)
 
     atomic_facts = [f for f in all_facts if "atomic number" in f["question"]]
+    if args.max_atomic_number is not None:
+        atomic_facts = [f for f in atomic_facts if f["answer"] < args.max_atomic_number]
     print(f"Loaded {len(atomic_facts)} atomic number facts (of {len(all_facts)} total).")
 
     if len(atomic_facts) < NUM_FEW_SHOT + 4:

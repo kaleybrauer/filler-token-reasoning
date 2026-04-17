@@ -194,10 +194,8 @@ def main():
                     ax.set_xlabel("Offset from question_end")
                     # Annotate filler boundaries
                     if boundaries:
-                        fs = boundaries.get("filler_start_offset")
                         fe = boundaries.get("filler_end_offset")
-                        if fs is not None:
-                            ax.axvline(fs - 0.5, color="white", linewidth=1, linestyle="--", alpha=0.7)
+                        if fe is not None:
                             ax.axvline(fe + 0.5, color="white", linewidth=1, linestyle="--", alpha=0.7)
                 else:
                     ax.set_xticks(range(n_pos))

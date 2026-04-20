@@ -25,14 +25,22 @@ plt.rcParams.update({"font.size": 20})
 
 
 def classify(a1, a2, sum_v):
+    # Dominant sum
     if sum_v > 0.3 and sum_v > max(a1, a2) * 1.5:
         return "A₁+A₂", "#d62728", f"{sum_v:.0%}"
-    if a1 > 0.3 and a1 > a2 * 1.5:
+    # Dominant A1
+    if a1 > 0.3 and a1 > a2 * 1.5 and a1 > sum_v * 1.5:
         return "A₁", "#228B22", f"{a1:.0%}"
-    if a2 > 0.3 and a2 > a1 * 1.5:
+    # Dominant A2
+    if a2 > 0.3 and a2 > a1 * 1.5 and a2 > sum_v * 1.5:
         return "A₂", "#1f77b4", f"{a2:.0%}"
-    if a1 > 0.15 or a2 > 0.15 or sum_v > 0.15:
-        return "mixed", "#D4A03C", f"A₁={a1:.0%}, A₂={a2:.0%}"
+    # Mixed — show whichever metrics are ≥10%
+    if a1 >= 0.10 or a2 >= 0.10 or sum_v >= 0.10:
+        parts = []
+        if a1 >= 0.10: parts.append(f"A₁={a1:.0%}")
+        if a2 >= 0.10: parts.append(f"A₂={a2:.0%}")
+        if sum_v >= 0.10: parts.append(f"Σ={sum_v:.0%}")
+        return "mixed", "#D4A03C", ", ".join(parts)
     return "unclear", "#888888", None
 
 

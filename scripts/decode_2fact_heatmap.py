@@ -48,11 +48,13 @@ def pos_label(p):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--condition", nargs="+", default=["dots_100"])
-    parser.add_argument("--extraction-dir", type=Path, default=Path("data/extracted_states_2fact"))
-    parser.add_argument("--lm-head", type=Path, default=Path("data/model_weights/deepseek_v3.2/lm_head_weight.npy"))
-    parser.add_argument("--rms-norm", type=Path, default=Path("data/model_weights/deepseek_v3.2/rms_norm_weight.npy"))
+    parser.add_argument("--extraction-dir", type=Path, default=Path("data/extracted_states_2fact_allpos"))
+    parser.add_argument("--lm-head", type=Path, default=Path("data/model_weights/deepseek_v3/lm_head_weight.npy"))
+    parser.add_argument("--rms-norm", type=Path, default=Path("data/model_weights/deepseek_v3/rms_norm_weight.npy"))
     parser.add_argument("--model-path", type=str, default="/workspace/models/deepseek-v3-awq")
     parser.add_argument("--output-dir", type=Path, default=Path("results/unsupervised_decode_2fact"))
+    parser.add_argument("--incorrect-only", action="store_true",
+                        help="Filter to examples where model got the final answer WRONG")
     args = parser.parse_args()
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
@@ -85,9 +87,15 @@ def main():
             with open(f, "rb") as fp:
                 d = pickle.load(fp)
             n_total += 1
-            if d.get("model_correct", False):
-                all_data.append(d)
-        print(f"  {len(all_data)}/{n_total} correct examples")
+            correct = d.get("model_correct", False)
+            if args.incorrect_only:
+                if not correct:
+                    all_data.append(d)
+            else:
+                if correct:
+                    all_data.append(d)
+        label = "incorrect" if args.incorrect_only else "correct"
+        print(f"  {len(all_data)}/{n_total} {label} examples")
 
         # Get positions and layers
         d0 = all_data[0]
@@ -149,7 +157,8 @@ def main():
             print(f"  {pos} done")
 
         # Save JSON
-        outfile = args.output_dir / f"decode_2fact_{cond}.json"
+        suffix_cond = f"{cond}_incorrect" if args.incorrect_only else cond
+        outfile = args.output_dir / f"decode_2fact_{suffix_cond}.json"
         with open(outfile, "w") as f:
             json.dump(results, f, indent=2)
         print(f"  Saved {outfile}")
@@ -208,13 +217,15 @@ def main():
                 if ax == axes[0]:
                     ax.set_ylabel("Layer")
 
-            fig.suptitle(f"{cond}: what is encoded at each (layer, position)?", fontsize=22)
+            title_suffix = " — model INCORRECT" if args.incorrect_only else ""
+            fig.suptitle(f"{cond}{title_suffix}: what is encoded at each (layer, position)?",
+                         fontsize=22)
             fig.subplots_adjust(right=0.88, wspace=0.15, top=0.93)
             cbar_ax = fig.add_axes([0.90, 0.15, 0.02, 0.65])
             fig.colorbar(im, cax=cbar_ax, label=cbar_label)
 
             for ext in ["png", "pdf"]:
-                fig.savefig(args.output_dir / f"heatmap_2fact_{cond}_{suffix}.{ext}",
+                fig.savefig(args.output_dir / f"heatmap_2fact_{suffix_cond}_{suffix}.{ext}",
                             dpi=150, bbox_inches="tight")
             plt.close()
             print(f"  Saved heatmap ({suffix})")

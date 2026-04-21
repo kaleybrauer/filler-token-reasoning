@@ -408,8 +408,8 @@ def main():
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
     # Load tokenizer and number map
-    from transformers import PreTrainedTokenizerFast
-    tokenizer = PreTrainedTokenizerFast.from_pretrained(args.model_path)
+    from extract_hidden_states import load_tokenizer
+    tokenizer = load_tokenizer(args.model_path)
     number_tokens = build_number_token_map(tokenizer)
     number_tok_ids = sorted(number_tokens.keys())
     number_tok_vals = np.array([number_tokens[tid] for tid in number_tok_ids])

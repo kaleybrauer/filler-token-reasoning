@@ -71,8 +71,8 @@ def main():
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
     # Load tokenizer and build number token map
-    from transformers import PreTrainedTokenizerFast
-    tokenizer = PreTrainedTokenizerFast.from_pretrained(args.model_path)
+    from extract_hidden_states import load_tokenizer
+    tokenizer = load_tokenizer(args.model_path)
     number_tokens = {}
     for val in range(args.max_val):
         ids = tokenizer.encode(str(val), add_special_tokens=False)

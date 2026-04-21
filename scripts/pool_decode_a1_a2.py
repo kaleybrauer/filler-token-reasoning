@@ -24,7 +24,8 @@ import pickle
 from pathlib import Path
 
 import numpy as np
-from transformers import PreTrainedTokenizerFast
+
+from extract_hidden_states import load_tokenizer
 
 
 def rms_norm(x, weight, eps=1e-6):
@@ -55,7 +56,7 @@ def main():
     # Load model weights and tokenizer
     lm_head = np.load(args.lm_head).astype(np.float32)
     norm_weight = np.load(args.rms_norm_path).astype(np.float32)
-    tokenizer = PreTrainedTokenizerFast.from_pretrained(args.model_path)
+    tokenizer = load_tokenizer(args.model_path)
     number_tokens = {}
     for val in range(args.max_val):
         ids = tokenizer.encode(str(val), add_special_tokens=False)

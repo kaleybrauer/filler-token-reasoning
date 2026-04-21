@@ -59,8 +59,8 @@ def main():
     args = parser.parse_args()
 
     # Load model weights and tokenizer
-    from transformers import PreTrainedTokenizerFast
-    tokenizer = PreTrainedTokenizerFast.from_pretrained(args.model_path)
+    from extract_hidden_states import load_tokenizer
+    tokenizer = load_tokenizer(args.model_path)
     lm_head = np.load(args.lm_head).astype(np.float32)
     norm_weight = np.load(args.rms_norm_path).astype(np.float32)
 

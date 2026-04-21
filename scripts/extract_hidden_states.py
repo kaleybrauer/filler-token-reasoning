@@ -461,26 +461,41 @@ class HiddenStateExtractor:
 # Model loading
 # ==============================================================================
 
+def _is_kimi_family(model_path: str) -> bool:
+    """Kimi K2 ships a custom tiktoken tokenizer (tokenization_kimi.py)."""
+    from pathlib import Path
+    return (Path(model_path) / "tokenization_kimi.py").exists()
+
+
 def load_tokenizer(model_path: str):
     """
     Load the tokenizer from a model directory.
 
-    Uses PreTrainedTokenizerFast to load tokenizer.json directly, bypassing
-    the tokenizer_config.json "tokenizer_class": "LlamaTokenizer" override.
-    AutoTokenizer loads as LlamaTokenizer (sentencepiece) which aggressively
-    merges tokens (e.g. 250 dots → 2 tokens). The fast tokenizer respects
-    the pre_tokenizer rules in tokenizer.json and gives correct tokenization
-    (e.g. 250 dots → 250 tokens).
+    DeepSeek V3: PreTrainedTokenizerFast loads tokenizer.json directly, bypassing
+      the "tokenizer_class": "LlamaTokenizer" override in tokenizer_config.json
+      (LlamaTokenizer aggressively merges tokens — 250 dots → 2 tokens).
+    Kimi K2: AutoTokenizer + trust_remote_code loads the custom TikTokenTokenizer
+      from tokenization_kimi.py.
     """
     import json
+    import logging
     from pathlib import Path
+
+    if _is_kimi_family(model_path):
+        from transformers import AutoTokenizer
+        tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
+        # Silence the verbose "Calling super().encode" logger in tokenization_kimi.py
+        for name in list(logging.Logger.manager.loggerDict):
+            if "tokenization_kimi" in name:
+                logging.getLogger(name).setLevel(logging.CRITICAL)
+        return tokenizer
+
     from transformers import PreTrainedTokenizerFast
 
     model_dir = Path(model_path)
     tokenizer_file = model_dir / "tokenizer.json"
     config_file = model_dir / "tokenizer_config.json"
 
-    # Read chat_template and special tokens from tokenizer_config.json
     with open(config_file) as f:
         config = json.load(f)
 
@@ -495,11 +510,10 @@ def load_tokenizer(model_path: str):
 
 def load_model(model_path: str):
     """
-    Load the AWQ model via transformers with device_map="auto".
+    Load the quantized model via transformers with device_map="auto".
 
-    Note: with vLLM 0.8.5 installed, transformers is ~4.48 which does NOT
-    have the slow _move_missing_keys_from_meta_to_device bug (that's 5.x).
-    Loading should take ~5-10 minutes on 3x H200.
+    Supports DeepSeek V3 AWQ (fp16 kernels via autoawq) and Kimi K2 AWQ / W4A16
+    (bf16 for Kimi).
     """
     from transformers import AutoModelForCausalLM
 
@@ -513,20 +527,22 @@ def load_model(model_path: str):
         mem = torch.cuda.get_device_properties(i).total_memory / 1e9
         print(f"  GPU {i}: {name}, {mem:.0f} GB")
 
-    # Set max_memory per GPU to prevent CPU offloading.
-    # AWQ quantizer rejects device maps with CPU.
+    # Reserve 80% of each GPU; autoawq rejects CPU in device map.
     max_memory = {
         i: f"{int(torch.cuda.get_device_properties(i).total_memory * 0.80 / 1e9)}GiB"
         for i in range(n_gpus)
     }
     print(f"  max_memory: {max_memory}")
 
+    # V3 preserves historical fp16 behavior. Kimi K2 uses bf16 (its config default).
+    dtype = "auto" if _is_kimi_family(model_path) else torch.float16
+
     t0 = time.time()
     model = AutoModelForCausalLM.from_pretrained(
         model_path,
         device_map="auto",
         max_memory=max_memory,
-        torch_dtype=torch.float16,
+        torch_dtype=dtype,
         trust_remote_code=True,
         attn_implementation="eager",
     )
@@ -975,7 +991,7 @@ def main():
     print(f"Conditions: {selected}")
 
     # Determine layers
-    num_layers = 61  # DeepSeek V3
+    num_layers = 61  # DeepSeek V3 and Kimi K2
     if args.layers == "all":
         layer_indices = list(range(num_layers))
     elif args.layers == "every4":

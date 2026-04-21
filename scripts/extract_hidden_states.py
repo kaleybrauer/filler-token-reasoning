@@ -1032,6 +1032,54 @@ def main():
     # Load model
     model, tokenizer = load_model(args.model_path)
 
+    # Save lm_head + final norm weights (needed by all downstream decode scripts).
+    # Cheap, idempotent, preserved across restarts.
+    family_subdir = "kimi_k2" if _is_kimi_family(args.model_path) else "deepseek_v3"
+    weights_dir = Path("data/model_weights") / family_subdir
+    lm_head_path = weights_dir / "lm_head_weight.npy"
+    norm_path = weights_dir / "rms_norm_weight.npy"
+    if not (lm_head_path.exists() and norm_path.exists()):
+        weights_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            lm_head_w = model.lm_head.weight.detach().to("cpu").to(torch.float16).numpy()
+            np.save(lm_head_path, lm_head_w)
+            print(f"Saved {lm_head_path}: {lm_head_w.shape} {lm_head_w.dtype}")
+        except Exception as e:
+            print(f"lm_head save failed: {e}")
+        try:
+            norm_w = model.model.norm.weight.detach().to("cpu").to(torch.float32).numpy()
+            np.save(norm_path, norm_w)
+            print(f"Saved {norm_path}: {norm_w.shape} {norm_w.dtype}")
+        except Exception as e:
+            print(f"rms_norm save failed: {e}")
+    else:
+        print(f"Weights already saved at {weights_dir}, skipping")
+
+    # Smoke-test: one forward pass on the first example to verify the model runs.
+    # Fails fast before the hours-long extraction loop if compressed-tensors + Blackwell
+    # hits any unseen forward-pass issue.
+    print("\n=== Smoke test forward pass ===")
+    _smoke_cond = list(selected.items())[0]
+    _k, _ftype = _smoke_cond[1]
+    _messages = build_messages_for_condition(
+        few_shot[:5], problems[0], _ftype, _k,
+        rng=random.Random(0), dataset_type=args.dataset_type,
+    )
+    _text = tokenizer.apply_chat_template(_messages, tokenize=False, add_generation_prompt=True)
+    _ids = tokenizer(_text, return_tensors="pt")["input_ids"]
+    _dev = next(model.parameters()).device
+    _ids = _ids.to(_dev)
+    _t = time.time()
+    with torch.no_grad():
+        _out = model(_ids, use_cache=False)
+    torch.cuda.synchronize()
+    print(f"  forward pass: {time.time()-_t:.2f}s, input_len={_ids.shape[1]}, "
+          f"logits={tuple(_out.logits.shape)}")
+    _next_id = _out.logits[0, -1].argmax().item()
+    print(f"  next token: id={_next_id}, decoded={tokenizer.decode([_next_id])!r}")
+    del _out
+    torch.cuda.empty_cache()
+
     # Run extraction
     run_extraction(
         model=model,

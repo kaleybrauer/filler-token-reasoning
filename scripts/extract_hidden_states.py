@@ -111,10 +111,15 @@ FILLER_ABSOLUTE_POSITIONS = None  # Set via --filler-positions; uses fractions i
 
 CONDITIONS = {
     "baseline": (0, "dots"),
+    "dots_1": (1, "dots"),
+    "dots_3": (3, "dots"),
+    "dots_5": (5, "dots"),
     "dots_10": (10, "dots"),
     "dots_25": (25, "dots"),
     "dots_50": (50, "dots"),
     "dots_100": (100, "dots"),
+    "counting_1": (1, "counting"),
+    "counting_3": (3, "counting"),
     "counting_5": (5, "counting"),
     "counting_10": (10, "counting"),
     "counting_25": (25, "counting"),
@@ -527,15 +532,19 @@ def load_model(model_path: str):
         mem = torch.cuda.get_device_properties(i).total_memory / 1e9
         print(f"  GPU {i}: {name}, {mem:.0f} GB")
 
-    # Reserve 80% of each GPU; autoawq rejects CPU in device map.
+    # Reserve per-GPU fraction; autoawq rejects CPU in device map.
+    # Kimi K2 AWQ (~540 GB) is larger than V3 (~330 GB) so needs a higher fraction.
+    gpu_frac = 0.85 if _is_kimi_family(model_path) else 0.80
     max_memory = {
-        i: f"{int(torch.cuda.get_device_properties(i).total_memory * 0.80 / 1e9)}GiB"
+        i: f"{int(torch.cuda.get_device_properties(i).total_memory * gpu_frac / 1e9)}GiB"
         for i in range(n_gpus)
     }
     print(f"  max_memory: {max_memory}")
 
-    # V3 preserves historical fp16 behavior. Kimi K2 uses bf16 (its config default).
-    dtype = "auto" if _is_kimi_family(model_path) else torch.float16
+    # AWQ CUDA kernels (awq_ext.gemm_forward_cuda) require fp16; Kimi K2's config
+    # default is bf16 but passing "auto" triggers "expected Half but found BFloat16"
+    # in the kernel path. Force fp16 for any AWQ model.
+    dtype = torch.float16
 
     t0 = time.time()
     model = AutoModelForCausalLM.from_pretrained(

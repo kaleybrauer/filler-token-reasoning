@@ -137,13 +137,32 @@ PROMPT_CHEMISTRY_LETTERPOS = (
     "If you cannot determine the answer, output null for that field."
 )
 
+PROMPT_GEOGRAPHY_CAPITALPOS = (
+    "These are potentially important tokens that were taken from a model "
+    "doing a geography task. The model was computing a property of a specific "
+    "city, and the tokens in this list are hints about which "
+    "city the model was 'thinking about' in its internal state while doing "
+    "the calculation, when it has not yet gotten to outputting the final "
+    "answer. The original prompt contained formatting words like 'Filler' "
+    "and 'Answer' that are not relevant to the task. The model is Chinese, "
+    "so it may use Chinese tokens as well as English.\n\n"
+    "Which city was the model thinking about?\n\n"
+    "Think briefly, then end your response with a JSON object on its own line: "
+    "{\"answer\": <string — full city name in English, e.g. \"Paris\">, "
+    "\"confidence\": <float 0-1>, "
+    "\"backups\": [<string>, <string>, ... up to 10 ranked alternative city names]}. "
+    "If you cannot determine the answer, output null for that field."
+)
+
 PROMPTS = {
-    ("2fact",     "neutral"):   PROMPT_NEUTRAL_2FACT,
-    ("2fact",     "addition"):  PROMPT_ADDITION_2FACT,
-    ("1fact",     "neutral"):   PROMPT_NEUTRAL_1FACT,
-    ("1fact",     "addition"):  PROMPT_ADDITION_1FACT,
-    ("letterpos", "neutral"):   PROMPT_NEUTRAL_LETTERPOS,
-    ("letterpos", "chemistry"): PROMPT_CHEMISTRY_LETTERPOS,
+    ("2fact",      "neutral"):   PROMPT_NEUTRAL_2FACT,
+    ("2fact",      "addition"):  PROMPT_ADDITION_2FACT,
+    ("1fact",      "neutral"):   PROMPT_NEUTRAL_1FACT,
+    ("1fact",      "addition"):  PROMPT_ADDITION_1FACT,
+    ("letterpos",  "neutral"):   PROMPT_NEUTRAL_LETTERPOS,
+    ("letterpos",  "chemistry"): PROMPT_CHEMISTRY_LETTERPOS,
+    ("capitalpos", "neutral"):   PROMPT_NEUTRAL_LETTERPOS,   # same neutral framing
+    ("capitalpos", "geography"): PROMPT_GEOGRAPHY_CAPITALPOS,
 }
 
 MODEL_IDS = {
@@ -352,6 +371,55 @@ def run_one_letterpos(client, label, model_id, prompt, samples, max_workers):
     return scored, summary
 
 
+def run_one_capitalpos(client, label, model_id, prompt, samples, max_workers):
+    n = len(samples)
+    print(f"\n=== {label} (n={n}) ===", flush=True)
+    results = [None] * n
+
+    def worker(i):
+        user = f"Top tokens (rank. score  'string'):\n{format_tokens(samples[i]['top_tokens'])}"
+        try:
+            resp = client.messages.create(
+                model=model_id, max_tokens=1000,
+                system=prompt,
+                messages=[{"role": "user", "content": user}],
+            )
+            return i, resp.content[0].text, None
+        except Exception as e:
+            return i, None, str(e)
+
+    with ThreadPoolExecutor(max_workers=max_workers) as ex:
+        futures = [ex.submit(worker, i) for i in range(n)]
+        for f in tqdm(as_completed(futures), total=n, desc=label):
+            i, text, err = f.result()
+            results[i] = {"text": text, "error": err}
+
+    scored = []
+    for i, s in enumerate(samples):
+        parsed = parse(results[i]["text"] or "", "letterpos") or {}
+        pred = parsed.get("answer")
+        backups = parsed.get("backups", []) or []
+        truth = s.get("intermediate")
+        top_k = {}
+        for K in [1, 2, 3, 5, 10]:
+            cand = [pred] + backups[: K - 1]
+            top_k[K] = any(_matches_str(c, truth) for c in cand)
+        scored.append({
+            "idx": s.get("idx"), "intermediate": truth,
+            "answer": s.get("answer"),
+            "pred": pred, "backups": backups,
+            "got": _matches_str(pred, truth),
+            "top_k": top_k, "raw": results[i]["text"],
+        })
+
+    summary = {}
+    for K in [1, 2, 3, 5, 10]:
+        hits = sum(r["top_k"][K] for r in scored)
+        summary[K] = hits
+        print(f"  top-{K:>2}: city={hits}/{n}", flush=True)
+    return scored, summary
+
+
 # ----------------------------------------------------------------------------
 
 def main():
@@ -363,13 +431,15 @@ def main():
                     help="Output dir for llm_decode_* files (default: same as --aggregated-dir)")
     ap.add_argument("--conditions", nargs="+", required=True,
                     help="Condition names")
-    ap.add_argument("--task", choices=["2fact", "1fact", "letterpos"], default="2fact",
+    ap.add_argument("--task", choices=["2fact", "1fact", "letterpos", "capitalpos"], default="2fact",
                     help="2fact: decode two operands. 1fact: decode one retrieved value. "
                          "letterpos: decode one element name (from an atomic-number → "
-                         "element → Nth letter task).")
-    ap.add_argument("--prompt", choices=["neutral", "addition", "chemistry"], default="neutral",
+                         "element → Nth letter task). capitalpos: decode one capital city "
+                         "name (from a country → capital → last letter task).")
+    ap.add_argument("--prompt", choices=["neutral", "addition", "chemistry", "geography"], default="neutral",
                     help="Prompt framing. Valid pairs: (2fact, 1fact) × (neutral, addition), "
-                         "(letterpos) × (neutral, chemistry).")
+                         "(letterpos) × (neutral, chemistry), "
+                         "(capitalpos) × (neutral, geography).")
     ap.add_argument("--models", nargs="+", default=["haiku", "sonnet"],
                     choices=list(MODEL_IDS))
     ap.add_argument("--threads", type=int, default=8,
@@ -397,7 +467,8 @@ def main():
 
     runner = {"2fact": run_one_2fact,
               "1fact": run_one_1fact,
-              "letterpos": run_one_letterpos}[args.task]
+              "letterpos": run_one_letterpos,
+              "capitalpos": run_one_capitalpos}[args.task]
 
     all_summaries = {}
     for cond in args.conditions:
@@ -428,7 +499,7 @@ def main():
             print(f"  {cond:<12} {mlabel:<7} {n:>4}   {prim:>4}/{n}     "
                   f"{t3:>4}/{n}     {t5:>4}/{n}     {t10:>4}/{n}")
     else:
-        target = "A" if args.task == "1fact" else "element"
+        target = {"1fact": "A", "letterpos": "element", "capitalpos": "city"}.get(args.task, "element")
         print(f"{'Condition':<14} {'Model':<7} {'N':>4}  "
               f"{'top-1':>8} {'top-2':>8} {'top-3':>8} {'top-5':>8} {'top-10':>8}  ({target})")
         for (cond, mlabel), (n, summary) in all_summaries.items():

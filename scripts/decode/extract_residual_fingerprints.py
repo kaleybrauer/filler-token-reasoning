@@ -57,6 +57,10 @@ def main():
                     help="Also include positions after filler_end (the 'Answer:' prompt region)")
     ap.add_argument("--top-k", type=int, default=30,
                     help="Fingerprint size per (setting, example)")
+    ap.add_argument("--no-residual", action="store_true",
+                    help="Skip the mean-subtraction step: take top-K by raw per-example "
+                         "probability instead of residual (P_e - P_mean). For ablating "
+                         "the residual step.")
     ap.add_argument("--max-examples", type=int, default=None,
                     help="Cap number of correct examples (for fast iteration)")
     ap.add_argument("--output", type=Path, required=True)
@@ -147,17 +151,22 @@ def main():
         logits = H @ lm_head.T                        # (n, vocab)
         shifted = logits - logits.max(axis=1, keepdims=True)
         probs = np.exp(shifted) / np.exp(shifted).sum(axis=1, keepdims=True)
-        # Cross-example mean (noise baseline)
+        # Cross-example mean (noise baseline) — also used for debug preview
         mean_p = probs.mean(axis=0)                   # (vocab,)
-        residual = probs - mean_p[None, :]            # (n, vocab)
 
-        # Top-K by residual per example
-        order = np.argpartition(-residual, args.top_k - 1, axis=1)[:, :args.top_k]
+        if args.no_residual:
+            # Ablation: rank by raw prob per example (no mean subtraction)
+            score = probs
+        else:
+            score = probs - mean_p[None, :]            # residual (n, vocab)
+
+        # Top-K by score per example
+        order = np.argpartition(-score, args.top_k - 1, axis=1)[:, :args.top_k]
         # Sort those top-K descending by value
         rows = np.arange(n)[:, None]
-        sort_in_topk = np.argsort(-residual[rows, order], axis=1)
+        sort_in_topk = np.argsort(-score[rows, order], axis=1)
         topk_ids = order[rows, sort_in_topk]
-        topk_vals = residual[rows, topk_ids]
+        topk_vals = score[rows, topk_ids]
 
         fp_ids[s_idx] = topk_ids
         fp_vals[s_idx] = topk_vals

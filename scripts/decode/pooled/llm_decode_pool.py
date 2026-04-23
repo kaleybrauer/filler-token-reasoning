@@ -14,7 +14,7 @@ to identify the two operands being added. Two modes:
 Expects $ANTHROPIC_API_KEY or a key path via --key-path.
 
 Usage:
-    python scripts/decode/llm_decode_pool.py \
+    python scripts/decode/pooled/llm_decode_pool.py \
         --input /tmp/pooled_top50.json \
         --mode fullvocab \
         --output /tmp/llm_decode_results.json

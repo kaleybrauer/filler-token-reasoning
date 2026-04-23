@@ -15,7 +15,7 @@ Diversity of a setting is the fraction of unique token IDs across
 that setting has the same fingerprint (no example-specific signal).
 
 Usage:
-    python scripts/decode/select_settings_from_fingerprints.py \
+    python scripts/dev/select_settings_from_fingerprints.py \
         --fingerprints /tmp/residual_fingerprints_kimi_dots10.npz \
         --output /tmp/kept_settings_kimi_dots10.json
 """

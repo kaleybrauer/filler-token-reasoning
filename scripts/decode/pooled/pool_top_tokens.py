@@ -8,7 +8,7 @@ top-K tokens per sampled example. Supports filtering to numeric tokens only
 names off the tokens?").
 
 Usage:
-    python scripts/decode/pool_top_tokens.py \
+    python scripts/decode/pooled/pool_top_tokens.py \
         --pool-result results/pool_decode_global_dots_10_kimi.json \
         --extraction-dir data/kimi-k2/extracted_states_2fact_allpos_kimi_k2/dots_10 \
         --model-path /workspace/models/kimi-k2-w4a16/ \
@@ -30,7 +30,7 @@ import numpy as np
 from tqdm import tqdm
 
 # Repo-local import
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 from extract.extract_hidden_states import load_tokenizer  # noqa: E402
 

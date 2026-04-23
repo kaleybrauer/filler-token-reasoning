@@ -232,15 +232,19 @@ def main():
         for ex, response in zip(examples, responses):
             predicted = parse_letter(response)
             correct = predicted == ex["answer"]
-            results.append({
-                "element": ex["element"],
-                "atomic_number": ex["atomic_number"],
-                "position": ex["position"],
+            row = {
                 "expected": ex["answer"],
                 "predicted": predicted,
                 "correct": correct,
                 "raw_response": response,
-            })
+            }
+            # Pass through any task-specific metadata (element/atomic_number/
+            # position for elements, intermediate for capitals, etc.).
+            for key, value in ex.items():
+                if key in ("answer", "question", "type"):
+                    continue
+                row[key] = value
+            results.append(row)
         acc = sum(r["correct"] for r in results) / len(results)
         return {"accuracy": acc, "results": results, "k": k, "filler_type": filler_type}
 

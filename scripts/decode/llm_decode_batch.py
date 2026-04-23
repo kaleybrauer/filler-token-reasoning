@@ -103,11 +103,47 @@ PROMPT_ADDITION_1FACT = (
     "If you cannot determine n, output null for that field."
 )
 
+PROMPT_NEUTRAL_LETTERPOS = (
+    "These are potentially important tokens that were taken from a model's "
+    "internal state during a task. The tokens in this list are hints about "
+    "what specific concept, entity, or name the model was 'thinking about' "
+    "in its internal state while doing the calculation, when it has not yet "
+    "gotten to outputting the final answer. The original prompt contained "
+    "formatting words like 'Filler' and 'Answer' that are not relevant to "
+    "the task. The model is Chinese, so it may use Chinese tokens as well "
+    "as English.\n\n"
+    "What specific thing (person, place, object, concept, etc.) was the "
+    "model thinking about?\n\n"
+    "Think briefly, then end your response with a JSON object on its own line: "
+    "{\"answer\": <string>, \"confidence\": <float 0-1>, "
+    "\"backups\": [<string>, <string>, ... up to 10 ranked alternatives]}. "
+    "If you cannot determine the answer, output null for that field."
+)
+
+PROMPT_CHEMISTRY_LETTERPOS = (
+    "These are potentially important tokens that were taken from a model "
+    "doing a chemistry task. The model was computing a property of a specific "
+    "chemical element, and the tokens in this list are hints about which "
+    "element the model was 'thinking about' in its internal state while doing "
+    "the calculation, when it has not yet gotten to outputting the final "
+    "answer. The original prompt contained formatting words like 'Filler' "
+    "and 'Answer' that are not relevant to the task. The model is Chinese, "
+    "so it may use Chinese tokens as well as English.\n\n"
+    "Which chemical element was the model thinking about?\n\n"
+    "Think briefly, then end your response with a JSON object on its own line: "
+    "{\"answer\": <string — full element name in English, e.g. \"Chlorine\">, "
+    "\"confidence\": <float 0-1>, "
+    "\"backups\": [<string>, <string>, ... up to 10 ranked alternative element names]}. "
+    "If you cannot determine the answer, output null for that field."
+)
+
 PROMPTS = {
-    ("2fact", "neutral"):  PROMPT_NEUTRAL_2FACT,
-    ("2fact", "addition"): PROMPT_ADDITION_2FACT,
-    ("1fact", "neutral"):  PROMPT_NEUTRAL_1FACT,
-    ("1fact", "addition"): PROMPT_ADDITION_1FACT,
+    ("2fact",     "neutral"):   PROMPT_NEUTRAL_2FACT,
+    ("2fact",     "addition"):  PROMPT_ADDITION_2FACT,
+    ("1fact",     "neutral"):   PROMPT_NEUTRAL_1FACT,
+    ("1fact",     "addition"):  PROMPT_ADDITION_1FACT,
+    ("letterpos", "neutral"):   PROMPT_NEUTRAL_LETTERPOS,
+    ("letterpos", "chemistry"): PROMPT_CHEMISTRY_LETTERPOS,
 }
 
 MODEL_IDS = {
@@ -124,17 +160,23 @@ def build_prompt(task: str, mode: str) -> str:
 # JSON parsing + formatting
 # ----------------------------------------------------------------------------
 
-JSON_RE_2FACT = re.compile(r'\{[^{}]*"n1"[^{}]*"backups"[^{}]*\[[^\]]*\][^{}]*\}', re.DOTALL)
-JSON_ANY_2FACT = re.compile(r'\{[^{}]*"n1"[^{}]*\}', re.DOTALL)
-JSON_RE_1FACT = re.compile(r'\{[^{}]*"n"[^{}]*"backups"[^{}]*\[[^\]]*\][^{}]*\}', re.DOTALL)
-JSON_ANY_1FACT = re.compile(r'\{[^{}]*"n"\s*:[^{}]*\}', re.DOTALL)
+JSON_RE_2FACT     = re.compile(r'\{[^{}]*"n1"[^{}]*"backups"[^{}]*\[[^\]]*\][^{}]*\}', re.DOTALL)
+JSON_ANY_2FACT    = re.compile(r'\{[^{}]*"n1"[^{}]*\}', re.DOTALL)
+JSON_RE_1FACT     = re.compile(r'\{[^{}]*"n"[^{}]*"backups"[^{}]*\[[^\]]*\][^{}]*\}', re.DOTALL)
+JSON_ANY_1FACT    = re.compile(r'\{[^{}]*"n"\s*:[^{}]*\}', re.DOTALL)
+JSON_RE_LETTERPOS = re.compile(r'\{[^{}]*"answer"[^{}]*"backups"[^{}]*\[[^\]]*\][^{}]*\}', re.DOTALL)
+JSON_ANY_LETTERPOS = re.compile(r'\{[^{}]*"answer"\s*:[^{}]*\}', re.DOTALL)
 
 
 def parse(text: str, task: str):
     if task == "2fact":
         m = JSON_RE_2FACT.findall(text) or JSON_ANY_2FACT.findall(text)
-    else:
+    elif task == "1fact":
         m = JSON_RE_1FACT.findall(text) or JSON_ANY_1FACT.findall(text)
+    elif task == "letterpos":
+        m = JSON_RE_LETTERPOS.findall(text) or JSON_ANY_LETTERPOS.findall(text)
+    else:
+        raise ValueError(f"unknown task {task!r}")
     if not m:
         return None
     try:
@@ -255,6 +297,61 @@ def run_one_1fact(client, label, model_id, prompt, samples, max_workers):
     return scored, summary
 
 
+def _matches_str(pred, truth):
+    """Case-insensitive substring match (truth inside prediction string)."""
+    return (isinstance(pred, str) and isinstance(truth, str)
+            and truth.lower() in pred.lower())
+
+
+def run_one_letterpos(client, label, model_id, prompt, samples, max_workers):
+    n = len(samples)
+    print(f"\n=== {label} (n={n}) ===", flush=True)
+    results = [None] * n
+
+    def worker(i):
+        user = f"Top tokens (rank. score  'string'):\n{format_tokens(samples[i]['top_tokens'])}"
+        try:
+            resp = client.messages.create(
+                model=model_id, max_tokens=1000,
+                system=prompt,
+                messages=[{"role": "user", "content": user}],
+            )
+            return i, resp.content[0].text, None
+        except Exception as e:
+            return i, None, str(e)
+
+    with ThreadPoolExecutor(max_workers=max_workers) as ex:
+        futures = [ex.submit(worker, i) for i in range(n)]
+        for f in tqdm(as_completed(futures), total=n, desc=label):
+            i, text, err = f.result()
+            results[i] = {"text": text, "error": err}
+
+    scored = []
+    for i, s in enumerate(samples):
+        parsed = parse(results[i]["text"] or "", "letterpos") or {}
+        pred = parsed.get("answer")
+        backups = parsed.get("backups", []) or []
+        truth = s["element"]
+        top_k = {}
+        for K in [1, 2, 3, 5, 10]:
+            cand = [pred] + backups[: K - 1]
+            top_k[K] = any(_matches_str(c, truth) for c in cand)
+        scored.append({
+            "idx": s.get("idx"), "element": truth,
+            "atomic_number": s.get("atomic_number"),
+            "pred": pred, "backups": backups,
+            "got": _matches_str(pred, truth),
+            "top_k": top_k, "raw": results[i]["text"],
+        })
+
+    summary = {}
+    for K in [1, 2, 3, 5, 10]:
+        hits = sum(r["top_k"][K] for r in scored)
+        summary[K] = hits
+        print(f"  top-{K:>2}: element={hits}/{n}", flush=True)
+    return scored, summary
+
+
 # ----------------------------------------------------------------------------
 
 def main():
@@ -266,10 +363,13 @@ def main():
                     help="Output dir for llm_decode_* files (default: same as --aggregated-dir)")
     ap.add_argument("--conditions", nargs="+", required=True,
                     help="Condition names")
-    ap.add_argument("--task", choices=["2fact", "1fact"], default="2fact",
-                    help="2fact: decode two operands. 1fact: decode one retrieved value.")
-    ap.add_argument("--prompt", choices=["neutral", "addition"], default="neutral",
-                    help="Prompt framing (default: neutral)")
+    ap.add_argument("--task", choices=["2fact", "1fact", "letterpos"], default="2fact",
+                    help="2fact: decode two operands. 1fact: decode one retrieved value. "
+                         "letterpos: decode one element name (from an atomic-number → "
+                         "element → Nth letter task).")
+    ap.add_argument("--prompt", choices=["neutral", "addition", "chemistry"], default="neutral",
+                    help="Prompt framing. Valid pairs: (2fact, 1fact) × (neutral, addition), "
+                         "(letterpos) × (neutral, chemistry).")
     ap.add_argument("--models", nargs="+", default=["haiku", "sonnet"],
                     choices=list(MODEL_IDS))
     ap.add_argument("--threads", type=int, default=8,
@@ -295,7 +395,9 @@ def main():
     import anthropic
     client = anthropic.Anthropic()
 
-    runner = run_one_2fact if args.task == "2fact" else run_one_1fact
+    runner = {"2fact": run_one_2fact,
+              "1fact": run_one_1fact,
+              "letterpos": run_one_letterpos}[args.task]
 
     all_summaries = {}
     for cond in args.conditions:
@@ -326,8 +428,9 @@ def main():
             print(f"  {cond:<12} {mlabel:<7} {n:>4}   {prim:>4}/{n}     "
                   f"{t3:>4}/{n}     {t5:>4}/{n}     {t10:>4}/{n}")
     else:
+        target = "A" if args.task == "1fact" else "element"
         print(f"{'Condition':<14} {'Model':<7} {'N':>4}  "
-              f"{'top-1':>8} {'top-2':>8} {'top-3':>8} {'top-5':>8} {'top-10':>8}")
+              f"{'top-1':>8} {'top-2':>8} {'top-3':>8} {'top-5':>8} {'top-10':>8}  ({target})")
         for (cond, mlabel), (n, summary) in all_summaries.items():
             print(f"  {cond:<12} {mlabel:<7} {n:>4}   "
                   f"{summary[1]:>4}/{n}  {summary[2]:>4}/{n}  {summary[3]:>4}/{n}  "

@@ -60,7 +60,9 @@ def problem_metadata(problem, dataset_type="1hop"):
 
 
 import sys
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+# Script lives at scripts/extract/; prompt helpers at scripts/data/. Need to
+# add scripts/ (parents[1]) so `from data.<module> import ...` resolves.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 # Reuse prompt construction from the dataset generators
 from data.generate_1hop_dataset import build_system_message, build_user_turn

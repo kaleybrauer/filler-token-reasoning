@@ -15,7 +15,7 @@ Output: an .npz with per-setting, per-example residual top-K (token ids
 and values), ready to feed into a pairwise-fingerprint-agreement step.
 
 Usage:
-    python scripts/dev/extract_residual_fingerprints.py \
+    python scripts/decode/extract_residual_fingerprints.py \
         --extraction-dir data/kimi-k2/extracted_states_2fact_allpos_kimi_k2/dots_10 \
         --model-path /workspace/models/kimi-k2-w4a16/ \
         --lm-head data/kimi-k2/model_weights/kimi_k2/lm_head_weight.npy \

@@ -13,7 +13,7 @@ Output: JSON with one record per example, matching the schema of
         llm_decode_pool.py can consume it directly.
 
 Usage:
-    python scripts/dev/aggregate_residuals_all_settings.py \
+    python scripts/decode/aggregate_residuals_all_settings.py \
         --fingerprints /tmp/residual_fingerprints_kimi_dots10.npz \
         --model-path /workspace/models/kimi-k2-w4a16/ \
         --output /tmp/aggregated_all_settings_kimi_dots10.json

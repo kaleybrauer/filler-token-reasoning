@@ -45,13 +45,13 @@ import transformers.activations as _act
 if not hasattr(_act, "PytorchGELUTanh"):
     _act.PytorchGELUTanh = _act.GELUTanh
 
-sys.path.insert(0, str(Path(__file__).parent))
-from extract_hidden_states import (
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from extract.extract_hidden_states import (
     build_messages_for_condition,
     find_filler_boundaries,
     load_tokenizer,
 )
-from extract_hidden_states import load_model
+from extract.extract_hidden_states import load_model
 from prompt_utils import build_messages, extract_answer
 
 

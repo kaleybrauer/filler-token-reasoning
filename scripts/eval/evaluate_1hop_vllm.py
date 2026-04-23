@@ -32,7 +32,7 @@ _compat = "/usr/local/cuda-12.8/compat"
 if os.path.isdir(_compat):
     os.environ["LD_LIBRARY_PATH"] = _compat + ":" + os.environ.get("LD_LIBRARY_PATH", "")
 
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from prompt_utils import build_messages, extract_answer
 
 # ---------------------------------------------------------------------------

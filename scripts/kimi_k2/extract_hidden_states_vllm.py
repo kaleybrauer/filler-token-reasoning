@@ -38,7 +38,7 @@ from tqdm import tqdm
 _SCRIPTS_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_SCRIPTS_DIR))
 
-from extract_hidden_states import (  # noqa: E402
+from extract.extract_hidden_states import (  # noqa: E402
     CONDITIONS,
     build_messages_for_condition,
     compute_all_positions,

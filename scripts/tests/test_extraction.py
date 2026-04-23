@@ -30,7 +30,7 @@ from generate_1hop_dataset import (
     filler_description,
     make_filler_tokens,
 )
-from extract_hidden_states import (
+from extract.extract_hidden_states import (
     CONDITIONS,
     FILLER_FRACTIONS,
     build_messages_for_condition,

@@ -35,7 +35,7 @@ if not hasattr(_act, "PytorchGELUTanh"):
     _act.PytorchGELUTanh = _act.GELUTanh
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from extract_hidden_states import find_filler_boundaries, load_model
+from extract.extract_hidden_states import find_filler_boundaries, load_model
 from prompt_utils import build_messages
 
 

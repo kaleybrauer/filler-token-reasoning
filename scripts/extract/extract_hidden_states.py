@@ -37,7 +37,7 @@ if not hasattr(_act, "PytorchGELUTanh"):
     _act.PytorchGELUTanh = _act.GELUTanh
 
 def problem_metadata(problem, dataset_type="1hop"):
-    """Extract metadata fields from a problem dict, handling 1-hop and 2-hop."""
+    """Extract metadata fields from a problem dict, handling 1-hop, 2-hop, and letterpos."""
     meta = {"answer": problem["answer"]}
     if dataset_type == "2fact":
         meta["fact_value_1"] = problem["fact_value_1"]
@@ -45,17 +45,32 @@ def problem_metadata(problem, dataset_type="1hop"):
         # For compatibility with pipelines that expect "fact_value"
         meta["fact_value"] = problem["fact_value_1"]
         meta["x"] = problem["fact_value_2"]
+    elif dataset_type == "letterpos":
+        meta["question"] = problem["question"]
+        # Pass through any task-specific side-metadata (element / atomic_number /
+        # position for element_letter_positions, intermediate for capitals, etc.)
+        for key, value in problem.items():
+            if key in ("answer", "question", "type"):
+                continue
+            meta[key] = value
     else:
         meta["fact_value"] = problem["fact_value"]
         meta["x"] = problem["x"]
     return meta
 
 
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
 # Reuse prompt construction from the dataset generators
-from generate_1hop_dataset import build_system_message, build_user_turn
-from generate_2fact_dataset import (
+from data.generate_1hop_dataset import build_system_message, build_user_turn
+from data.generate_2fact_dataset import (
     build_system_message_2fact,
     build_user_turn_2fact,
+)
+from data.generate_letterpos_dataset import (
+    build_system_message_letterpos,
+    build_user_turn_letterpos,
 )
 
 
@@ -63,8 +78,9 @@ def build_messages_for_condition(few_shot_items, target, filler_type, k, rng=Non
                                  dataset_type="1hop"):
     """Build chat messages for any filler condition.
 
-    Uses bare assistant format by default (assistant outputs just the number).
-    Supports 1-hop (fact + x) and 2-hop (fact1 + fact2) tasks.
+    Uses bare assistant format (assistant outputs just the number, or single
+    letter for letterpos). Supports 1-hop (fact + x), 2-hop (fact1 + fact2),
+    and letterpos (element → Nth letter) tasks.
     """
     if dataset_type == "2fact":
         system_msg = build_system_message_2fact(filler_type, k)
@@ -79,6 +95,21 @@ def build_messages_for_condition(few_shot_items, target, filler_type, k, rng=Non
 
         user_content = build_user_turn_2fact(
             target["fact_phrase_1"], target["fact_phrase_2"], filler_type, k, rng=rng
+        )
+        messages.append({"role": "user", "content": user_content})
+    elif dataset_type == "letterpos":
+        system_msg = build_system_message_letterpos(filler_type, k)
+        messages = [{"role": "system", "content": system_msg}]
+
+        for fs in few_shot_items:
+            user_content = build_user_turn_letterpos(
+                fs["question"], filler_type, k, rng=rng
+            )
+            messages.append({"role": "user", "content": user_content})
+            messages.append({"role": "assistant", "content": str(fs["answer"])})
+
+        user_content = build_user_turn_letterpos(
+            target["question"], filler_type, k, rng=rng
         )
         messages.append({"role": "user", "content": user_content})
     else:
@@ -575,8 +606,13 @@ def get_model_answer(
     tokenizer,
     input_ids: torch.Tensor,
     attention_mask: torch.Tensor,
-) -> Tuple[str, Optional[int]]:
-    """Generate the model's answer and parse the numeric result."""
+    dataset_type: str = "1hop",
+):
+    """Generate the model's answer and parse the result.
+
+    For numeric tasks (1hop, 2fact) returns (raw_response, int | None).
+    For letterpos returns (raw_response, str | None) — a single lowercase letter.
+    """
     with torch.no_grad():
         gen_output = model.generate(
             input_ids,
@@ -587,6 +623,15 @@ def get_model_answer(
 
     new_tokens = gen_output[0][input_ids.shape[1]:]
     raw_response = tokenizer.decode(new_tokens, skip_special_tokens=True).strip()
+
+    if dataset_type == "letterpos":
+        m = re.search(r"Answer:\s*(\S)", raw_response)
+        if m and m.group(1).isalpha():
+            return raw_response, m.group(1).lower()
+        for ch in raw_response:
+            if ch.isalpha():
+                return raw_response, ch.lower()
+        return raw_response, None
 
     m = re.search(r"Answer:\s*(-?\d+)", raw_response)
     if m:
@@ -718,6 +763,9 @@ def run_extraction(
         if dataset_type == "2fact":
             entry["fact_phrase_1"] = p["fact_phrase_1"]
             entry["fact_phrase_2"] = p["fact_phrase_2"]
+        elif dataset_type == "letterpos":
+            # problem_metadata already included element, atomic_number, position, question
+            pass
         else:
             entry["fact_phrase"] = p["fact_phrase"]
             entry["kind"] = p["kind"]
@@ -775,7 +823,8 @@ def run_extraction(
                         ids_single = padded_ids[b:b+1, meta["pad_len"]:]
                         mask_single = attn_mask[b:b+1, meta["pad_len"]:]
                         model_response, model_answer = get_model_answer(
-                            model, tokenizer, ids_single, mask_single
+                            model, tokenizer, ids_single, mask_single,
+                            dataset_type=dataset_type,
                         )
                         is_correct = (model_answer == problem["answer"])
                         correct_count += int(is_correct)
@@ -867,7 +916,8 @@ def run_extraction(
                 model_response, model_answer, is_correct = None, None, None
                 if also_generate:
                     model_response, model_answer = get_model_answer(
-                        model, tokenizer, input_ids, attention_mask
+                        model, tokenizer, input_ids, attention_mask,
+                        dataset_type=dataset_type,
                     )
                     is_correct = (model_answer == problem["answer"])
                     correct_count += int(is_correct)
@@ -921,8 +971,14 @@ def verify_extraction(output_dir: str, condition_name: str, n_check: int = 3):
             data = pickle.load(fp)
 
         print(f"\n--- {f.name} ---")
-        print(f"  fact_value={data['fact_value']}, x={data['x']}, answer={data['answer']}")
-        print(f"  Model answer: {data['model_answer']} "
+        if "element" in data:
+            print(f"  element={data['element']}, atomic_number={data['atomic_number']}, "
+                  f"position={data['position']}, answer={data['answer']!r}")
+        elif "intermediate" in data:
+            print(f"  intermediate={data['intermediate']!r}, answer={data['answer']!r}")
+        else:
+            print(f"  fact_value={data['fact_value']}, x={data['x']}, answer={data['answer']}")
+        print(f"  Model answer: {data['model_answer']!r} "
               f"({'correct' if data['model_correct'] else 'wrong'})")
         print(f"  Seq length: {data['seq_len']}")
         print(f"  Filler: [{data['filler_start']}, {data['filler_end']}]")
@@ -979,8 +1035,9 @@ def main():
     parser.add_argument("--batch-size", type=int, default=1,
                         help="Batch size for extraction (>1 for better GPU utilization)")
     parser.add_argument("--dataset-type", type=str, default="1hop",
-                        choices=["1hop", "2fact"],
-                        help="Dataset type: 1hop (fact+x) or 2fact (fact1+fact2)")
+                        choices=["1hop", "2fact", "letterpos"],
+                        help="Dataset type: 1hop (fact+x), 2fact (fact1+fact2), "
+                             "or letterpos (atomic# → element → Nth letter)")
     parser.add_argument("--all-positions", action="store_true",
                         help="Extract every token from question_end through answer_prompt. "
                              "Overrides --filler-positions and fraction-based positions.")
@@ -989,7 +1046,9 @@ def main():
     # Load dataset
     with open(args.dataset) as f:
         dataset = json.load(f)
-    few_shot = dataset["few_shot_facts"]
+    # Field name differs: addition datasets use "few_shot_facts",
+    # the letterpos dataset uses "few_shot_examples".
+    few_shot = dataset.get("few_shot_facts") or dataset["few_shot_examples"]
     problems = dataset["examples"]
     if args.max_problems:
         problems = problems[:args.max_problems]

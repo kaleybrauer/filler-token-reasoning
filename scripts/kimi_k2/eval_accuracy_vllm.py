@@ -20,7 +20,7 @@ import torch
 _SCRIPTS_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_SCRIPTS_DIR))
 
-from extract_hidden_states import CONDITIONS, build_messages_for_condition  # noqa: E402
+from extract.extract_hidden_states import CONDITIONS, build_messages_for_condition  # noqa: E402
 
 
 def parse_answer(text: str) -> int | None:

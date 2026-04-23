@@ -13,8 +13,8 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-sys.path.insert(0, str(Path(__file__).parent))
-from generate_1hop_dataset import build_system_message, build_user_turn
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from data.generate_1hop_dataset import build_system_message, build_user_turn
 
 
 def build_messages_pre_padding(few_shot_items, target, k, bare_assistant=True):

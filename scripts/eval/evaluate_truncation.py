@@ -40,9 +40,9 @@ if os.path.isdir(_compat):
     os.environ["LD_LIBRARY_PATH"] = _compat + ":" + os.environ.get("LD_LIBRARY_PATH", "")
 
 # Add scripts dir to path so we can import prompt helpers
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from generate_1hop_dataset import build_system_message, build_user_turn, make_filler_tokens
+from data.generate_1hop_dataset import build_system_message, build_user_turn, make_filler_tokens
 
 # ---------------------------------------------------------------------------
 # Defaults

@@ -26,7 +26,9 @@ from pathlib import Path
 import numpy as np
 from tqdm import tqdm
 
-from extract_hidden_states import load_tokenizer
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from extract.extract_hidden_states import load_tokenizer
 
 
 def get_answer_token_id(tokenizer, answer: int):

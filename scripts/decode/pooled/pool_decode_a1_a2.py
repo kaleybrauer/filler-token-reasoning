@@ -25,7 +25,9 @@ from pathlib import Path
 
 import numpy as np
 
-from extract_hidden_states import load_tokenizer
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from extract.extract_hidden_states import load_tokenizer
 
 
 def rms_norm(x, weight, eps=1e-6):

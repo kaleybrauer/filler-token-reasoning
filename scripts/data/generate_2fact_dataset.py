@@ -18,7 +18,9 @@ import random
 import re
 from pathlib import Path
 
-from generate_1hop_dataset import (
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from data.generate_1hop_dataset import (
     build_system_message,
     filler_description,
     make_filler_tokens,

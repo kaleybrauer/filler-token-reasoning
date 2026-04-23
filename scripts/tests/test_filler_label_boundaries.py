@@ -18,7 +18,7 @@ import torch
 from transformers import AutoTokenizer
 
 sys.path.insert(0, str(Path(__file__).parent))
-from extract_hidden_states import find_filler_boundaries
+from extract.extract_hidden_states import find_filler_boundaries
 from filler_kv_transplant import find_filler_label_start
 from prompt_utils import build_messages
 

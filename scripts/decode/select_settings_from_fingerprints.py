@@ -134,7 +134,7 @@ def main():
     tokenizer = None
     if args.model_path:
         try:
-            from extract_hidden_states import load_tokenizer
+            from extract.extract_hidden_states import load_tokenizer
             tokenizer = load_tokenizer(args.model_path)
         except Exception as e:
             print(f"Warning: could not load tokenizer ({e}); skipping digit-match diag")

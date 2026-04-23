@@ -85,7 +85,8 @@ def main():
 
         # Propagate ground-truth fields so llm_decode_pool.py can score
         for field in ["truth_fact_value_1", "truth_fact_value_2", "truth_fact_value",
-                      "truth_answer", "truth_element", "truth_atomic_number"]:
+                      "truth_answer", "truth_element", "truth_atomic_number",
+                      "truth_intermediate"]:
             if field in data.files:
                 arr = data[field]
                 val = arr[e]
@@ -106,6 +107,7 @@ def main():
                     record["answer"] = val
                 elif key == "element": record["element"] = val
                 elif key == "atomic_number": record["atomic_number"] = val
+                elif key == "intermediate": record["intermediate"] = val
         out.append(record)
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -117,7 +119,7 @@ def main():
     print("\n=== Preview (first 3 examples, top-10) ===")
     for ex in out[:3]:
         label_parts = []
-        for k in ["fact_value_1", "fact_value_2", "element", "atomic_number", "answer"]:
+        for k in ["fact_value_1", "fact_value_2", "element", "atomic_number", "intermediate", "answer"]:
             if k in ex and ex[k] is not None:
                 label_parts.append(f"{k}={ex[k]}")
         print(f"\n  ex{ex['idx']} ({', '.join(label_parts)}):")

@@ -136,6 +136,7 @@ def main():
         "answer":       _get("answer", -1),
         "element":      _get("element"),
         "atomic_number": _get("atomic_number", -1),
+        "intermediate": _get("intermediate"),
     }
 
     for s_idx, (pos, layer) in enumerate(tqdm(settings, desc="Extracting fingerprints")):
@@ -194,6 +195,7 @@ def main():
         truth_answer=truth["answer"],
         truth_element=truth["element"],
         truth_atomic_number=truth["atomic_number"],
+        truth_intermediate=truth["intermediate"],
         config=np.array([{"min_layer": args.min_layer,
                           "include_question_end": args.include_question_end,
                           "include_post_filler": args.include_post_filler,

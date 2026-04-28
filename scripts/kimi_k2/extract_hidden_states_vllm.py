@@ -166,9 +166,12 @@ def extract_states_at_positions(
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--model-path", default="/workspace/models/kimi-k2-w4a16", type=Path)
-    ap.add_argument("--dataset", required=True, type=Path)
-    ap.add_argument("--output-dir", type=Path,
-                    default=Path("data/extracted_states_2fact_allpos_kimi_k2"))
+    ap.add_argument("--dataset", required=True, type=Path, nargs="+",
+                    help="One or more dataset JSON paths. Multiple = sequential extraction "
+                         "with a single vLLM load.")
+    ap.add_argument("--output-dir", type=Path, nargs="+",
+                    default=[Path("data/extracted_states_2fact_allpos_kimi_k2")],
+                    help="One output dir per --dataset (1:1 pairing).")
     ap.add_argument("--layers", default="all",
                     help='Layer indices (comma-separated) or "all"')
     ap.add_argument("--conditions", nargs="+", required=True,
@@ -177,7 +180,9 @@ def main() -> None:
     ap.add_argument("--no-skip-existing", action="store_true")
     ap.add_argument("--filler-positions", type=str, default=None)
     ap.add_argument("--all-positions", action="store_true")
-    ap.add_argument("--dataset-type", choices=["1hop", "2fact"], default="2fact")
+    ap.add_argument("--dataset-type", choices=["1hop", "2fact", "letterpos"],
+                    default=["2fact"], nargs="+",
+                    help="One per --dataset, or a single value to broadcast.")
     ap.add_argument("--tensor-parallel-size", type=int, default=None,
                     help="Override TP size (default: all visible GPUs)")
     ap.add_argument("--gpu-memory-utilization", type=float, default=0.85)
@@ -185,15 +190,35 @@ def main() -> None:
     ap.add_argument("--no-generate", action="store_true")
     args = ap.parse_args()
 
-    # Dataset
-    print(f"Loading dataset from {args.dataset}")
-    with open(args.dataset) as f:
-        data = json.load(f)
-    problems_all = data["examples"] if isinstance(data, dict) else data
-    few_shot = data.get("few_shot_facts", []) if isinstance(data, dict) else []
-    if args.max_problems:
-        problems_all = problems_all[:args.max_problems]
-    print(f"  {len(problems_all)} problems, {len(few_shot)} few-shot facts")
+    # Pair up (dataset, output_dir, dataset_type)
+    if len(args.output_dir) != len(args.dataset):
+        ap.error(f"--output-dir count ({len(args.output_dir)}) must match "
+                 f"--dataset count ({len(args.dataset)})")
+    if len(args.dataset_type) == 1:
+        dataset_types = args.dataset_type * len(args.dataset)
+    elif len(args.dataset_type) == len(args.dataset):
+        dataset_types = list(args.dataset_type)
+    else:
+        ap.error(f"--dataset-type count ({len(args.dataset_type)}) must be 1 "
+                 f"or equal --dataset count ({len(args.dataset)})")
+
+    def _load_dataset(dataset_path):
+        print(f"Loading dataset from {dataset_path}")
+        with open(dataset_path) as f:
+            data = json.load(f)
+        problems = data["examples"] if isinstance(data, dict) else data
+        if isinstance(data, dict):
+            few_shot = data.get("few_shot_facts") or data.get("few_shot_examples", [])
+        else:
+            few_shot = []
+        if args.max_problems:
+            problems = problems[:args.max_problems]
+        print(f"  {len(problems)} problems, {len(few_shot)} few-shot facts")
+        return problems, few_shot
+
+    # Load first dataset for smoke test (others loaded inside the per-dataset loop)
+    first_problems, first_few_shot = _load_dataset(args.dataset[0])
+    first_dataset_type = dataset_types[0]
 
     selected_conditions = {c: CONDITIONS[c] for c in args.conditions}
     print(f"  conditions: {selected_conditions}")
@@ -242,12 +267,12 @@ def main() -> None:
     if args.filler_positions and not args.all_positions:
         filler_pos = [int(x) for x in args.filler_positions.split(",")]
 
-    # Smoke-test forward pass
+    # Smoke-test forward pass (uses first dataset)
     print("\n=== Smoke test forward pass ===")
     smoke_k, smoke_ftype = list(selected_conditions.values())[0]
     smoke_msgs = build_messages_for_condition(
-        few_shot[:5], problems_all[0], smoke_ftype, smoke_k,
-        rng=random.Random(0), dataset_type=args.dataset_type,
+        first_few_shot[:5], first_problems[0], smoke_ftype, smoke_k,
+        rng=random.Random(0), dataset_type=first_dataset_type,
     )
     smoke_text = tokenizer.apply_chat_template(smoke_msgs, tokenize=False,
                                                add_generation_prompt=True)
@@ -268,134 +293,156 @@ def main() -> None:
         print(f"  layer {li}: shape={tuple(h.shape)} nan={n_nan} "
               f"absmax={finite.abs().max().item() if finite.numel() else float('nan'):.3g}")
 
-    # Metadata
-    args.output_dir.mkdir(parents=True, exist_ok=True)
-    meta = [
-        {
-            "idx": i,
-            **problem_metadata(p, args.dataset_type),
-            **({"fact_phrase_1": p["fact_phrase_1"], "fact_phrase_2": p["fact_phrase_2"]}
-               if args.dataset_type == "2fact"
-               else {"fact_phrase": p["fact_phrase"], "kind": p["kind"]}),
-        }
-        for i, p in enumerate(problems_all)
-    ]
-    with open(args.output_dir / "metadata.json", "w") as f:
-        json.dump(meta, f, indent=2)
+    def _extra_meta(p, dt):
+        if dt == "2fact":
+            return {"fact_phrase_1": p["fact_phrase_1"], "fact_phrase_2": p["fact_phrase_2"]}
+        if dt == "letterpos":
+            # problem_metadata already passed through all task-specific fields
+            return {}
+        return {"fact_phrase": p["fact_phrase"], "kind": p["kind"]}
 
-    # Main extraction loop
     gen_sp = SamplingParams(temperature=0, max_tokens=20, detokenize=True)
     prefill_sp = SamplingParams(temperature=0, max_tokens=1, detokenize=False)
 
-    for cond_name, (k, filler_type) in selected_conditions.items():
-        cond_dir = args.output_dir / cond_name
-        cond_dir.mkdir(exist_ok=True)
-        print(f"\n{'=' * 60}\nCondition: {cond_name} (k={k}, filler_type={filler_type})\n{'=' * 60}")
+    for ds_idx, (dataset_path, output_dir, dataset_type) in enumerate(
+        zip(args.dataset, args.output_dir, dataset_types)
+    ):
+        print(f"\n{'#' * 70}\n# Dataset {ds_idx + 1}/{len(args.dataset)}: {dataset_path} "
+              f"(type={dataset_type})\n# Output: {output_dir}\n{'#' * 70}")
 
-        todo = []
-        for i in range(len(problems_all)):
-            save_path = cond_dir / f"prob_{i:04d}.pkl"
-            if not args.no_skip_existing and save_path.exists():
+        if ds_idx == 0:
+            problems_all, few_shot = first_problems, first_few_shot
+        else:
+            problems_all, few_shot = _load_dataset(dataset_path)
+
+        # Metadata
+        output_dir.mkdir(parents=True, exist_ok=True)
+        meta = [
+            {
+                "idx": i,
+                **problem_metadata(p, dataset_type),
+                **_extra_meta(p, dataset_type),
+            }
+            for i, p in enumerate(problems_all)
+        ]
+        with open(output_dir / "metadata.json", "w") as f:
+            json.dump(meta, f, indent=2)
+
+        for cond_name, (k, filler_type) in selected_conditions.items():
+            cond_dir = output_dir / cond_name
+            cond_dir.mkdir(exist_ok=True)
+            print(f"\n{'=' * 60}\nCondition: {cond_name} (k={k}, filler_type={filler_type})\n{'=' * 60}")
+
+            todo = []
+            for i in range(len(problems_all)):
+                save_path = cond_dir / f"prob_{i:04d}.pkl"
+                if not args.no_skip_existing and save_path.exists():
+                    continue
+                todo.append(i)
+            if not todo:
+                print(f"  All {len(problems_all)} problems already extracted, skipping")
                 continue
-            todo.append(i)
-        if not todo:
-            print(f"  All {len(problems_all)} problems already extracted, skipping")
-            continue
-        print(f"  {len(todo)} problems to extract")
+            print(f"  {len(todo)} problems to extract")
 
-        t_start = time.time()
-        correct = 0
-        total = 0
+            t_start = time.time()
+            correct = 0
+            total = 0
 
-        for prob_idx in tqdm(todo, desc=cond_name):
-            problem = problems_all[prob_idx]
-            rng = random.Random(prob_idx)
-            messages = build_messages_for_condition(
-                few_shot[:5], problem, filler_type, k, rng=rng,
-                dataset_type=args.dataset_type,
-            )
-            full_text = tokenizer.apply_chat_template(
-                messages, tokenize=False, add_generation_prompt=True
-            )
-            input_ids = tokenizer(full_text)["input_ids"]
-            seq_len = len(input_ids)
-
-            # Compute positions
-            filler_start = filler_end = question_end_pos = None
-            boundaries = None
-            if k > 0:
-                ids_tensor = torch.tensor([input_ids])
-                question_end_pos, filler_start, filler_end = find_filler_boundaries(
-                    tokenizer, ids_tensor, k
+            for prob_idx in tqdm(todo, desc=cond_name):
+                problem = problems_all[prob_idx]
+                rng = random.Random(prob_idx)
+                messages = build_messages_for_condition(
+                    few_shot[:5], problem, filler_type, k, rng=rng,
+                    dataset_type=dataset_type,
                 )
-                if args.all_positions:
-                    positions, boundaries = compute_all_positions(
-                        question_end_pos, seq_len,
-                        filler_start=filler_start, filler_end=filler_end,
+                full_text = tokenizer.apply_chat_template(
+                    messages, tokenize=False, add_generation_prompt=True
+                )
+                input_ids = tokenizer(full_text)["input_ids"]
+                seq_len = len(input_ids)
+
+                # Compute positions
+                filler_start = filler_end = question_end_pos = None
+                boundaries = None
+                if k > 0:
+                    ids_tensor = torch.tensor([input_ids])
+                    question_end_pos, filler_start, filler_end = find_filler_boundaries(
+                        tokenizer, ids_tensor, k
                     )
+                    if args.all_positions:
+                        positions, boundaries = compute_all_positions(
+                            question_end_pos, seq_len,
+                            filler_start=filler_start, filler_end=filler_end,
+                        )
+                    else:
+                        positions = compute_extraction_positions(
+                            filler_start, filler_end, seq_len,
+                            absolute_positions=filler_pos,
+                            question_end_pos=question_end_pos,
+                        )
                 else:
-                    positions = compute_extraction_positions(
-                        filler_start, filler_end, seq_len,
-                        absolute_positions=filler_pos,
-                        question_end_pos=question_end_pos,
-                    )
-            else:
-                positions = compute_baseline_positions(seq_len)
+                    positions = compute_baseline_positions(seq_len)
 
-            # Sanity check positions
-            positions = {
-                p: idx for p, idx in positions.items() if 0 <= idx < seq_len
-            }
+                # Sanity check positions
+                positions = {
+                    p: idx for p, idx in positions.items() if 0 <= idx < seq_len
+                }
 
-            # Run forward + extract states
-            capture.clear()
-            if args.no_generate:
-                _ = llm.generate([TokensPrompt(prompt_token_ids=input_ids)],
-                                 prefill_sp, use_tqdm=False)
-                model_response, model_answer, model_correct = None, None, None
-            else:
-                outs = llm.generate([TokensPrompt(prompt_token_ids=input_ids)],
-                                    gen_sp, use_tqdm=False)
-                model_response = outs[0].outputs[0].text.strip()
-                # Parse integer answer
-                import re
-                m = re.search(r"Answer:\s*(-?\d+)", model_response)
-                if not m:
-                    m = re.search(r"(-?\d+)", model_response)
-                model_answer = int(m.group(1)) if m else None
-                model_correct = (model_answer == problem["answer"]) if model_answer is not None else False
-                total += 1
-                correct += int(model_correct)
+                # Run forward + extract states
+                capture.clear()
+                if args.no_generate:
+                    _ = llm.generate([TokensPrompt(prompt_token_ids=input_ids)],
+                                     prefill_sp, use_tqdm=False)
+                    model_response, model_answer, model_correct = None, None, None
+                else:
+                    outs = llm.generate([TokensPrompt(prompt_token_ids=input_ids)],
+                                        gen_sp, use_tqdm=False)
+                    model_response = outs[0].outputs[0].text.strip()
+                    import re
+                    if dataset_type == "letterpos":
+                        m = re.search(r"Answer:\s*(\S)", model_response)
+                        if m and m.group(1).isalpha():
+                            model_answer = m.group(1).lower()
+                        else:
+                            model_answer = next((ch.lower() for ch in model_response if ch.isalpha()), None)
+                    else:
+                        m = re.search(r"Answer:\s*(-?\d+)", model_response)
+                        if not m:
+                            m = re.search(r"(-?\d+)", model_response)
+                        model_answer = int(m.group(1)) if m else None
+                    model_correct = (model_answer == problem["answer"]) if model_answer is not None else False
+                    total += 1
+                    correct += int(model_correct)
 
-            states = extract_states_at_positions(
-                capture.captured, positions, layer_indices, hidden_size
-            )
+                states = extract_states_at_positions(
+                    capture.captured, positions, layer_indices, hidden_size
+                )
 
-            result = {
-                "problem_idx": prob_idx,
-                "condition": cond_name,
-                "k": k,
-                **problem_metadata(problem, args.dataset_type),
-                "positions": positions,
-                "states": states,
-                "model_response": model_response,
-                "model_answer": model_answer,
-                "model_correct": model_correct,
-                "seq_len": seq_len,
-                "filler_start": filler_start,
-                "filler_end": filler_end,
-                "gen_prefix": None,
-            }
-            if boundaries is not None:
-                result["boundaries"] = boundaries
+                result = {
+                    "problem_idx": prob_idx,
+                    "condition": cond_name,
+                    "k": k,
+                    **problem_metadata(problem, dataset_type),
+                    "positions": positions,
+                    "states": states,
+                    "model_response": model_response,
+                    "model_answer": model_answer,
+                    "model_correct": model_correct,
+                    "seq_len": seq_len,
+                    "filler_start": filler_start,
+                    "filler_end": filler_end,
+                    "gen_prefix": None,
+                }
+                if boundaries is not None:
+                    result["boundaries"] = boundaries
 
-            with open(cond_dir / f"prob_{prob_idx:04d}.pkl", "wb") as f:
-                pickle.dump(result, f)
+                with open(cond_dir / f"prob_{prob_idx:04d}.pkl", "wb") as f:
+                    pickle.dump(result, f)
 
-        elapsed = time.time() - t_start
-        acc = correct / total if total else float("nan")
-        print(f"  {cond_name}: done in {elapsed:.0f}s "
-              f"({elapsed / max(total, 1):.1f}s/example, {acc:.1%} correct)")
+            elapsed = time.time() - t_start
+            acc = correct / total if total else float("nan")
+            print(f"  {cond_name}: done in {elapsed:.0f}s "
+                  f"({elapsed / max(total, 1):.1f}s/example, {acc:.1%} correct)")
 
 
 if __name__ == "__main__":

@@ -36,7 +36,10 @@ extracted_states/
 *.sh
 
 # --- Data ---
-data/
+/data/*
+!/data/element_aliases.json
+!/data/capital_aliases.json
+**/data/
 !scripts/data/
 !scripts/multihop/data/
 !scripts/multihop/data/*.json

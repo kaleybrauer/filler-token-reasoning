@@ -59,7 +59,9 @@ def main():
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
-    from extract_hidden_states import load_tokenizer
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from extract.extract_hidden_states import load_tokenizer
     tokenizer = load_tokenizer(args.model_path)
 
     # Build number token map

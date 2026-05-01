@@ -1,0 +1,2204 @@
+{
+  "task": "capitals_letter_count",
+  "few_shot_examples": [
+    {
+      "question": "What is the last letter of the name of the capital of the Czech Republic?",
+      "answer": "e",
+      "intermediate": "Prague"
+    },
+    {
+      "question": "What is the last letter of the name of the capital of India?",
+      "answer": "i",
+      "intermediate": "New Delhi"
+    },
+    {
+      "question": "What is the last letter of the name of the capital of South Africa?",
+      "answer": "a",
+      "intermediate": "Pretoria"
+    },
+    {
+      "question": "What is the last letter of the name of the capital of Honduras?",
+      "answer": "a",
+      "intermediate": "Tegucigalpa"
+    },
+    {
+      "question": "What is the last letter of the name of the capital of the Mexican state of Tamaulipas?",
+      "answer": "a",
+      "intermediate": "Ciudad Victoria"
+    }
+  ],
+  "examples": [
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Germany?",
+      "answer": "n",
+      "intermediate": "Berlin"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of France?",
+      "answer": "s",
+      "intermediate": "Paris"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Italy?",
+      "answer": "e",
+      "intermediate": "Rome"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Spain?",
+      "answer": "d",
+      "intermediate": "Madrid"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Portugal?",
+      "answer": "n",
+      "intermediate": "Lisbon"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the United Kingdom?",
+      "answer": "n",
+      "intermediate": "London"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Ireland?",
+      "answer": "n",
+      "intermediate": "Dublin"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Netherlands?",
+      "answer": "m",
+      "intermediate": "Amsterdam"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Belgium?",
+      "answer": "s",
+      "intermediate": "Brussels"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Switzerland?",
+      "answer": "n",
+      "intermediate": "Bern"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Austria?",
+      "answer": "a",
+      "intermediate": "Vienna"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Poland?",
+      "answer": "w",
+      "intermediate": "Warsaw"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Slovakia?",
+      "answer": "a",
+      "intermediate": "Bratislava"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Hungary?",
+      "answer": "t",
+      "intermediate": "Budapest"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Romania?",
+      "answer": "t",
+      "intermediate": "Bucharest"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Bulgaria?",
+      "answer": "a",
+      "intermediate": "Sofia"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Greece?",
+      "answer": "s",
+      "intermediate": "Athens"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Serbia?",
+      "answer": "e",
+      "intermediate": "Belgrade"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Croatia?",
+      "answer": "b",
+      "intermediate": "Zagreb"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Slovenia?",
+      "answer": "a",
+      "intermediate": "Ljubljana"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Bosnia and Herzegovina?",
+      "answer": "o",
+      "intermediate": "Sarajevo"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Montenegro?",
+      "answer": "a",
+      "intermediate": "Podgorica"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of North Macedonia?",
+      "answer": "e",
+      "intermediate": "Skopje"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Albania?",
+      "answer": "a",
+      "intermediate": "Tirana"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Kosovo?",
+      "answer": "a",
+      "intermediate": "Pristina"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Denmark?",
+      "answer": "n",
+      "intermediate": "Copenhagen"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Sweden?",
+      "answer": "m",
+      "intermediate": "Stockholm"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Norway?",
+      "answer": "o",
+      "intermediate": "Oslo"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Finland?",
+      "answer": "i",
+      "intermediate": "Helsinki"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Iceland?",
+      "answer": "k",
+      "intermediate": "Reykjavik"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Estonia?",
+      "answer": "n",
+      "intermediate": "Tallinn"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Latvia?",
+      "answer": "a",
+      "intermediate": "Riga"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Lithuania?",
+      "answer": "s",
+      "intermediate": "Vilnius"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Belarus?",
+      "answer": "k",
+      "intermediate": "Minsk"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Ukraine?",
+      "answer": "v",
+      "intermediate": "Kyiv"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Moldova?",
+      "answer": "u",
+      "intermediate": "Chisinau"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Russia?",
+      "answer": "w",
+      "intermediate": "Moscow"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Malta?",
+      "answer": "a",
+      "intermediate": "Valletta"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Cyprus?",
+      "answer": "a",
+      "intermediate": "Nicosia"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Liechtenstein?",
+      "answer": "z",
+      "intermediate": "Vaduz"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of China?",
+      "answer": "g",
+      "intermediate": "Beijing"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Japan?",
+      "answer": "o",
+      "intermediate": "Tokyo"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of South Korea?",
+      "answer": "l",
+      "intermediate": "Seoul"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of North Korea?",
+      "answer": "g",
+      "intermediate": "Pyongyang"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Mongolia?",
+      "answer": "r",
+      "intermediate": "Ulaanbaatar"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Taiwan?",
+      "answer": "i",
+      "intermediate": "Taipei"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Vietnam?",
+      "answer": "i",
+      "intermediate": "Hanoi"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Thailand?",
+      "answer": "k",
+      "intermediate": "Bangkok"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Cambodia?",
+      "answer": "h",
+      "intermediate": "Phnom Penh"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Laos?",
+      "answer": "e",
+      "intermediate": "Vientiane"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Myanmar?",
+      "answer": "w",
+      "intermediate": "Naypyidaw"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Malaysia?",
+      "answer": "r",
+      "intermediate": "Kuala Lumpur"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Indonesia?",
+      "answer": "a",
+      "intermediate": "Jakarta"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Philippines?",
+      "answer": "a",
+      "intermediate": "Manila"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Brunei?",
+      "answer": "n",
+      "intermediate": "Bandar Seri Begawan"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of East Timor?",
+      "answer": "i",
+      "intermediate": "Dili"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Pakistan?",
+      "answer": "d",
+      "intermediate": "Islamabad"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Bangladesh?",
+      "answer": "a",
+      "intermediate": "Dhaka"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Nepal?",
+      "answer": "u",
+      "intermediate": "Kathmandu"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Bhutan?",
+      "answer": "u",
+      "intermediate": "Thimphu"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Sri Lanka?",
+      "answer": "o",
+      "intermediate": "Colombo"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Maldives?",
+      "answer": "e",
+      "intermediate": "Male"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Afghanistan?",
+      "answer": "l",
+      "intermediate": "Kabul"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Iran?",
+      "answer": "n",
+      "intermediate": "Tehran"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Iraq?",
+      "answer": "d",
+      "intermediate": "Baghdad"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Syria?",
+      "answer": "s",
+      "intermediate": "Damascus"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Lebanon?",
+      "answer": "t",
+      "intermediate": "Beirut"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Jordan?",
+      "answer": "n",
+      "intermediate": "Amman"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Israel?",
+      "answer": "m",
+      "intermediate": "Jerusalem"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Saudi Arabia?",
+      "answer": "h",
+      "intermediate": "Riyadh"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Yemen?",
+      "answer": "a",
+      "intermediate": "Sanaa"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Oman?",
+      "answer": "t",
+      "intermediate": "Muscat"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the United Arab Emirates?",
+      "answer": "i",
+      "intermediate": "Abu Dhabi"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Qatar?",
+      "answer": "a",
+      "intermediate": "Doha"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Bahrain?",
+      "answer": "a",
+      "intermediate": "Manama"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Turkey?",
+      "answer": "a",
+      "intermediate": "Ankara"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Armenia?",
+      "answer": "n",
+      "intermediate": "Yerevan"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Azerbaijan?",
+      "answer": "u",
+      "intermediate": "Baku"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Georgia?",
+      "answer": "i",
+      "intermediate": "Tbilisi"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Kazakhstan?",
+      "answer": "a",
+      "intermediate": "Astana"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Uzbekistan?",
+      "answer": "t",
+      "intermediate": "Tashkent"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Kyrgyzstan?",
+      "answer": "k",
+      "intermediate": "Bishkek"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Tajikistan?",
+      "answer": "e",
+      "intermediate": "Dushanbe"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Turkmenistan?",
+      "answer": "t",
+      "intermediate": "Ashgabat"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Egypt?",
+      "answer": "o",
+      "intermediate": "Cairo"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Libya?",
+      "answer": "i",
+      "intermediate": "Tripoli"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Tunisia?",
+      "answer": "s",
+      "intermediate": "Tunis"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Algeria?",
+      "answer": "s",
+      "intermediate": "Algiers"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Morocco?",
+      "answer": "t",
+      "intermediate": "Rabat"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Sudan?",
+      "answer": "m",
+      "intermediate": "Khartoum"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of South Sudan?",
+      "answer": "a",
+      "intermediate": "Juba"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Ethiopia?",
+      "answer": "a",
+      "intermediate": "Addis Ababa"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Eritrea?",
+      "answer": "a",
+      "intermediate": "Asmara"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Somalia?",
+      "answer": "u",
+      "intermediate": "Mogadishu"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Kenya?",
+      "answer": "i",
+      "intermediate": "Nairobi"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Uganda?",
+      "answer": "a",
+      "intermediate": "Kampala"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Tanzania?",
+      "answer": "a",
+      "intermediate": "Dodoma"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Rwanda?",
+      "answer": "i",
+      "intermediate": "Kigali"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Burundi?",
+      "answer": "a",
+      "intermediate": "Gitega"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Nigeria?",
+      "answer": "a",
+      "intermediate": "Abuja"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Ghana?",
+      "answer": "a",
+      "intermediate": "Accra"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Ivory Coast?",
+      "answer": "o",
+      "intermediate": "Yamoussoukro"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Senegal?",
+      "answer": "r",
+      "intermediate": "Dakar"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Mali?",
+      "answer": "o",
+      "intermediate": "Bamako"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Burkina Faso?",
+      "answer": "u",
+      "intermediate": "Ouagadougou"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Niger?",
+      "answer": "y",
+      "intermediate": "Niamey"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Chad?",
+      "answer": "a",
+      "intermediate": "N'Djamena"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Cameroon?",
+      "answer": "e",
+      "intermediate": "Yaounde"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Central African Republic?",
+      "answer": "i",
+      "intermediate": "Bangui"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Gabon?",
+      "answer": "e",
+      "intermediate": "Libreville"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Republic of the Congo?",
+      "answer": "e",
+      "intermediate": "Brazzaville"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Democratic Republic of the Congo?",
+      "answer": "a",
+      "intermediate": "Kinshasa"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Angola?",
+      "answer": "a",
+      "intermediate": "Luanda"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Zambia?",
+      "answer": "a",
+      "intermediate": "Lusaka"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Zimbabwe?",
+      "answer": "e",
+      "intermediate": "Harare"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Mozambique?",
+      "answer": "o",
+      "intermediate": "Maputo"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Malawi?",
+      "answer": "e",
+      "intermediate": "Lilongwe"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Madagascar?",
+      "answer": "o",
+      "intermediate": "Antananarivo"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Mauritius?",
+      "answer": "s",
+      "intermediate": "Port Louis"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Seychelles?",
+      "answer": "a",
+      "intermediate": "Victoria"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Comoros?",
+      "answer": "i",
+      "intermediate": "Moroni"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Namibia?",
+      "answer": "k",
+      "intermediate": "Windhoek"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Botswana?",
+      "answer": "e",
+      "intermediate": "Gaborone"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Lesotho?",
+      "answer": "u",
+      "intermediate": "Maseru"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Eswatini?",
+      "answer": "e",
+      "intermediate": "Mbabane"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Liberia?",
+      "answer": "a",
+      "intermediate": "Monrovia"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Sierra Leone?",
+      "answer": "n",
+      "intermediate": "Freetown"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Guinea?",
+      "answer": "y",
+      "intermediate": "Conakry"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Gambia?",
+      "answer": "l",
+      "intermediate": "Banjul"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Mauritania?",
+      "answer": "t",
+      "intermediate": "Nouakchott"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Cape Verde?",
+      "answer": "a",
+      "intermediate": "Praia"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Equatorial Guinea?",
+      "answer": "o",
+      "intermediate": "Malabo"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Togo?",
+      "answer": "e",
+      "intermediate": "Lome"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Benin?",
+      "answer": "o",
+      "intermediate": "Porto-Novo"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the United States?",
+      "answer": "n",
+      "intermediate": "Washington"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Canada?",
+      "answer": "a",
+      "intermediate": "Ottawa"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Belize?",
+      "answer": "n",
+      "intermediate": "Belmopan"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Nicaragua?",
+      "answer": "a",
+      "intermediate": "Managua"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Costa Rica?",
+      "answer": "e",
+      "intermediate": "San Jose"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Cuba?",
+      "answer": "a",
+      "intermediate": "Havana"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Jamaica?",
+      "answer": "n",
+      "intermediate": "Kingston"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Haiti?",
+      "answer": "e",
+      "intermediate": "Port-au-Prince"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Dominican Republic?",
+      "answer": "o",
+      "intermediate": "Santo Domingo"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Bahamas?",
+      "answer": "u",
+      "intermediate": "Nassau"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Barbados?",
+      "answer": "n",
+      "intermediate": "Bridgetown"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Trinidad and Tobago?",
+      "answer": "n",
+      "intermediate": "Port of Spain"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Grenada?",
+      "answer": "s",
+      "intermediate": "Saint George's"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Saint Lucia?",
+      "answer": "s",
+      "intermediate": "Castries"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Dominica?",
+      "answer": "u",
+      "intermediate": "Roseau"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Antigua and Barbuda?",
+      "answer": "s",
+      "intermediate": "Saint John's"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Saint Kitts and Nevis?",
+      "answer": "e",
+      "intermediate": "Basseterre"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Saint Vincent and the Grenadines?",
+      "answer": "n",
+      "intermediate": "Kingstown"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Brazil?",
+      "answer": "a",
+      "intermediate": "Brasilia"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Argentina?",
+      "answer": "s",
+      "intermediate": "Buenos Aires"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Chile?",
+      "answer": "o",
+      "intermediate": "Santiago"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Peru?",
+      "answer": "a",
+      "intermediate": "Lima"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Colombia?",
+      "answer": "a",
+      "intermediate": "Bogota"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Venezuela?",
+      "answer": "s",
+      "intermediate": "Caracas"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Ecuador?",
+      "answer": "o",
+      "intermediate": "Quito"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Bolivia?",
+      "answer": "z",
+      "intermediate": "La Paz"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Paraguay?",
+      "answer": "n",
+      "intermediate": "Asuncion"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Uruguay?",
+      "answer": "o",
+      "intermediate": "Montevideo"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Guyana?",
+      "answer": "n",
+      "intermediate": "Georgetown"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Suriname?",
+      "answer": "o",
+      "intermediate": "Paramaribo"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Australia?",
+      "answer": "a",
+      "intermediate": "Canberra"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of New Zealand?",
+      "answer": "n",
+      "intermediate": "Wellington"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Fiji?",
+      "answer": "a",
+      "intermediate": "Suva"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Papua New Guinea?",
+      "answer": "y",
+      "intermediate": "Port Moresby"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Samoa?",
+      "answer": "a",
+      "intermediate": "Apia"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Tonga?",
+      "answer": "a",
+      "intermediate": "Nuku'alofa"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Vanuatu?",
+      "answer": "a",
+      "intermediate": "Port Vila"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Solomon Islands?",
+      "answer": "a",
+      "intermediate": "Honiara"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Kiribati?",
+      "answer": "a",
+      "intermediate": "Tarawa"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Micronesia?",
+      "answer": "r",
+      "intermediate": "Palikir"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Marshall Islands?",
+      "answer": "o",
+      "intermediate": "Majuro"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Palau?",
+      "answer": "d",
+      "intermediate": "Ngerulmud"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Tuvalu?",
+      "answer": "i",
+      "intermediate": "Funafuti"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Nauru?",
+      "answer": "n",
+      "intermediate": "Yaren"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the US state of Alabama?",
+      "answer": "y",
+      "intermediate": "Montgomery"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the US state of Alaska?",
+      "answer": "u",
+      "intermediate": "Juneau"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the US state of Arizona?",
+      "answer": "x",
+      "intermediate": "Phoenix"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the US state of Arkansas?",
+      "answer": "k",
+      "intermediate": "Little Rock"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the US state of California?",
+      "answer": "o",
+      "intermediate": "Sacramento"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the US state of Colorado?",
+      "answer": "r",
+      "intermediate": "Denver"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the US state of Connecticut?",
+      "answer": "d",
+      "intermediate": "Hartford"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the US state of Delaware?",
+      "answer": "r",
+      "intermediate": "Dover"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the US state of Florida?",
+      "answer": "e",
+      "intermediate": "Tallahassee"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the US state of Georgia?",
+      "answer": "a",
+      "intermediate": "Atlanta"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the US state of Hawaii?",
+      "answer": "u",
+      "intermediate": "Honolulu"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the US state of Idaho?",
+      "answer": "e",
+      "intermediate": "Boise"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the US state of Illinois?",
+      "answer": "d",
+      "intermediate": "Springfield"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the US state of Indiana?",
+      "answer": "s",
+      "intermediate": "Indianapolis"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the US state of Iowa?",
+      "answer": "s",
+      "intermediate": "Des Moines"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the US state of Kansas?",
+      "answer": "a",
+      "intermediate": "Topeka"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the US state of Kentucky?",
+      "answer": "t",
+      "intermediate": "Frankfort"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the US state of Louisiana?",
+      "answer": "e",
+      "intermediate": "Baton Rouge"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the US state of Maine?",
+      "answer": "a",
+      "intermediate": "Augusta"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the US state of Maryland?",
+      "answer": "s",
+      "intermediate": "Annapolis"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the US state of Massachusetts?",
+      "answer": "n",
+      "intermediate": "Boston"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the US state of Michigan?",
+      "answer": "g",
+      "intermediate": "Lansing"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the US state of Minnesota?",
+      "answer": "l",
+      "intermediate": "Saint Paul"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the US state of Mississippi?",
+      "answer": "n",
+      "intermediate": "Jackson"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the US state of Missouri?",
+      "answer": "y",
+      "intermediate": "Jefferson City"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the US state of Montana?",
+      "answer": "a",
+      "intermediate": "Helena"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the US state of Nebraska?",
+      "answer": "n",
+      "intermediate": "Lincoln"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the US state of Nevada?",
+      "answer": "y",
+      "intermediate": "Carson City"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the US state of New Hampshire?",
+      "answer": "d",
+      "intermediate": "Concord"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the US state of New Jersey?",
+      "answer": "n",
+      "intermediate": "Trenton"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the US state of New Mexico?",
+      "answer": "e",
+      "intermediate": "Santa Fe"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the US state of New York?",
+      "answer": "y",
+      "intermediate": "Albany"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the US state of North Carolina?",
+      "answer": "h",
+      "intermediate": "Raleigh"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the US state of North Dakota?",
+      "answer": "k",
+      "intermediate": "Bismarck"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the US state of Ohio?",
+      "answer": "s",
+      "intermediate": "Columbus"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the US state of Oregon?",
+      "answer": "m",
+      "intermediate": "Salem"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the US state of Pennsylvania?",
+      "answer": "g",
+      "intermediate": "Harrisburg"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the US state of Rhode Island?",
+      "answer": "e",
+      "intermediate": "Providence"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the US state of South Carolina?",
+      "answer": "a",
+      "intermediate": "Columbia"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the US state of South Dakota?",
+      "answer": "e",
+      "intermediate": "Pierre"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the US state of Tennessee?",
+      "answer": "e",
+      "intermediate": "Nashville"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the US state of Texas?",
+      "answer": "n",
+      "intermediate": "Austin"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the US state of Utah?",
+      "answer": "y",
+      "intermediate": "Salt Lake City"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the US state of Vermont?",
+      "answer": "r",
+      "intermediate": "Montpelier"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the US state of Virginia?",
+      "answer": "d",
+      "intermediate": "Richmond"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the US state of Washington?",
+      "answer": "a",
+      "intermediate": "Olympia"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the US state of West Virginia?",
+      "answer": "n",
+      "intermediate": "Charleston"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the US state of Wisconsin?",
+      "answer": "n",
+      "intermediate": "Madison"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the US state of Wyoming?",
+      "answer": "e",
+      "intermediate": "Cheyenne"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Anhui Province?",
+      "answer": "i",
+      "intermediate": "Hefei"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Fujian Province?",
+      "answer": "u",
+      "intermediate": "Fuzhou"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Gansu Province?",
+      "answer": "u",
+      "intermediate": "Lanzhou"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Guangdong Province?",
+      "answer": "u",
+      "intermediate": "Guangzhou"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Guizhou Province?",
+      "answer": "g",
+      "intermediate": "Guiyang"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Hainan Province?",
+      "answer": "u",
+      "intermediate": "Haikou"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Hebei Province?",
+      "answer": "g",
+      "intermediate": "Shijiazhuang"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Heilongjiang Province?",
+      "answer": "n",
+      "intermediate": "Harbin"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Henan Province?",
+      "answer": "u",
+      "intermediate": "Zhengzhou"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Hubei Province?",
+      "answer": "n",
+      "intermediate": "Wuhan"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Hunan Province?",
+      "answer": "a",
+      "intermediate": "Changsha"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Jiangsu Province?",
+      "answer": "g",
+      "intermediate": "Nanjing"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Jiangxi Province?",
+      "answer": "g",
+      "intermediate": "Nanchang"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Jilin Province?",
+      "answer": "n",
+      "intermediate": "Changchun"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Liaoning Province?",
+      "answer": "g",
+      "intermediate": "Shenyang"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Qinghai Province?",
+      "answer": "g",
+      "intermediate": "Xining"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Shaanxi Province?",
+      "answer": "n",
+      "intermediate": "Xi'an"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Shandong Province?",
+      "answer": "n",
+      "intermediate": "Jinan"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Shanxi Province?",
+      "answer": "n",
+      "intermediate": "Taiyuan"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Sichuan Province?",
+      "answer": "u",
+      "intermediate": "Chengdu"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Yunnan Province?",
+      "answer": "g",
+      "intermediate": "Kunming"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Zhejiang Province?",
+      "answer": "u",
+      "intermediate": "Hangzhou"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Guangxi Zhuang Autonomous Region?",
+      "answer": "g",
+      "intermediate": "Nanning"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Inner Mongolia?",
+      "answer": "t",
+      "intermediate": "Hohhot"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Ningxia Hui Autonomous Region?",
+      "answer": "n",
+      "intermediate": "Yinchuan"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Tibet Autonomous Region?",
+      "answer": "a",
+      "intermediate": "Lhasa"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Xinjiang Uyghur Autonomous Region?",
+      "answer": "i",
+      "intermediate": "Urumqi"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Indian state of Andhra Pradesh?",
+      "answer": "i",
+      "intermediate": "Amaravati"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Indian state of Arunachal Pradesh?",
+      "answer": "r",
+      "intermediate": "Itanagar"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Indian state of Assam?",
+      "answer": "r",
+      "intermediate": "Dispur"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Indian state of Bihar?",
+      "answer": "a",
+      "intermediate": "Patna"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Indian state of Chhattisgarh?",
+      "answer": "r",
+      "intermediate": "Raipur"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Indian state of Goa?",
+      "answer": "i",
+      "intermediate": "Panaji"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Indian state of Gujarat?",
+      "answer": "r",
+      "intermediate": "Gandhinagar"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Indian state of Haryana?",
+      "answer": "h",
+      "intermediate": "Chandigarh"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Indian state of Himachal Pradesh?",
+      "answer": "a",
+      "intermediate": "Shimla"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Indian state of Jharkhand?",
+      "answer": "i",
+      "intermediate": "Ranchi"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Indian state of Karnataka?",
+      "answer": "u",
+      "intermediate": "Bengaluru"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Indian state of Kerala?",
+      "answer": "m",
+      "intermediate": "Thiruvananthapuram"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Indian state of Madhya Pradesh?",
+      "answer": "l",
+      "intermediate": "Bhopal"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Indian state of Maharashtra?",
+      "answer": "i",
+      "intermediate": "Mumbai"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Indian state of Manipur?",
+      "answer": "l",
+      "intermediate": "Imphal"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Indian state of Meghalaya?",
+      "answer": "g",
+      "intermediate": "Shillong"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Indian state of Mizoram?",
+      "answer": "l",
+      "intermediate": "Aizawl"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Indian state of Nagaland?",
+      "answer": "a",
+      "intermediate": "Kohima"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Indian state of Odisha?",
+      "answer": "r",
+      "intermediate": "Bhubaneswar"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Indian state of Punjab?",
+      "answer": "h",
+      "intermediate": "Chandigarh"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Indian state of Rajasthan?",
+      "answer": "r",
+      "intermediate": "Jaipur"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Indian state of Sikkim?",
+      "answer": "k",
+      "intermediate": "Gangtok"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Indian state of Tamil Nadu?",
+      "answer": "i",
+      "intermediate": "Chennai"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Indian state of Telangana?",
+      "answer": "d",
+      "intermediate": "Hyderabad"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Indian state of Tripura?",
+      "answer": "a",
+      "intermediate": "Agartala"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Indian state of Uttar Pradesh?",
+      "answer": "w",
+      "intermediate": "Lucknow"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Indian state of Uttarakhand?",
+      "answer": "n",
+      "intermediate": "Dehradun"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Indian state of West Bengal?",
+      "answer": "a",
+      "intermediate": "Kolkata"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the German state of Baden-W\u00fcrttemberg?",
+      "answer": "t",
+      "intermediate": "Stuttgart"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the German state of Bavaria?",
+      "answer": "h",
+      "intermediate": "Munich"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the German state of Brandenburg?",
+      "answer": "m",
+      "intermediate": "Potsdam"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the German state of Hesse?",
+      "answer": "n",
+      "intermediate": "Wiesbaden"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the German state of Lower Saxony?",
+      "answer": "r",
+      "intermediate": "Hanover"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the German state of Mecklenburg-Vorpommern?",
+      "answer": "n",
+      "intermediate": "Schwerin"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the German state of North Rhine-Westphalia?",
+      "answer": "f",
+      "intermediate": "D\u00fcsseldorf"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the German state of Rhineland-Palatinate?",
+      "answer": "z",
+      "intermediate": "Mainz"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the German state of Saarland?",
+      "answer": "n",
+      "intermediate": "Saarbr\u00fccken"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the German state of Saxony?",
+      "answer": "n",
+      "intermediate": "Dresden"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the German state of Saxony-Anhalt?",
+      "answer": "g",
+      "intermediate": "Magdeburg"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the German state of Schleswig-Holstein?",
+      "answer": "l",
+      "intermediate": "Kiel"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the German state of Thuringia?",
+      "answer": "t",
+      "intermediate": "Erfurt"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Canadian province of Alberta?",
+      "answer": "n",
+      "intermediate": "Edmonton"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Canadian province of British Columbia?",
+      "answer": "a",
+      "intermediate": "Victoria"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Canadian province of Manitoba?",
+      "answer": "g",
+      "intermediate": "Winnipeg"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Canadian province of New Brunswick?",
+      "answer": "n",
+      "intermediate": "Fredericton"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Canadian province of Newfoundland and Labrador?",
+      "answer": "s",
+      "intermediate": "St. John's"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Canadian province of Nova Scotia?",
+      "answer": "x",
+      "intermediate": "Halifax"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Canadian province of Ontario?",
+      "answer": "o",
+      "intermediate": "Toronto"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Canadian province of Prince Edward Island?",
+      "answer": "n",
+      "intermediate": "Charlottetown"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Canadian province of Saskatchewan?",
+      "answer": "a",
+      "intermediate": "Regina"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Northwest Territories?",
+      "answer": "e",
+      "intermediate": "Yellowknife"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Canadian territory of Nunavut?",
+      "answer": "t",
+      "intermediate": "Iqaluit"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Canadian territory of Yukon?",
+      "answer": "e",
+      "intermediate": "Whitehorse"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Mexican state of Baja California?",
+      "answer": "i",
+      "intermediate": "Mexicali"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Mexican state of Baja California Sur?",
+      "answer": "z",
+      "intermediate": "La Paz"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Mexican state of Chiapas?",
+      "answer": "z",
+      "intermediate": "Tuxtla Guti\u00e9rrez"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Mexican state of Coahuila?",
+      "answer": "o",
+      "intermediate": "Saltillo"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Mexican state of Guerrero?",
+      "answer": "o",
+      "intermediate": "Chilpancingo"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Mexican state of Hidalgo?",
+      "answer": "a",
+      "intermediate": "Pachuca"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Mexican state of Jalisco?",
+      "answer": "a",
+      "intermediate": "Guadalajara"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Mexican state of M\u00e9xico?",
+      "answer": "a",
+      "intermediate": "Toluca"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Mexican state of Michoac\u00e1n?",
+      "answer": "a",
+      "intermediate": "Morelia"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Mexican state of Morelos?",
+      "answer": "a",
+      "intermediate": "Cuernavaca"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Mexican state of Nayarit?",
+      "answer": "c",
+      "intermediate": "Tepic"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Mexican state of Nuevo Le\u00f3n?",
+      "answer": "y",
+      "intermediate": "Monterrey"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Mexican state of Quintana Roo?",
+      "answer": "l",
+      "intermediate": "Chetumal"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Mexican state of Sinaloa?",
+      "answer": "n",
+      "intermediate": "Culiac\u00e1n"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Mexican state of Sonora?",
+      "answer": "o",
+      "intermediate": "Hermosillo"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Mexican state of Tabasco?",
+      "answer": "a",
+      "intermediate": "Villahermosa"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Mexican state of Veracruz?",
+      "answer": "a",
+      "intermediate": "Xalapa"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Mexican state of Yucat\u00e1n?",
+      "answer": "a",
+      "intermediate": "M\u00e9rida"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Brazilian state of Acre?",
+      "answer": "o",
+      "intermediate": "Rio Branco"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Brazilian state of Alagoas?",
+      "answer": "\u00f3",
+      "intermediate": "Macei\u00f3"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Brazilian state of Amap\u00e1?",
+      "answer": "\u00e1",
+      "intermediate": "Macap\u00e1"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Brazilian state of Amazonas?",
+      "answer": "s",
+      "intermediate": "Manaus"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Brazilian state of Bahia?",
+      "answer": "r",
+      "intermediate": "Salvador"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Brazilian state of Cear\u00e1?",
+      "answer": "a",
+      "intermediate": "Fortaleza"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Brazilian state of Esp\u00edrito Santo?",
+      "answer": "a",
+      "intermediate": "Vit\u00f3ria"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Brazilian state of Goi\u00e1s?",
+      "answer": "a",
+      "intermediate": "Goi\u00e2nia"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Brazilian state of Maranh\u00e3o?",
+      "answer": "s",
+      "intermediate": "S\u00e3o Lu\u00eds"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Brazilian state of Mato Grosso?",
+      "answer": "\u00e1",
+      "intermediate": "Cuiab\u00e1"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Brazilian state of Mato Grosso do Sul?",
+      "answer": "e",
+      "intermediate": "Campo Grande"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Brazilian state of Minas Gerais?",
+      "answer": "e",
+      "intermediate": "Belo Horizonte"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Brazilian state of Par\u00e1?",
+      "answer": "m",
+      "intermediate": "Bel\u00e9m"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Brazilian state of Para\u00edba?",
+      "answer": "a",
+      "intermediate": "Jo\u00e3o Pessoa"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Brazilian state of Paran\u00e1?",
+      "answer": "a",
+      "intermediate": "Curitiba"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Brazilian state of Pernambuco?",
+      "answer": "e",
+      "intermediate": "Recife"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Brazilian state of Piau\u00ed?",
+      "answer": "a",
+      "intermediate": "Teresina"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Brazilian state of Rio Grande do Norte?",
+      "answer": "l",
+      "intermediate": "Natal"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Brazilian state of Rio Grande do Sul?",
+      "answer": "e",
+      "intermediate": "Porto Alegre"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Brazilian state of Rond\u00f4nia?",
+      "answer": "o",
+      "intermediate": "Porto Velho"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Brazilian state of Roraima?",
+      "answer": "a",
+      "intermediate": "Boa Vista"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Brazilian state of Santa Catarina?",
+      "answer": "s",
+      "intermediate": "Florian\u00f3polis"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Brazilian state of Sergipe?",
+      "answer": "u",
+      "intermediate": "Aracaju"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Brazilian state of Tocantins?",
+      "answer": "s",
+      "intermediate": "Palmas"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Australian state of New South Wales?",
+      "answer": "y",
+      "intermediate": "Sydney"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Australian state of Victoria?",
+      "answer": "e",
+      "intermediate": "Melbourne"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Australian state of Queensland?",
+      "answer": "e",
+      "intermediate": "Brisbane"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Australian state of Western Australia?",
+      "answer": "h",
+      "intermediate": "Perth"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Australian state of South Australia?",
+      "answer": "e",
+      "intermediate": "Adelaide"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Australian state of Tasmania?",
+      "answer": "t",
+      "intermediate": "Hobart"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Australian Capital Territory?",
+      "answer": "a",
+      "intermediate": "Canberra"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of the Northern Territory?",
+      "answer": "n",
+      "intermediate": "Darwin"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Scotland?",
+      "answer": "h",
+      "intermediate": "Edinburgh"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Wales?",
+      "answer": "f",
+      "intermediate": "Cardiff"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Northern Ireland?",
+      "answer": "t",
+      "intermediate": "Belfast"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Puerto Rico?",
+      "answer": "n",
+      "intermediate": "San Juan"
+    },
+    {
+      "type": "last_letter",
+      "question": "What is the last letter of the name of the capital of Greenland?",
+      "answer": "k",
+      "intermediate": "Nuuk"
+    }
+  ]
+}

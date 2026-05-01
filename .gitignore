@@ -39,10 +39,11 @@ extracted_states/
 /data/*
 !/data/element_aliases.json
 !/data/capital_aliases.json
-**/data/
-!scripts/data/
-!scripts/multihop/data/
-!scripts/multihop/data/*.json
+!/data/2fact_addition_dataset.json
+!/data/element_letter_positions.json
+!/data/capital_letter_position.json
+finetuning/data/
+finetuning/scripts/multihop/data/
 datasets/
 *.jsonl
 *.jsonl.gz

@@ -181,13 +181,47 @@ finetuning/        # Qwen2.5-72B LoRA fine-tuning (separate experiment)
 
 ## Setup
 
-Python 3.10+, CUDA-capable GPUs for any extraction/intervention scripts.
+Python ≥ 3.10 and a CUDA-capable GPU node are required for any extraction or intervention script. CPU is sufficient for the residual-decode aggregation, the LLM-judge driver, and all plotting.
+
+### 1. Install dependencies
+
+The project uses [uv](https://github.com/astral-sh/uv) for environment management:
 
 ```bash
-uv sync
-source /workspace/config/probing_env.sh
+# Install uv if you don't have it
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# In the repo root:
+uv sync                                    # creates .venv and installs everything in pyproject.toml
+uv pip install flash-attn --no-build-isolation   # optional: only if you want Flash Attention 2
 ```
 
-For the LLM-as-judge step, set `ANTHROPIC_API_KEY` in the environment.
+`uv sync` pins `torch==2.6.0+cu124` from the PyTorch index plus `transformers`, `accelerate`, `bitsandbytes`, `autoawq`, `vllm`, `anthropic`, `matplotlib`, etc. Activate the env with `source .venv/bin/activate` or prefix commands with `uv run`.
 
-Hardware used: 3–4 × NVIDIA H200 (150 GB HBM3). DeepSeek V3 fits across 3 H200s in 4-bit AWQ; Kimi K2 needs 4 H200s under W4A16 with vLLM TP=4. Cumulative hidden-state extraction cache for the three-task suite is ~700 GB. 
+### 2. Download model checkpoints
+
+Each model is ~330–510 GB on disk. Use `huggingface-cli` (installed by `uv sync`) and pass the local path to scripts via `--model-path`:
+
+```bash
+huggingface-cli download cognitivecomputations/DeepSeek-V3-0324-AWQ \
+    --local-dir /path/to/deepseek-v3-awq
+
+huggingface-cli download RedHatAI/Kimi-K2-Instruct-quantized.w4a16 \
+    --local-dir /path/to/kimi-k2-w4a16
+```
+
+Both checkpoints are public; no `HF_TOKEN` required.
+
+### 3. Environment variables
+
+Only one is strictly required:
+
+| variable | when needed |
+|---|---|
+| `ANTHROPIC_API_KEY` | LLM-as-judge step (`scripts/decode/llm_decode_batch.py`) |
+| `HF_HOME` (optional) | redirect HuggingFace cache (model downloads, tokenizer assets) to a non-default location |
+| `HF_TOKEN` (optional) | only needed if you swap in a gated model |
+
+### 4. Hardware
+
+3–4 × NVIDIA H200 (150 GB HBM3) for the experiments in this repo: DeepSeek V3 fits across 3 H200s in 4-bit AWQ; Kimi K2 needs 4 H200s under W4A16 with vLLM TP=4. Cumulative hidden-state extraction cache for the three-task suite is ~700 GB on local SSD. Smaller setups can run a subset of conditions; the residual-decode step alone is CPU-only after extraction.

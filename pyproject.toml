@@ -18,6 +18,9 @@ dependencies = [
     "tqdm",
     "huggingface_hub",
     "autoawq==0.2.7.post3",
+    "vllm>=0.8",                 # Kimi K2 extraction + accuracy evals
+    "anthropic>=0.39",           # LLM-as-judge over residual top tokens
+    "requests",                  # build_*_aliases.py (Wikidata SPARQL)
 ]
 
 [[tool.uv.index]]

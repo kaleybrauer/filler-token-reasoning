@@ -12,11 +12,11 @@ Three tasks share the same prompt scaffold (5 few-shot examples held out of any 
 | 2-fact addition | "What is [fact phrase 1] plus [fact phrase 2]?" | look up A₁ and A₂, return A₁ + A₂ |
 | letter-position | "What is the [Nth] letter of the chemical element with atomic number [Z]?" or "...the capital of [region]?" | look up entity (element name from atomic number, or capital from a country, state, province, or territory), return its [Nth] letter |
 
-Filler types: `dots` (`. . .`), `counting` (`1 2 3 ...`); filler lengths from k=10 to k=100. Datasets and held-out few-shot pools live in `data/`.
+Filler types: `dots` (`. . .`), `counting` (`1 2 3 ...`), `alphabet` (`a b c ...`); filler lengths from k=5 to k=100. Datasets and held-out few-shot pools live in `data/`.
 
 ## Datasets
 
-We include data files for 2-fact addition and the two letter-position domains. The 1-fact addition dataset must be regenerated locally because it draws facts from Ryan Greenblatt's [`compose_facts`](https://github.com/rgreenblatt/compose_facts) repo which he has requested not be pushed to github.
+We include data files for 2-fact addition and the two letter-position domains. The 1-fact addition dataset must be regenerated locally because it draws facts from Ryan Greenblatt's [`compose_facts`](https://github.com/rgreenblatt/compose_facts) repo which are not to be pushed to github so they can continue to be used as test questions for future LLMs.
 
 | dataset | file | provided? | source / regenerate with |
 |---|---|---|---|

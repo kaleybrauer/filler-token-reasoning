@@ -61,15 +61,18 @@ def classify_positions(
     Classify each token position into a group.
 
     Groups:
-        system       — system prompt tokens
-        few_shot     — few-shot example tokens
-        question     — target question tokens (user turn)
-        filler       — filler tokens (dots)
-        filler_label — "Filler:", newlines before dots
-        answer_label — "Answer:", newlines after dots (present in both conditions)
+        system        — system prompt tokens
+        few_shot      — few-shot example tokens
+        question      — target question tokens (user turn)
+        filler        — the filler region: "Filler:" header, the filler tokens
+                        themselves (dots / counting), and any newlines bordering
+                        them. The header and dots are intentionally collapsed
+                        into a single segment (we treat the whole filler region
+                        as one block).
+        answer_label  — "Answer:", newlines after dots (present in both conditions)
         answer_prefix — generated "Answer: " tokens (only for pre_answer)
-        assistant    — assistant header token
-        other        — anything not classified above
+        assistant     — assistant header token
+        other         — anything not classified above
 
     Returns dict mapping group name -> list of token indices.
     """
@@ -132,16 +135,18 @@ def classify_positions(
                 else:
                     groups["question"].append(i)
             else:
-                # Has filler — split into question, filler_label, answer_label
+                # Has filler — split into question, filler region, answer_label.
+                # The "Filler:" header tokens and any newlines bordering the
+                # filler are folded into the filler group (see docstring).
                 if answer_token_pos >= 0 and i >= answer_token_pos:
                     groups["answer_label"].append(i)
                 elif filler_label_start >= 0 and i >= filler_label_start:
-                    groups["filler_label"].append(i)
+                    groups["filler"].append(i)
                 elif i < filler_start:
                     groups["question"].append(i)
                 else:
-                    # After filler_end but before answer — filler_label
-                    groups["filler_label"].append(i)
+                    # After filler_end but before answer — still part of filler region
+                    groups["filler"].append(i)
         elif any(role == "assistant" and pos == i for role, pos in role_boundaries):
             groups["assistant"].append(i)
         elif len(user_turns) > 1 and i >= user_turns[0] and i < user_turns[-1]:
@@ -375,7 +380,7 @@ def run_extraction(
 def analyze_results(output_dir: Path, conditions: list):
     """Load results and print summary tables."""
 
-    group_order = ["system", "few_shot", "question", "filler", "filler_label",
+    group_order = ["system", "few_shot", "question", "filler",
                    "answer_label", "assistant", "other"]
 
     for cond_name in conditions:

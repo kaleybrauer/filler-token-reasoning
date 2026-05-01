@@ -76,7 +76,7 @@ def main():
     extractor = AttentionExtractor(model, layer_indices)
     extractor.register_hooks()
 
-    groups_order = ["system", "few_shot", "question", "filler", "filler_label",
+    groups_order = ["system", "few_shot", "question", "filler",
                     "answer_label", "assistant", "format", "other"]
 
     for k in k_values:
@@ -86,11 +86,13 @@ def main():
         print(f"  dots k={k}, querying filler positions {query_ks}")
         print(f"{'#'*70}")
 
-        # Query labels: filler positions + special positions
-        # "filler_label" = the Filler: format tokens before dots
+        # Query labels: filler positions + special positions.
+        # "filler_label" is no longer a separate group — those tokens are now
+        # folded into "filler" (see classify_positions). Querying from the
+        # individual filler positions in `query_ks` covers the same span.
         # "answer_label" = the Answer: tokens after dots
         # "answer_pos" = the <assistant> token (last input token)
-        special_queries = ["filler_label", "answer_label", "answer_pos"]
+        special_queries = ["answer_label", "answer_pos"]
         all_query_keys = list(query_ks) + special_queries
 
         all_group_attn = {li: {qk: defaultdict(list) for qk in all_query_keys}

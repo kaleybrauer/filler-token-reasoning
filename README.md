@@ -16,7 +16,7 @@ Filler types: `dots` (`. . .`), `counting` (`1 2 3 ...`); filler lengths from k=
 
 ## Datasets
 
-We include data files for 2-fact addition and the two letter-position domains. The 1-fact addition dataset must be regenerated locally because it draws facts from Ryan Greenblatt's `compose_facts` repo which he has requested not be pushed to github.
+We include data files for 2-fact addition and the two letter-position domains. The 1-fact addition dataset must be regenerated locally because it draws facts from Ryan Greenblatt's [`compose_facts`](https://github.com/rgreenblatt/compose_facts) repo which he has requested not be pushed to github.
 
 | dataset | file | provided? | source / regenerate with |
 |---|---|---|---|
@@ -27,7 +27,7 @@ We include data files for 2-fact addition and the two letter-position domains. T
 | Element multilingual aliases | `data/element_aliases.json` | yes | `scripts/data/build_element_aliases.py` (Wikidata) |
 | Capital multilingual aliases | `data/capital_aliases.json` | yes | `scripts/data/build_capital_aliases.py` (Wikidata + manual fixes) |
 
-The fact pool for 1-fact (and the underlying single-fact pool for 2-fact) comes from Ryan Greenblatt's [`compose_facts`](https://github.com/rgreenblatt/compose_facts) repo (atomic numbers, ages at death, hand-curated static counts). To regenerate the 1-fact dataset end-to-end:
+The fact pool for 1-fact comes from Ryan Greenblatt's [`compose_facts`](https://github.com/rgreenblatt/compose_facts) repo (atomic numbers, ages at death, hand-curated static counts). To regenerate the 1-fact dataset end-to-end:
 
 ```bash
 # 1. Download upstream fact JSONs

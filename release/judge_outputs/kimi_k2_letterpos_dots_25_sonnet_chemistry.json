@@ -1,0 +1,4639 @@
+[
+  {
+    "idx": 0,
+    "element": "Silver",
+    "atomic_number": 47,
+    "pred": "Silver",
+    "backups": [],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens overwhelmingly point to \"silver\" - with \"silver\" at rank 1, \" silver\" at rank 2, \" Silver\" at rank 4, \"Silver\" at rank 5, plus the Chinese tokens \"银\" (silver), \"白银\" (silver/white silver), \"银子\" (silver), \"银价\" (silver price), and the chemical symbol \" Ag\".\n\n{\"answer\": \"Silver\", \"confidence\": 0.99, \"backups\": []}"
+  },
+  {
+    "idx": 1,
+    "element": "Thallium",
+    "atomic_number": 81,
+    "pred": "Mercury",
+    "backups": [
+      "Thallium",
+      "Lead",
+      "Americium",
+      "Tungsten",
+      "Potassium",
+      "Uranium",
+      "Iridium",
+      "Barium"
+    ],
+    "got": false,
+    "top_k": {
+      "1": false,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "Looking at the key tokens:\n\n- `'mercury'` (rank 6) - direct element name\n- `'汞'` (rank 31) - Chinese character for mercury\n- `'82'` (rank 13) - atomic number of lead... but wait, mercury is 80\n- `'95'` (rank 11) - could be americium (95)\n- `'lium'` (rank 4) - ending common in many elements\n- `'hall'` (rank 10) - could relate to thallium (Tl, 81)\n\nThe strongest signals are `' mercury'` and `'汞'` (which is the Chinese character specifically for mercury). Mercury has atomic number 80, symbol Hg. The number 82 could be lead (Pb), but the direct mentions of mercury in both English and Chinese are very strong indicators.\n\n{\"answer\": \"Mercury\", \"confidence\": 0.82, \"backups\": [\"Thallium\", \"Lead\", \"Americium\", \"Tungsten\", \"Potassium\", \"Uranium\", \"Iridium\", \"Barium\"]}"
+  },
+  {
+    "idx": 2,
+    "element": "Thulium",
+    "atomic_number": 69,
+    "pred": "Lutetium",
+    "backups": [
+      "Thulium",
+      "Erbium",
+      "Holmium",
+      "Ytterbium",
+      "Dysprosium",
+      "Yttrium",
+      "Terbium"
+    ],
+    "got": false,
+    "top_k": {
+      "1": false,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "Looking at the tokens, I can see strong hints:\n\n- `'mium'` - suffix common in element names\n- `' lut'` / `' Lut'` - suggests \"Lutetium\"\n- `'稀土'` - Chinese for \"rare earth\"\n- `'Tm'` - symbol for Thulium\n- `'holm'` - as in \"Stockholm\" → Holmium, or \"Thulium\" (from Thule)\n- `'erb'` - as in Erbium\n- `' dys'` - as in Dysprosium\n- `' yt'` / `'ytt'` - as in Yttrium/Ytterbium\n\nThe strongest tokens are `'mium'`, `' lut'`/`' Lut'`, and `'稀土'` (rare earth). \"Lutetium\" fits perfectly with `'lut'` + `'ium'`/`'mium'`. Lutetium is indeed a rare earth element. The `'Tm'` token could be a distractor or relate to nearby lanthanides being considered.\n\n{\"answer\": \"Lutetium\", \"confidence\": 0.72, \"backups\": [\"Thulium\", \"Erbium\", \"Holmium\", \"Ytterbium\", \"Dysprosium\", \"Yttrium\", \"Terbium\"]}"
+  },
+  {
+    "idx": 3,
+    "element": "Ruthenium",
+    "atomic_number": 44,
+    "pred": "Ruthenium",
+    "backups": [
+      "Radium",
+      "Rhodium",
+      "Rutherfordium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens \" Rut\", \"ium\", \" rut\", \"enium\", and \" Ru\"/\"Ru\" strongly point to **Ruthenium** (Ru, element 44).\n\n{\"answer\": \"Ruthenium\", \"confidence\": 0.97, \"backups\": [\"Radium\", \"Rhodium\", \"Rutherfordium\"]}"
+  },
+  {
+    "idx": 5,
+    "element": "Ruthenium",
+    "atomic_number": 44,
+    "pred": "Ruthenium",
+    "backups": [
+      "Rutherfordium",
+      "Radium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly suggest \"Ruthenium\" - \" Rut\" (rank 1, very high score), \"enium\" (rank 7), \"Ru\" (rank 15), \" Ru\" (rank 23), and the atomic symbol context all point to Ruthenium (Ru, element 44).\n\n{\"answer\": \"Ruthenium\", \"confidence\": 0.97, \"backups\": [\"Rutherfordium\", \"Radium\"]}"
+  },
+  {
+    "idx": 6,
+    "element": "Gold",
+    "atomic_number": 79,
+    "pred": "Gold",
+    "backups": [
+      "Platinum",
+      "Copper"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly indicate Gold: \"gold\", \"Gold\", \"GOLD\", \"Au\", \"黄金的\" (golden/of gold), \"金子\" (gold), \"金的\" (of gold), \"Aur\" (from Aurum), atomic symbol Au.\n\n{\"answer\": \"Gold\", \"confidence\": 0.99, \"backups\": [\"Platinum\", \"Copper\"]}"
+  },
+  {
+    "idx": 7,
+    "element": "Barium",
+    "atomic_number": 56,
+    "pred": "Caesium",
+    "backups": [
+      "Barium",
+      "Rubidium",
+      "Potassium",
+      "Radium"
+    ],
+    "got": false,
+    "top_k": {
+      "1": false,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top token is 'esium' which strongly suggests \"Caesium\" (Cs). The second strongest hint is 'arium' suggesting Barium (Ba), and ' Ba' / 'Ba' also appear. However, 'esium' has a much higher score and likely completes \"Caesium\" or \"Cesium\". The atomic number 55 for Caesium vs 56 for Barium. Token '37' appears (rank 48), which is the atomic number of Rubidium... but 'esium' is dominant.\n\n\"Cesium\" fits 'esium' perfectly as the ending. Barium fits 'arium' and 'Ba' tokens. The score for 'esium' is much higher than 'arium'.\n\n{\"answer\": \"Caesium\", \"confidence\": 0.72, \"backups\": [\"Barium\", \"Rubidium\", \"Potassium\", \"Radium\"]}"
+  },
+  {
+    "idx": 8,
+    "element": "Chromium",
+    "atomic_number": 24,
+    "pred": "Chromium",
+    "backups": [],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "{\"answer\": \"Chromium\", \"confidence\": 0.99, \"backups\": []}"
+  },
+  {
+    "idx": 9,
+    "element": "Gallium",
+    "atomic_number": 31,
+    "pred": "Gallium",
+    "backups": [
+      "Aluminum",
+      "Gadolinium",
+      "Germanium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly point to Gallium: \" gall\" (rank 2), \" Ga\" (rank 8), \"Ga\" (rank 11), \" Gall\" (rank 20), and atomic number \"31\" (rank 26) which is Gallium's atomic number.\n\n{\"answer\": \"Gallium\", \"confidence\": 0.97, \"backups\": [\"Aluminum\", \"Gadolinium\", \"Germanium\"]}"
+  },
+  {
+    "idx": 10,
+    "element": "Actinium",
+    "atomic_number": 89,
+    "pred": "Uranium",
+    "backups": [
+      "Thorium",
+      "Actinium",
+      "Radium"
+    ],
+    "got": false,
+    "top_k": {
+      "1": false,
+      "2": false,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly suggest \"uranium\" (rank 1, score 36.317) and \"thorium\" (rank 3, score 20.993 as ' thor'). The atomic number 89 token appears (rank 7), which corresponds to Actinium, but the dominant signal is uranium. Token '铀' (rank 35) is the Chinese word for uranium, and '放射性' means \"radioactive.\"\n\nThe task seems to involve something about letters/atomic properties. The number 89 could relate to thorium (90) or actinium (89), but the overwhelming top token is 'uranium'.\n\nGiven the dominant scores for ' uranium' and related tokens like 'uran', '铀' (uranium in Chinese), uranium is clearly the primary element being considered.\n\n{\"answer\": \"Uranium\", \"confidence\": 0.72, \"backups\": [\"Thorium\", \"Actinium\", \"Radium\"]}"
+  },
+  {
+    "idx": 11,
+    "element": "Actinium",
+    "atomic_number": 89,
+    "pred": "Thorium",
+    "backups": [
+      "Actinium",
+      "Uranium",
+      "Protactinium",
+      "Radium"
+    ],
+    "got": false,
+    "top_k": {
+      "1": false,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "Looking at the tokens, I can see strong signals:\n\n- 'thor' and ' thor' (ranks 5-6) → **Thorium**\n- 'ium' suffix (rank 2)\n- ' radioactive' (rank 4) — thorium is radioactive\n- ' uranium' (rank 3) — often mentioned alongside thorium\n- '89' (rank 31) — thorium's atomic number is 90, but actinium is 89... however 'thor' is much stronger\n- '放射性' (rank 27) = \"radioactive\" in Chinese\n\nThe dominant signal is clearly \"thor\" + \"ium\" = **Thorium**.\n\n{\"answer\": \"Thorium\", \"confidence\": 0.85, \"backups\": [\"Actinium\", \"Uranium\", \"Protactinium\", \"Radium\"]}"
+  },
+  {
+    "idx": 12,
+    "element": "Thorium",
+    "atomic_number": 90,
+    "pred": "Thorium",
+    "backups": [
+      "Uranium",
+      "Thulium",
+      "Promethium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly suggest \"Thorium\" — note ' Thor', ' thor', 'thor', and 'ium' as top tokens, with uranium as a secondary signal.\n\n{\"answer\": \"Thorium\", \"confidence\": 0.85, \"backups\": [\"Uranium\", \"Thulium\", \"Promethium\"]}"
+  },
+  {
+    "idx": 13,
+    "element": "Lutetium",
+    "atomic_number": 71,
+    "pred": "Lutetium",
+    "backups": [
+      "Lawrencium",
+      "Lithium",
+      "Lanthanum"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly suggest \"lutecium/lutetium\" - tokens like ' lut', ' Lut', 'lut', ' Lu', 'Lu', and 'lium' all point to **Lutetium** (element 71, symbol Lu).\n\n{\"answer\": \"Lutetium\", \"confidence\": 0.95, \"backups\": [\"Lawrencium\", \"Lithium\", \"Lanthanum\"]}"
+  },
+  {
+    "idx": 14,
+    "element": "Mercury",
+    "atomic_number": 80,
+    "pred": "Mercury",
+    "backups": [],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens clearly indicate \"mercury\" (rank 1 with score 161.330), \"cury\" (partial word), \" Mercury\" (rank 6), and \"汞\" (rank 11, which is the Chinese character for mercury), plus \"Hg\" (rank 32, the chemical symbol for mercury).\n\n{\"answer\": \"Mercury\", \"confidence\": 0.99, \"backups\": []}"
+  },
+  {
+    "idx": 15,
+    "element": "Molybdenum",
+    "atomic_number": 42,
+    "pred": "Molybdenum",
+    "backups": [
+      "Chromium",
+      "Osmium",
+      "Tungsten"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly indicate **Molybdenum**: '钼' (Chinese for Molybdenum), 'oly' (part of \"Molybdenum\"), ' Mo' and 'Mo' (chemical symbol), and '95' (atomic number of Molybdenum is 42... wait, 95 is the atomic mass).\n\n{\"answer\": \"Molybdenum\", \"confidence\": 0.98, \"backups\": [\"Chromium\", \"Osmium\", \"Tungsten\"]}"
+  },
+  {
+    "idx": 17,
+    "element": "Helium",
+    "atomic_number": 2,
+    "pred": "Helium",
+    "backups": [
+      "Neon",
+      "Hydrogen",
+      "Argon"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top token by a massive margin is ' helium', with score 161.152, far above all others.\n\n{\"answer\": \"Helium\", \"confidence\": 0.98, \"backups\": [\"Neon\", \"Hydrogen\", \"Argon\"]}"
+  },
+  {
+    "idx": 18,
+    "element": "Potassium",
+    "atomic_number": 19,
+    "pred": "Potassium",
+    "backups": [],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "{\"answer\": \"Potassium\", \"confidence\": 0.99, \"backups\": []}"
+  },
+  {
+    "idx": 19,
+    "element": "Protactinium",
+    "atomic_number": 91,
+    "pred": "Uranium",
+    "backups": [
+      "Thorium",
+      "Protactinium",
+      "Plutonium"
+    ],
+    "got": false,
+    "top_k": {
+      "1": false,
+      "2": false,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly indicate \"uranium\" (rank 1 with score 73.504, plus 'Uran', 'uran', '铀' which is uranium in Chinese). The secondary tokens like 'thor' (thorium) and 'prot' (protactinium) are likely nearby elements being considered, but uranium dominates.\n\n{\"answer\": \"Uranium\", \"confidence\": 0.95, \"backups\": [\"Thorium\", \"Protactinium\", \"Plutonium\"]}"
+  },
+  {
+    "idx": 20,
+    "element": "Selenium",
+    "atomic_number": 34,
+    "pred": "Selenium",
+    "backups": [
+      "Phosphorus",
+      "Helium",
+      "Hydrogen"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens overwhelmingly point to **selenium**: rank 1 is ' selenium' with a score of 116.655, rank 3 is '硒' (the Chinese character for selenium), and ranks 8-9 are 'enium' and 'elenium' (suffixes of selenium).\n\n{\"answer\": \"Selenium\", \"confidence\": 0.99, \"backups\": [\"Phosphorus\", \"Helium\", \"Hydrogen\"]}"
+  },
+  {
+    "idx": 21,
+    "element": "Tantalum",
+    "atomic_number": 73,
+    "pred": "Tantalum",
+    "backups": [
+      "Tungsten",
+      "Titanium",
+      "Phosphorus"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly suggest \"tantalum\" (tokens: ' tantal', ' Ta', 'Ta', 'lum', 'antal') with some signal for tungsten ('ungsten', '钨') as well. The highest score by far is ' tantal', pointing to Tantalum.\n\n{\"answer\": \"Tantalum\", \"confidence\": 0.82, \"backups\": [\"Tungsten\", \"Titanium\", \"Phosphorus\"]}"
+  },
+  {
+    "idx": 22,
+    "element": "Tellurium",
+    "atomic_number": 52,
+    "pred": "Tellurium",
+    "backups": [
+      "Selenium",
+      "Tennessine"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly suggest **Tellurium**: \"Tell\" (rank 1), \" Te\" (rank 5), \"lur\" (rank 12), \"llu\" (rank 30) all point to \"Tellurium.\" There's also \" selenium\" and \"硒\" (selenium in Chinese) as secondary signals, but Tellurium dominates.\n\n{\"answer\": \"Tellurium\", \"confidence\": 0.88, \"backups\": [\"Selenium\", \"Tennessine\"]}"
+  },
+  {
+    "idx": 23,
+    "element": "Copper",
+    "atomic_number": 29,
+    "pred": "Copper",
+    "backups": [],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "{\"answer\": \"Copper\", \"confidence\": 0.99, \"backups\": []}"
+  },
+  {
+    "idx": 24,
+    "element": "Dysprosium",
+    "atomic_number": 66,
+    "pred": "Dysprosium",
+    "backups": [
+      "Gadolinium",
+      "Terbium",
+      "Chromium",
+      "Erbium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens show 'mium' (rank 1), ' dys' (rank 2), ' Dy' (rank 4), and 'Dy' (rank 6). These strongly point to **Dysprosium** (Dy, element 66), a rare earth element (稀土 appears at rank 8).\n\n{\"answer\": \"Dysprosium\", \"confidence\": 0.95, \"backups\": [\"Gadolinium\", \"Terbium\", \"Chromium\", \"Erbium\"]}"
+  },
+  {
+    "idx": 25,
+    "element": "Terbium",
+    "atomic_number": 65,
+    "pred": "Terbium",
+    "backups": [
+      "Dysprosium",
+      "Gadolinium",
+      "Thulium",
+      "Erbium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly suggest \"Tb\" (terbium) — it appears twice with high scores, along with \"稀土\" (rare earth), \"ter\" and \"reb\" fragments consistent with \"terbium\", and nearby lanthanide neighbors \"Gd\" and \"Dy\" as alternatives.\n\n{\"answer\": \"Terbium\", \"confidence\": 0.92, \"backups\": [\"Dysprosium\", \"Gadolinium\", \"Thulium\", \"Erbium\"]}"
+  },
+  {
+    "idx": 26,
+    "element": "Fermium",
+    "atomic_number": 100,
+    "pred": "Fermium",
+    "backups": [
+      "Uranium",
+      "Einsteinium",
+      "Curium",
+      "Nobelium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "Looking at the tokens, I can see strong hints:\n\n- \"ferm\" (rank 2, high score)\n- \"ium\" (rank 1, highest score)\n- \"Fm\" (rank 22) - the chemical symbol for Fermium\n- \"100\" (rank 41) - atomic number of Fermium\n- \" uranium\" nearby as context\n- \"mium\" also present\n\n\"Ferm\" + \"ium\" = **Fermium**, element 100, symbol Fm.\n\n{\"answer\": \"Fermium\", \"confidence\": 0.97, \"backups\": [\"Uranium\", \"Einsteinium\", \"Curium\", \"Nobelium\"]}"
+  },
+  {
+    "idx": 27,
+    "element": "Cadmium",
+    "atomic_number": 48,
+    "pred": "Cadmium",
+    "backups": [
+      "Chromium",
+      "Nickel",
+      "Zinc",
+      "Mercury"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly point to Cadmium: '镉' (Chinese for Cadmium), ' cad', ' Cad', ' Cd', 'Cd', and 'mium' (ending of \"cadmium\"). The symbol Cd and atomic number 48 all align.\n\n{\"answer\": \"Cadmium\", \"confidence\": 0.97, \"backups\": [\"Chromium\", \"Nickel\", \"Zinc\", \"Mercury\"]}"
+  },
+  {
+    "idx": 28,
+    "element": "Radium",
+    "atomic_number": 88,
+    "pred": "Radium",
+    "backups": [
+      "Uranium",
+      "Caesium",
+      "Francium",
+      "Barium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly point to Radium:\n- 'adium' (rank 1, highest score) — completing \"R**adium**\"\n- ' rad' (rank 2) — start of \"Radium\"\n- ' Ra' (rank 13) — chemical symbol for Radium\n- ' Radi' (rank 21) — \"Radi**um**\"\n- '镭' (rank 18) — Chinese word for Radium\n- '放射性' (rank 9) — \"radioactive\" in Chinese, associated with Radium\n- ' radioactive' (rank 10) — Radium is famously radioactive\n\n{\"answer\": \"Radium\", \"confidence\": 0.97, \"backups\": [\"Uranium\", \"Caesium\", \"Francium\", \"Barium\"]}"
+  },
+  {
+    "idx": 30,
+    "element": "Hydrogen",
+    "atomic_number": 1,
+    "pred": "Hydrogen",
+    "backups": [
+      "Helium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly point to Hydrogen: ' hydrogen' is ranked #1 with a dominant score, '氢' (Chinese for hydrogen) is #3, and fragments like ' Hyd', 'Hyd', 'dro', 'ydr', 'ydro', 'rogen' all spell out \"hydrogen.\"\n\n{\"answer\": \"Hydrogen\", \"confidence\": 0.99, \"backups\": [\"Helium\"]}"
+  },
+  {
+    "idx": 31,
+    "element": "Rhodium",
+    "atomic_number": 45,
+    "pred": "Rhodium",
+    "backups": [
+      "Rhodium",
+      "Palladium",
+      "Platinum",
+      "Phosphorus"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens are overwhelmingly \"Rh\" and \"Rh\" variants. The Chinese token '钯' means palladium, but the dominant signal is \"Rh\" which is the chemical symbol for Rhodium. Other hints like 'adium', 'odium', 'idium' suggest element names ending in \"-dium\" or \"-odium\", and 'platinum' appears as a neighbor (platinum group metals). \"Rh\" = Rhodium.\n\n{\"answer\": \"Rhodium\", \"confidence\": 0.92, \"backups\": [\"Rhodium\", \"Palladium\", \"Platinum\", \"Phosphorus\"]}"
+  },
+  {
+    "idx": 33,
+    "element": "Gallium",
+    "atomic_number": 31,
+    "pred": "Gallium",
+    "backups": [
+      "Arsenic",
+      "Aluminum",
+      "Germanium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly point to Gallium: \"Ga\", \" Ga\", \" gall\", \"lium\", \" Gall\" are all highly ranked and clearly refer to Gallium (Ga).\n\n{\"answer\": \"Gallium\", \"confidence\": 0.97, \"backups\": [\"Arsenic\", \"Aluminum\", \"Germanium\"]}"
+  },
+  {
+    "idx": 34,
+    "element": "Lutetium",
+    "atomic_number": 71,
+    "pred": "Lutetium",
+    "backups": [
+      "Lutecium",
+      "Lawrencium",
+      "Lithium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The strongest tokens are ' lut', ' Lut', ' Lu', 'lium', '稀土' (rare earth), and references to \"third letter\" / \"spelling\". This strongly points to **Lutetium** (Lu), a rare earth element. The tokens suggest the model was thinking about the spelling of \"Lutetium\" and possibly its third letter.\n\n{\"answer\": \"Lutetium\", \"confidence\": 0.92, \"backups\": [\"Lutecium\", \"Lawrencium\", \"Lithium\"]}"
+  },
+  {
+    "idx": 35,
+    "element": "Silicon",
+    "atomic_number": 14,
+    "pred": "Silicon",
+    "backups": [
+      "Phosphorus"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "{\"answer\": \"Silicon\", \"confidence\": 0.98, \"backups\": [\"Phosphorus\"]}"
+  },
+  {
+    "idx": 36,
+    "element": "Fluorine",
+    "atomic_number": 9,
+    "pred": "Fluorine",
+    "backups": [
+      "Chlorine",
+      "Neon"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly point to Fluorine: ' fluor', ' fluoride', '氟' (Chinese for fluorine), ' Flu', 'lur', 'loor' — all clearly related to fluorine.\n\n{\"answer\": \"Fluorine\", \"confidence\": 0.98, \"backups\": [\"Chlorine\", \"Neon\"]}"
+  },
+  {
+    "idx": 38,
+    "element": "Protactinium",
+    "atomic_number": 91,
+    "pred": "Uranium",
+    "backups": [
+      "Thorium",
+      "Protactinium",
+      "Plutonium",
+      "Radium"
+    ],
+    "got": false,
+    "top_k": {
+      "1": false,
+      "2": false,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly indicate \"uranium\" (rank 1 with score 55.385, plus 'Uran', 'uran', '铀' which is Chinese for uranium). There are also hints of \"thorium\" ('thor', ' Thor') and \"protactinium\" ('prot', ' Pa', 'Prot') which are adjacent elements in the actinide series, suggesting the model may be thinking about relationships between these elements. But uranium dominates overwhelmingly.\n\n{\"answer\": \"Uranium\", \"confidence\": 0.95, \"backups\": [\"Thorium\", \"Protactinium\", \"Plutonium\", \"Radium\"]}"
+  },
+  {
+    "idx": 40,
+    "element": "Cesium",
+    "atomic_number": 55,
+    "pred": "Caesium",
+    "backups": [
+      "Potassium",
+      "Sodium",
+      "Lithium"
+    ],
+    "got": false,
+    "top_k": {
+      "1": false,
+      "2": false,
+      "3": false,
+      "5": false,
+      "10": false
+    },
+    "raw": "The top token is 'esium' with a very high score, and token 12 is ' Cs' (the chemical symbol for Caesium/Cesium). This strongly points to Caesium.\n\n{\"answer\": \"Caesium\", \"confidence\": 0.97, \"backups\": [\"Potassium\", \"Sodium\", \"Lithium\"]}"
+  },
+  {
+    "idx": 41,
+    "element": "Neon",
+    "atomic_number": 10,
+    "pred": "Neon",
+    "backups": [
+      "Helium",
+      "Argon",
+      "Xenon",
+      "Krypton"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly indicate \"Neon\" — tokens like ' Neon', 'neon', ' neon', \"on's\", 'gas', ' gases', and '原子' (atom) all point to this noble gas element.\n\n{\"answer\": \"Neon\", \"confidence\": 0.97, \"backups\": [\"Helium\", \"Argon\", \"Xenon\", \"Krypton\"]}"
+  },
+  {
+    "idx": 43,
+    "element": "Dysprosium",
+    "atomic_number": 66,
+    "pred": "Dysprosium",
+    "backups": [
+      "Lutetium",
+      "Erbium",
+      "Terbium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly point to Dysprosium: 'Dy', ' Dy', ' dys', 'mium' (completing \"dysprosium\"), and '稀土' (rare earth in Chinese).\n\n{\"answer\": \"Dysprosium\", \"confidence\": 0.97, \"backups\": [\"Lutetium\", \"Erbium\", \"Terbium\"]}"
+  },
+  {
+    "idx": 44,
+    "element": "Rubidium",
+    "atomic_number": 37,
+    "pred": "Rubidium",
+    "backups": [
+      "Cesium",
+      "Potassium",
+      "Iridium",
+      "Barium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top token is 'Rb' with a very high score of 81.266, which is the chemical symbol for Rubidium. Supporting tokens include 'rub', 'Rub', and 'Rubidium' fragments. There are also some hints toward Cesium ('esium') and Potassium ('potassium', '钾'), but Rubidium is clearly dominant.\n\n{\"answer\": \"Rubidium\", \"confidence\": 0.92, \"backups\": [\"Cesium\", \"Potassium\", \"Iridium\", \"Barium\"]}"
+  },
+  {
+    "idx": 45,
+    "element": "Tungsten",
+    "atomic_number": 74,
+    "pred": "Tungsten",
+    "backups": [
+      "Chromium",
+      "Wolfram"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly indicate \"Tungsten\" — \"ungsten\" (rank 1) and \"钨\" (the Chinese word for Tungsten, rank 2) are the top two tokens.\n\n{\"answer\": \"Tungsten\", \"confidence\": 0.98, \"backups\": [\"Chromium\", \"Wolfram\"]}"
+  },
+  {
+    "idx": 46,
+    "element": "Neodymium",
+    "atomic_number": 60,
+    "pred": "Neodymium",
+    "backups": [
+      "Nickel",
+      "Neon",
+      "Neptunium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly suggest **Neodymium**:\n\n- `' Nd'` (rank 1, highest score) — chemical symbol for Neodymium\n- `'mium'` (rank 2) — suffix of \"Neodymium\"\n- `'ym'` (rank 9) — part of \"Neodym-ium\"\n- `'Nd'` (rank 15) — symbol again\n- `'稀土'` (rank 6) — Chinese for \"rare earth\" (Neodymium is a rare earth element)\n- `'60'` (rank 32) — atomic number of Neodymium\n\n{\"answer\": \"Neodymium\", \"confidence\": 0.97, \"backups\": [\"Nickel\", \"Neon\", \"Neptunium\"]}"
+  },
+  {
+    "idx": 47,
+    "element": "Yttrium",
+    "atomic_number": 39,
+    "pred": "Yttrium",
+    "backups": [
+      "Barium",
+      "Uranium",
+      "Radium",
+      "Potassium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly suggest Yttrium: \"ytt\" (rank 8), \"rium\" (rank 1), \"tri\" (rank 4), \"=Y\", \"(Y\", \"/Y\", \" Y\" all pointing to the element symbol Y, and \"trium\" (rank 17) completing \"yttrium.\"\n\n{\"answer\": \"Yttrium\", \"confidence\": 0.97, \"backups\": [\"Barium\", \"Uranium\", \"Radium\", \"Potassium\"]}"
+  },
+  {
+    "idx": 48,
+    "element": "Radium",
+    "atomic_number": 88,
+    "pred": "Radium",
+    "backups": [
+      "Caesium",
+      "Francium",
+      "Barium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly suggest Radium:\n- '镭' is the Chinese word for Radium\n- '放射性' means \"radioactive\" in Chinese\n- ' radioactive', ' rad', 'adium', ' Ra', ' Radi' all point to Radium\n- '88' is Radium's atomic number\n- 'ium' ending is consistent with Radium\n\n{\"answer\": \"Radium\", \"confidence\": 0.97, \"backups\": [\"Caesium\", \"Francium\", \"Barium\"]}"
+  },
+  {
+    "idx": 49,
+    "element": "Aluminum",
+    "atomic_number": 13,
+    "pred": "Aluminum",
+    "backups": [],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "{\"answer\": \"Aluminum\", \"confidence\": 0.99, \"backups\": []}"
+  },
+  {
+    "idx": 51,
+    "element": "Niobium",
+    "atomic_number": 41,
+    "pred": "Niobium",
+    "backups": [
+      "Nickel",
+      "Chromium",
+      "Tantalum",
+      "Neptunium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly suggest \"Nb\" (Niobium) - the chemical symbol Nb appears at rank 1 with a very high score, and \"ium\" suffix appears at rank 2. There's also a hint of \"ni\" (rank 5) which fits \"Niobium\". The token \"mium\" could relate to other elements but Nb/Niobium is clearly dominant.\n\n{\"answer\": \"Niobium\", \"confidence\": 0.85, \"backups\": [\"Nickel\", \"Chromium\", \"Tantalum\", \"Neptunium\"]}"
+  },
+  {
+    "idx": 53,
+    "element": "Mercury",
+    "atomic_number": 80,
+    "pred": "Mercury",
+    "backups": [
+      "Lead"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "{\"answer\": \"Mercury\", \"confidence\": 0.99, \"backups\": [\"Lead\"]}"
+  },
+  {
+    "idx": 54,
+    "element": "Cobalt",
+    "atomic_number": 27,
+    "pred": "Cobalt",
+    "backups": [
+      "Nickel",
+      "Chromium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "{\"answer\": \"Cobalt\", \"confidence\": 0.99, \"backups\": [\"Nickel\", \"Chromium\"]}"
+  },
+  {
+    "idx": 55,
+    "element": "Magnesium",
+    "atomic_number": 12,
+    "pred": "Magnesium",
+    "backups": [
+      "Cesium",
+      "Manganese"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly indicate **Magnesium**: \"magnesium\" ranks #1 with a very high score, \"Mg\" appears multiple times, \"镁\" (Chinese for magnesium), and \"Magn\" fragments all point to the same element.\n\n{\"answer\": \"Magnesium\", \"confidence\": 0.98, \"backups\": [\"Cesium\", \"Manganese\"]}"
+  },
+  {
+    "idx": 56,
+    "element": "Vanadium",
+    "atomic_number": 23,
+    "pred": "Vanadium",
+    "backups": [
+      "Chromium",
+      "Titanium",
+      "Radium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top token is '钒' which is the Chinese character for Vanadium, and there are also tokens like 'Van', '(V', ' Van' supporting this.\n\n{\"answer\": \"Vanadium\", \"confidence\": 0.97, \"backups\": [\"Chromium\", \"Titanium\", \"Radium\"]}"
+  },
+  {
+    "idx": 58,
+    "element": "Scandium",
+    "atomic_number": 21,
+    "pred": "Scandium",
+    "backups": [
+      "Titanium",
+      "Chromium",
+      "Vanadium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly suggest \"Sc\" — the chemical symbol for Scandium. The tokens ' Sc', 'Sc', '.Sc', '_Sc', '(SC' all point to this element. Additionally, '二十一' means \"twenty-one\" in Chinese, which is Scandium's atomic number (21). The Chinese tokens '元素' (element) and related terms confirm this is about an element named Scandium.\n\n{\"answer\": \"Scandium\", \"confidence\": 0.97, \"backups\": [\"Titanium\", \"Chromium\", \"Vanadium\"]}"
+  },
+  {
+    "idx": 59,
+    "element": "Astatine",
+    "atomic_number": 85,
+    "pred": "Iodine",
+    "backups": [
+      "Astatine",
+      "Chlorine"
+    ],
+    "got": false,
+    "top_k": {
+      "1": false,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top token is ' iod' (score 75.742), and token 7 is '碘' (the Chinese character for iodine). These strongly point to Iodine. There's also 'Ast' appearing multiple times, which could hint at Astatine (another halogen), but iodine is overwhelmingly dominant.\n\n{\"answer\": \"Iodine\", \"confidence\": 0.92, \"backups\": [\"Astatine\", \"Chlorine\"]}"
+  },
+  {
+    "idx": 61,
+    "element": "Helium",
+    "atomic_number": 2,
+    "pred": "Helium",
+    "backups": [
+      "Neon"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "{\"answer\": \"Helium\", \"confidence\": 0.98, \"backups\": [\"Neon\"]}"
+  },
+  {
+    "idx": 62,
+    "element": "Yttrium",
+    "atomic_number": 39,
+    "pred": "Yttrium",
+    "backups": [
+      "Ytterbium",
+      "Zirconium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly point to Yttrium: \"ytt\" (rank 5), \"rium\" (rank 21), \"=Y\", \"/Y\", \"(Y\" (the chemical symbol Y), \"稀土\" meaning \"rare earth\" (rank 29), and \"锆\" (Zirconium, rank 43 — adjacent element).\n\n{\"answer\": \"Yttrium\", \"confidence\": 0.95, \"backups\": [\"Ytterbium\", \"Zirconium\"]}"
+  },
+  {
+    "idx": 63,
+    "element": "Promethium",
+    "atomic_number": 61,
+    "pred": "Promethium",
+    "backups": [
+      "Neodymium",
+      "Phosphorus",
+      "Helium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly point to Promethium: \"Pm\" (rank 4), \"etheus\" (rank 23), \"Prom\" (ranks 34, 37, 38), \"mium\" (rank 6), \"稀土\" (rare earth, rank 13), and \"radioactive\" (rank 35) all align perfectly with Promethium (Pm), the radioactive rare earth element.\n\n{\"answer\": \"Promethium\", \"confidence\": 0.97, \"backups\": [\"Neodymium\", \"Phosphorus\", \"Helium\"]}"
+  },
+  {
+    "idx": 64,
+    "element": "Boron",
+    "atomic_number": 5,
+    "pred": "Boron",
+    "backups": [
+      "Phosphorus",
+      "Hydrogen"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens are '硼' (Chinese for Boron), ' Bor', 'oron' — these clearly spell out \"Boron.\"\n\n{\"answer\": \"Boron\", \"confidence\": 0.99, \"backups\": [\"Phosphorus\", \"Hydrogen\"]}"
+  },
+  {
+    "idx": 65,
+    "element": "Lutetium",
+    "atomic_number": 71,
+    "pred": "Lutetium",
+    "backups": [
+      "Lithium",
+      "Lutecium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly suggest \"Lutetium\" - I can see ' lut', ' Lut', 'Lu', ' Lu', 'ium', 'mium', and '稀土' (rare earth in Chinese). The model appears to be thinking about the third letter of \"Lutetium\" or some spelling property of it.\n\n{\"answer\": \"Lutetium\", \"confidence\": 0.92, \"backups\": [\"Lithium\", \"Lutecium\"]}"
+  },
+  {
+    "idx": 66,
+    "element": "Osmium",
+    "atomic_number": 76,
+    "pred": "Osmium",
+    "backups": [
+      "Einsteinium",
+      "Curium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly point to \"Osm\" and \"mium\" (tokens 1 and 6), along with \"Os\" (tokens 9, 49), clearly indicating Osmium.\n\n{\"answer\": \"Osmium\", \"confidence\": 0.98, \"backups\": [\"Einsteinium\", \"Curium\"]}"
+  },
+  {
+    "idx": 67,
+    "element": "Tin",
+    "atomic_number": 50,
+    "pred": "Tin",
+    "backups": [
+      "Lead",
+      "Antimony"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly indicate \"tin\" (Sn, 锡, atomic number 50).\n\n{\"answer\": \"Tin\", \"confidence\": 0.98, \"backups\": [\"Lead\", \"Antimony\"]}"
+  },
+  {
+    "idx": 68,
+    "element": "Rhodium",
+    "atomic_number": 45,
+    "pred": "Rhodium",
+    "backups": [
+      "Palladium",
+      "Platinum",
+      "Silver"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly point to \"Rh\" - the chemical symbol for Rhodium. Tokens 1, 3, 4 (\"odium\" completing \"Rh\"), 5, and 12 (\"adium\" → \"Rhodium\") all confirm this. The Chinese token '钯' (palladium) appears but with much lower score, likely as a nearby element in the periodic table.\n\n{\"answer\": \"Rhodium\", \"confidence\": 0.95, \"backups\": [\"Palladium\", \"Platinum\", \"Silver\"]}"
+  },
+  {
+    "idx": 69,
+    "element": "Ytterbium",
+    "atomic_number": 70,
+    "pred": "Yttrium",
+    "backups": [
+      "Ytterbium",
+      "Erbium",
+      "Lutetium",
+      "Europium",
+      "Americium"
+    ],
+    "got": false,
+    "top_k": {
+      "1": false,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "Looking at the tokens, I can identify several key clues:\n\n1. `'mium'` - suffix common in element names (e.g., \"ytterbium\", \"erbium\")\n2. `' yt'` and `'ytt'` - strongly suggests \"Ytterbium\" or \"Yttrium\"\n3. `'erb'` - suggests \"Erbium\" or \"Ytterbium\"\n4. `'95'` - could be atomic number (Americium = 95) or... wait\n5. `'=Y'`, `'>Y'`, `'(Y'`, `',Y'` - Y is the chemical symbol for Yttrium\n6. `' lut'` - suggests \"Lutetium\"\n7. `' europ'` - suggests \"Europium\"\n\nThe symbol Y strongly points to **Yttrium** (atomic number 39). The tokens `' yt'`, `'ytt'`, `'=Y'`, `'>Y'` all point to Yttrium. The `'erb'` and `'mium'` tokens may reflect nearby lanthanide associations. The number `95` doesn't match Yttrium's atomic number (39), but the Y symbol tokens are very compelling.\n\n{\"answer\": \"Yttrium\", \"confidence\": 0.62, \"backups\": [\"Ytterbium\", \"Erbium\", \"Lutetium\", \"Europium\", \"Americium\"]}"
+  },
+  {
+    "idx": 70,
+    "element": "Tungsten",
+    "atomic_number": 74,
+    "pred": "Tungsten",
+    "backups": [
+      "Phosphorus"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens are 'ungsten' (completing \"Tungsten\") and '钨' (the Chinese character for Tungsten), with a very high confidence margin over other tokens.\n\n{\"answer\": \"Tungsten\", \"confidence\": 0.99, \"backups\": [\"Phosphorus\"]}"
+  },
+  {
+    "idx": 72,
+    "element": "Radon",
+    "atomic_number": 86,
+    "pred": "Radon",
+    "backups": [
+      "Radium",
+      "Uranium",
+      "Americium",
+      "Xenon",
+      "Helium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "Looking at the tokens, I can identify several key clues:\n\n1. \"rad\", \"radioactive\", \"放射性\" (radioactive in Chinese) — suggests a radioactive element\n2. \" Rn\" — this is the chemical symbol for Radon\n3. \" noble\", \" gases\" — Radon is a noble gas\n4. \"82\" could be a distractor (Lead's atomic number), but \"95\" could be Americium... however \"Rn\" is the strongest direct symbol hint\n5. \" helium\" — noble gas context\n6. \" xen\" — Xenon (another noble gas), but Rn fits better\n\nThe token \" Rn\" combined with \"radioactive,\" \"noble,\" \"gases,\" and \"rad\" strongly points to **Radon** (atomic number 86, symbol Rn), which is the only radioactive noble gas.\n\n{\"answer\": \"Radon\", \"confidence\": 0.82, \"backups\": [\"Radium\", \"Uranium\", \"Americium\", \"Xenon\", \"Helium\"]}"
+  },
+  {
+    "idx": 74,
+    "element": "Titanium",
+    "atomic_number": 22,
+    "pred": "Titanium",
+    "backups": [
+      "Chromium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "{\"answer\": \"Titanium\", \"confidence\": 0.98, \"backups\": [\"Chromium\"]}"
+  },
+  {
+    "idx": 75,
+    "element": "Manganese",
+    "atomic_number": 25,
+    "pred": "Manganese",
+    "backups": [
+      "Nickel",
+      "Iron"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly point to manganese: rank 1 is ' manganese' with a score of 140.942, rank 2 is 'anganese', rank 4 is '锰' (Chinese for manganese), and rank 20/43 show 'Mn' (its chemical symbol).\n\n{\"answer\": \"Manganese\", \"confidence\": 0.99, \"backups\": [\"Nickel\", \"Iron\"]}"
+  },
+  {
+    "idx": 76,
+    "element": "Bismuth",
+    "atomic_number": 83,
+    "pred": "Bismuth",
+    "backups": [
+      "Lead",
+      "Arsenic",
+      "Antimony"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly suggest Bismuth: 'Bi', 'ism', 'imuth', 'uth' all point to Bismuth. There's also lead ('铅', 'Pb', 'lead') but Bismuth dominates.\n\n{\"answer\": \"Bismuth\", \"confidence\": 0.82, \"backups\": [\"Lead\", \"Arsenic\", \"Antimony\"]}"
+  },
+  {
+    "idx": 77,
+    "element": "Tantalum",
+    "atomic_number": 73,
+    "pred": "Tantalum",
+    "backups": [
+      "Tungsten",
+      "Titanium",
+      "Niobium",
+      "Uranium",
+      "Potassium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "Looking at the top tokens:\n- 'tantal' (rank 1, highest score) → Tantalum (Ta)\n- 'ungsten' (rank 2) → Tungsten (W)\n- ' Ta' (rank 5) → Tantalum symbol\n- '钨' (rank 8) → Chinese for Tungsten\n- 'Ta' (rank 17) → Tantalum symbol\n\nThe highest-scoring token is 'tantal' which strongly points to Tantalum. The second strongest is 'ungsten' for Tungsten. However, 'tantal' has a much higher score (69.377 vs 39.427), and ' Ta' also appears. The Chinese character '钨' means Tungsten, which supports Tungsten as well.\n\nGiven the dominant score of 'tantal' and ' Ta', Tantalum appears to be the primary element being thought about.\n\n{\"answer\": \"Tantalum\", \"confidence\": 0.62, \"backups\": [\"Tungsten\", \"Titanium\", \"Niobium\", \"Uranium\", \"Potassium\"]}"
+  },
+  {
+    "idx": 78,
+    "element": "Calcium",
+    "atomic_number": 20,
+    "pred": "Calcium",
+    "backups": [
+      "Caesium",
+      "Carbon"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "Calcium.\n\n{\"answer\": \"Calcium\", \"confidence\": 0.98, \"backups\": [\"Caesium\", \"Carbon\"]}"
+  },
+  {
+    "idx": 79,
+    "element": "Strontium",
+    "atomic_number": 38,
+    "pred": "Strontium",
+    "backups": [
+      "Calcium",
+      "Magnesium",
+      "Cesium",
+      "Barium",
+      "Phosphorus"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly suggest \"Sr\" (Strontium) — tokens 3 and 4 are ' Sr' and 'Sr' with high scores, and tokens 5-8 suggest \"strontium\" (esium → strontium, str → strontium). The 'ium' suffix also fits.\n\n{\"answer\": \"Strontium\", \"confidence\": 0.88, \"backups\": [\"Calcium\", \"Magnesium\", \"Cesium\", \"Barium\", \"Phosphorus\"]}"
+  },
+  {
+    "idx": 80,
+    "element": "Europium",
+    "atomic_number": 63,
+    "pred": "Europium",
+    "backups": [
+      "Gadolinium",
+      "Californium",
+      "Caesium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly point to Europium: \"europ\", \"Eu\", \"Europ\", \"ium\", and Chinese tokens for rare earth elements (稀土, 元素).\n\n{\"answer\": \"Europium\", \"confidence\": 0.97, \"backups\": [\"Gadolinium\", \"Californium\", \"Caesium\"]}"
+  },
+  {
+    "idx": 81,
+    "element": "Fermium",
+    "atomic_number": 100,
+    "pred": "Fermium",
+    "backups": [
+      "Uranium",
+      "Einsteinium",
+      "Nobelium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly suggest \"fermium\" - I can see ' ferm', 'erm', 'mium', ' Fer', and 'Fm' (fermium's chemical symbol) all pointing to this element. There's also some uranium signal but fermium is much stronger.\n\n{\"answer\": \"Fermium\", \"confidence\": 0.92, \"backups\": [\"Uranium\", \"Einsteinium\", \"Nobelium\"]}"
+  },
+  {
+    "idx": 83,
+    "element": "Holmium",
+    "atomic_number": 67,
+    "pred": "Holmium",
+    "backups": [
+      "Chromium",
+      "Erbium",
+      "Lutetium",
+      "Potassium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly suggest \"Holmium\":\n- 'holm' (rank 7, score 10.562)\n- ' Ho' (rank 9, score 8.720)\n- 'Ho' (rank 18)\n- ' hol' (rank 14)\n- ' Hol' (rank 22)\n- 'ium' (rank 3)\n\nThe highest-scoring token 'mium' could relate to the ending of \"Holmium\" (hol**mium**), or possibly chromium/other elements, but the \"holm\" and \"Ho\" tokens are very specific to Holmium.\n\n{\"answer\": \"Holmium\", \"confidence\": 0.88, \"backups\": [\"Chromium\", \"Erbium\", \"Lutetium\", \"Potassium\"]}"
+  },
+  {
+    "idx": 84,
+    "element": "Ruthenium",
+    "atomic_number": 44,
+    "pred": "Ruthenium",
+    "backups": [
+      "Chromium",
+      "Radium",
+      "Platinum"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens \" Rut\", \"enium\", and \" Ru\" strongly point to **Ruthenium**.\n\n{\"answer\": \"Ruthenium\", \"confidence\": 0.95, \"backups\": [\"Chromium\", \"Radium\", \"Platinum\"]}"
+  },
+  {
+    "idx": 85,
+    "element": "Plutonium",
+    "atomic_number": 94,
+    "pred": "Uranium",
+    "backups": [
+      "Plutonium",
+      "Neptunium"
+    ],
+    "got": false,
+    "top_k": {
+      "1": false,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly indicate uranium (rank 1 with score 71.152, \"uran\", \"Uran\", \"铀\" which is Chinese for uranium, atomic number 92). Plutonium (Pu, 94) also appears prominently, but uranium dominates.\n\n{\"answer\": \"Uranium\", \"confidence\": 0.82, \"backups\": [\"Plutonium\", \"Neptunium\"]}"
+  },
+  {
+    "idx": 86,
+    "element": "Aluminum",
+    "atomic_number": 13,
+    "pred": "Aluminum",
+    "backups": [],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "{\"answer\": \"Aluminum\", \"confidence\": 0.99, \"backups\": []}"
+  },
+  {
+    "idx": 88,
+    "element": "Iron",
+    "atomic_number": 26,
+    "pred": "Iron",
+    "backups": [
+      "Phosphorus",
+      "Chromium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens overwhelmingly point to Iron: \"Iron\", \"iron\", \"Fe\", \"IRON\", \"铁质\" (iron quality), \"铁矿石\" (iron ore), \"铁\" (iron), etc.\n\n{\"answer\": \"Iron\", \"confidence\": 0.99, \"backups\": [\"Phosphorus\", \"Chromium\"]}"
+  },
+  {
+    "idx": 89,
+    "element": "Vanadium",
+    "atomic_number": 23,
+    "pred": "Vanadium",
+    "backups": [
+      "Chromium",
+      "Titanium",
+      "Manganese",
+      "Phosphorus"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top token is '钒' which is the Chinese word for Vanadium. The token 'adium' (rank 2) likely relates to \"Vanadium\" as well. The symbol V and \"(V\" appear, and \"van\" tokens are also present.\n\n{\"answer\": \"Vanadium\", \"confidence\": 0.93, \"backups\": [\"Chromium\", \"Titanium\", \"Manganese\", \"Phosphorus\"]}"
+  },
+  {
+    "idx": 90,
+    "element": "Gallium",
+    "atomic_number": 31,
+    "pred": "Gallium",
+    "backups": [
+      "Aluminum",
+      "Thallium",
+      "Indium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly point to Gallium: 'lium' (as in Ga**llium**), ' gall', 'Ga', ' Ga', ' Gall' are the top tokens. The Chinese tokens '元素', '半导体' (semiconductor) also fit Gallium's use in semiconductors (GaAs, etc.).\n\n{\"answer\": \"Gallium\", \"confidence\": 0.97, \"backups\": [\"Aluminum\", \"Thallium\", \"Indium\"]}"
+  },
+  {
+    "idx": 91,
+    "element": "Lanthanum",
+    "atomic_number": 57,
+    "pred": "Lanthanum",
+    "backups": [
+      "Lithium",
+      "Lutetium",
+      "Lawrencium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly suggest Lanthanum:\n\n- ' La', 'La', '-La' are highly ranked\n- '稀土' means \"rare earth\" in Chinese (lanthanum is a rare earth element)\n- 'anth', 'antan', 'antha' are fragments of \"lanthanum\"\n- '元素' means \"element\" in Chinese\n- The token 'lan' also matches\n\n{\"answer\": \"Lanthanum\", \"confidence\": 0.95, \"backups\": [\"Lithium\", \"Lutetium\", \"Lawrencium\"]}"
+  },
+  {
+    "idx": 92,
+    "element": "Iodine",
+    "atomic_number": 53,
+    "pred": "Iodine",
+    "backups": [
+      "Bromine",
+      "Astatine"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly point to Iodine:\n- ' iod', 'iod', 'odin' → \"iodine\"\n- '碘' is the Chinese word for iodine\n- '53' is iodine's atomic number\n- ' thyroid' is classically associated with iodine\n- 'KI' (potassium iodide) is a common iodine compound\n\n{\"answer\": \"Iodine\", \"confidence\": 0.99, \"backups\": [\"Bromine\", \"Astatine\"]}"
+  },
+  {
+    "idx": 93,
+    "element": "Tin",
+    "atomic_number": 50,
+    "pred": "Tin",
+    "backups": [
+      "Chromium",
+      "Lead"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly point to \"tin\" (锡 in Chinese, symbol Sn, atomic number 50).\n\n{\"answer\": \"Tin\", \"confidence\": 0.98, \"backups\": [\"Chromium\", \"Lead\"]}"
+  },
+  {
+    "idx": 95,
+    "element": "Lanthanum",
+    "atomic_number": 57,
+    "pred": "Lanthanum",
+    "backups": [
+      "Lutetium",
+      "Lawrencium",
+      "Lithium",
+      "Magnesium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly point to **Lanthanum** (La):\n\n- \"La\", \" La\", \"-La\", \"La\" tokens dominate\n- \"ium\" / \".um\" / \"um\" endings suggest a metallic element name\n- \"稀土\" (rare earth in Chinese) confirms a lanthanide\n- \"lut\" could hint at \"lutetium\" as a backup, but La is overwhelmingly dominant\n- Atomic number context fits Lanthanum (57)\n\n{\"answer\": \"Lanthanum\", \"confidence\": 0.88, \"backups\": [\"Lutetium\", \"Lawrencium\", \"Lithium\", \"Magnesium\"]}"
+  },
+  {
+    "idx": 96,
+    "element": "Plutonium",
+    "atomic_number": 94,
+    "pred": "Plutonium",
+    "backups": [
+      "Uranium",
+      "Promethium",
+      "Polonium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly suggest Plutonium: ' Pu', 'Pu', '94' (atomic number), 'uton', ' Pluto', 'uran' (uranium is nearby/related), and '铀' (uranium in Chinese, as a related element).\n\nThe top token is 'uranium' but Pu/Plutonium tokens are also very prominent. Given ' Pu', 'Pu', '94', 'uton', ' Pluto' all pointing to Plutonium, and uranium being a closely related element often mentioned alongside plutonium, Plutonium seems most likely.\n\n{\"answer\": \"Plutonium\", \"confidence\": 0.72, \"backups\": [\"Uranium\", \"Promethium\", \"Polonium\"]}"
+  },
+  {
+    "idx": 97,
+    "element": "Thallium",
+    "atomic_number": 81,
+    "pred": "Mercury",
+    "backups": [
+      "Lead",
+      "Thallium",
+      "Tungsten",
+      "Helium"
+    ],
+    "got": false,
+    "top_k": {
+      "1": false,
+      "2": false,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "Looking at the tokens, I can see strong signals:\n\n- ' mercury' (rank 2, high score)\n- '汞' (rank 9) — Chinese for mercury\n- ' Mercury' (rank 49)\n- '铅' (rank 11) — Chinese for lead\n- 'Pb', ' Pb', '82', '81' — lead-related symbols/atomic numbers\n- ' Lead', 'Lead', 'lead' — also present\n\nThe highest-scoring content token is ' mercury' and '汞' (mercury in Chinese). However, there's also significant lead-related tokens (Pb, 82, Lead). \n\nThe task seems to involve counting letters or syllables in an element name. \"Mercury\" has 7 letters, \"Lead\" has 4. The model appears most strongly focused on **Mercury** based on the top scores.\n\n{\"answer\": \"Mercury\", \"confidence\": 0.62, \"backups\": [\"Lead\", \"Thallium\", \"Tungsten\", \"Helium\"]}"
+  },
+  {
+    "idx": 98,
+    "element": "Boron",
+    "atomic_number": 5,
+    "pred": "Boron",
+    "backups": [
+      "Bromine",
+      "Barium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly indicate **Boron**: the Chinese character '硼' (boron), ' Bor', 'oron', ' bor', 'BOR', and 'ium' all point to Boron (B, atomic number 5).\n\n{\"answer\": \"Boron\", \"confidence\": 0.99, \"backups\": [\"Bromine\", \"Barium\"]}"
+  },
+  {
+    "idx": 99,
+    "element": "Cobalt",
+    "atomic_number": 27,
+    "pred": "Cobalt",
+    "backups": [
+      "Nickel",
+      "Carbon"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "{\"answer\": \"Cobalt\", \"confidence\": 0.98, \"backups\": [\"Nickel\", \"Carbon\"]}"
+  },
+  {
+    "idx": 100,
+    "element": "Astatine",
+    "atomic_number": 85,
+    "pred": "Iodine",
+    "backups": [
+      "Astatine",
+      "Polonium",
+      "Radium",
+      "Cesium"
+    ],
+    "got": false,
+    "top_k": {
+      "1": false,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top token is ' iod' with a very high score of 46.126, and there's also '碘' (Chinese for iodine) and 'idine'/'ine' suffixes. The token 'radioactive' also appears, which fits iodine (particularly radioactive isotopes like I-131). However, there are also hints of 'Ast' tokens which could suggest Astatine (the radioactive halogen below iodine). But the dominant signal ' iod' strongly points to Iodine.\n\n{\"answer\": \"Iodine\", \"confidence\": 0.82, \"backups\": [\"Astatine\", \"Polonium\", \"Radium\", \"Cesium\"]}"
+  },
+  {
+    "idx": 101,
+    "element": "Lithium",
+    "atomic_number": 3,
+    "pred": "Lithium",
+    "backups": [],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "{\"answer\": \"Lithium\", \"confidence\": 0.99, \"backups\": []}"
+  },
+  {
+    "idx": 102,
+    "element": "Magnesium",
+    "atomic_number": 12,
+    "pred": "Magnesium",
+    "backups": [
+      "Cesium",
+      "Aluminum"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top token is clearly ' magnesium' with a dominant score of 135.360, and token 4 is '镁' (the Chinese word for magnesium). Other tokens like 'Magn', 'agne', 'gn' are fragments of \"magnesium\". Token 16 '第十二' means \"twelfth\" in Chinese, consistent with magnesium being element 12.\n\n{\"answer\": \"Magnesium\", \"confidence\": 0.99, \"backups\": [\"Cesium\", \"Aluminum\"]}"
+  },
+  {
+    "idx": 103,
+    "element": "Xenon",
+    "atomic_number": 54,
+    "pred": "Xenon",
+    "backups": [
+      "Krypton",
+      "Helium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly point to Xenon: ' Xen' (rank 1, score 102.806), ' xen' (rank 2), and 'Xe' (rank 9). The atomic number 36 appears at rank 4, but that's Krypton — however, Xenon's symbol is Xe and the overwhelming dominance of 'Xen' makes it clear.\n\nWait — let me reconsider. Xe is Xenon (atomic number 54), and '36' would be Krypton. But the top tokens are overwhelmingly 'Xen'/'xen'/'Xe', so this is Xenon.\n\n{\"answer\": \"Xenon\", \"confidence\": 0.95, \"backups\": [\"Krypton\", \"Helium\"]}"
+  },
+  {
+    "idx": 105,
+    "element": "Argon",
+    "atomic_number": 18,
+    "pred": "Argon",
+    "backups": [
+      "Neon",
+      "Helium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top token is 'argon' with a very high score of 77.410, with 'Arg' and 'gon' also appearing. Neon/helium appear as secondary noble gas associations.\n\n{\"answer\": \"Argon\", \"confidence\": 0.97, \"backups\": [\"Neon\", \"Helium\"]}"
+  },
+  {
+    "idx": 107,
+    "element": "Holmium",
+    "atomic_number": 67,
+    "pred": "Holmium",
+    "backups": [
+      "Lutetium",
+      "Gadolinium",
+      "Cobalt"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly point to Holmium: \"Ho\", \"mium\", \"holm\", \"Hol\", \"holmium\" fragments, atomic number 67, and 稀土 (rare earth).\n\n{\"answer\": \"Holmium\", \"confidence\": 0.97, \"backups\": [\"Lutetium\", \"Gadolinium\", \"Cobalt\"]}"
+  },
+  {
+    "idx": 108,
+    "element": "Platinum",
+    "atomic_number": 78,
+    "pred": "Platinum",
+    "backups": [
+      "Palladium",
+      "Gold"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly indicate **platinum**: the word \"platinum\" appears directly, along with \"atinum\", \"铂\" (Chinese for platinum), \"铂金\" (platinum), \"白金\" (white gold/platinum), and the chemical symbol \"Pt\".\n\n{\"answer\": \"Platinum\", \"confidence\": 0.99, \"backups\": [\"Palladium\", \"Gold\"]}"
+  },
+  {
+    "idx": 110,
+    "element": "Nickel",
+    "atomic_number": 28,
+    "pred": "Nickel",
+    "backups": [],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "{\"answer\": \"Nickel\", \"confidence\": 0.99, \"backups\": []}"
+  },
+  {
+    "idx": 111,
+    "element": "Silver",
+    "atomic_number": 47,
+    "pred": "Silver",
+    "backups": [
+      "Phosphorus"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly point to **Silver** — \"silver\" appears at rank 1 with by far the highest score, and is reinforced by '白银', '银子', '银', and '银价' (all Chinese words for silver), plus multiple English variations.\n\n{\"answer\": \"Silver\", \"confidence\": 0.98, \"backups\": [\"Phosphorus\"]}"
+  },
+  {
+    "idx": 112,
+    "element": "Barium",
+    "atomic_number": 56,
+    "pred": "Caesium",
+    "backups": [
+      "Barium",
+      "Potassium",
+      "Magnesium",
+      "Francium"
+    ],
+    "got": false,
+    "top_k": {
+      "1": false,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top token is 'esium' with a very high score of 46.277, which strongly suggests \"Caesium\" (or Cesium). The second token 'rium' could relate to Barium (score 20.735), and 'arium' at rank 9 also points to Barium. Token ' Ba' at rank 21 and ' bar'/'Bar' tokens also suggest Barium.\n\nHowever, 'esium' is overwhelmingly the top token — this is the suffix of \"Caesium\" (Cs). The tokens ' Ba' and 'arium' suggest Barium as a secondary candidate.\n\nGiven the dominant score of 'esium', Caesium is the most likely answer.\n\n{\"answer\": \"Caesium\", \"confidence\": 0.72, \"backups\": [\"Barium\", \"Potassium\", \"Magnesium\", \"Francium\"]}"
+  },
+  {
+    "idx": 113,
+    "element": "Rubidium",
+    "atomic_number": 37,
+    "pred": "Rubidium",
+    "backups": [
+      "Potassium",
+      "Iridium",
+      "Cesium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly suggest Rubidium: 'rub', 'esium', 'Rb', ' Rub' all point to Rubidium (Rb). The 'assium' and ' potassium' tokens make sense as Rubidium is an alkali metal closely related to potassium, and '钾' (Chinese for potassium) appears as well. The symbol Rb and the syllables \"rub-id-ium\" are clearly dominant.\n\n{\"answer\": \"Rubidium\", \"confidence\": 0.95, \"backups\": [\"Potassium\", \"Iridium\", \"Cesium\"]}"
+  },
+  {
+    "idx": 114,
+    "element": "Erbium",
+    "atomic_number": 68,
+    "pred": "Erbium",
+    "backups": [
+      "Lutetium",
+      "Europium",
+      "Gadolinium",
+      "Erbium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "Looking at the tokens, I can see strong signals:\n\n- `'erb'` (rank 3) — strongly suggests **Erbium** (Er)\n- `' Er'` (rank 6) and `'Er'` (rank 13) — the chemical symbol for Erbium\n- `' lut'` (rank 4) could hint at Lutetium, but Erbium signals are much stronger\n- `'稀土'` means \"rare earth\" in Chinese, consistent with lanthanides\n- `' europ'` (rank 39) hints at Europium as a secondary candidate\n- `' Gad'` (rank 48) hints at Gadolinium\n\nThe dominant signal is clearly Erbium (Er).\n\n{\"answer\": \"Erbium\", \"confidence\": 0.82, \"backups\": [\"Lutetium\", \"Europium\", \"Gadolinium\", \"Erbium\"]}"
+  },
+  {
+    "idx": 116,
+    "element": "Tellurium",
+    "atomic_number": 52,
+    "pred": "Selenium",
+    "backups": [
+      "Tellurium",
+      "Chromium",
+      "Barium"
+    ],
+    "got": false,
+    "top_k": {
+      "1": false,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens show \"selenium\" at rank 1 with a high score, and \"硒\" (Chinese for selenium) at rank 17. There are also hints of \"Tell/Te\" which could suggest Tellurium, and \"lur\" (as in tellurium), but selenium dominates strongly.\n\n{\"answer\": \"Selenium\", \"confidence\": 0.72, \"backups\": [\"Tellurium\", \"Chromium\", \"Barium\"]}"
+  },
+  {
+    "idx": 117,
+    "element": "Thorium",
+    "atomic_number": 90,
+    "pred": "Thorium",
+    "backups": [
+      "Uranium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly point to \"Thor\" (ranks 1, 3, 4) which is the stem of **Thorium**. The \"ium\" token (rank 11) and \"rium\" (rank 19) further confirm this. While uranium also appears (ranks 6, 9, 29, and 铀 at rank 40), Thorium is the dominant signal.\n\n{\"answer\": \"Thorium\", \"confidence\": 0.82, \"backups\": [\"Uranium\"]}"
+  },
+  {
+    "idx": 118,
+    "element": "Oxygen",
+    "atomic_number": 8,
+    "pred": "Oxygen",
+    "backups": [],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens overwhelmingly point to Oxygen: rank 1 is ' Oxygen' with a very high score, 'xygen', 'oxygen', ' oxygen', and the Chinese '氧' (oxygen) and '氧气' (oxygen gas) all appear prominently.\n\n{\"answer\": \"Oxygen\", \"confidence\": 0.99, \"backups\": []}"
+  },
+  {
+    "idx": 120,
+    "element": "Nickel",
+    "atomic_number": 28,
+    "pred": "Nickel",
+    "backups": [
+      "Nobelium",
+      "Nitrogen",
+      "Neon"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens overwhelmingly point to Nickel (镍, Ni).\n\n{\"answer\": \"Nickel\", \"confidence\": 0.99, \"backups\": [\"Nobelium\", \"Nitrogen\", \"Neon\"]}"
+  },
+  {
+    "idx": 121,
+    "element": "Praseodymium",
+    "atomic_number": 59,
+    "pred": "Neodymium",
+    "backups": [
+      "Praseodymium",
+      "Promethium"
+    ],
+    "got": false,
+    "top_k": {
+      "1": false,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly point to Neodymium: \"Nd\" (atomic symbol), \"59\" (wait, Nd is 60... but Pr is 59), \" Pr\" and \" Pra\" (Praseodymium, atomic number 59), \"稀土\" (rare earth in Chinese), \"ody\" (as in \"neodymium\"), \"mium\".\n\nThe top tokens include both Nd (Neodymium, Z=60) and Pr/Pra (Praseodymium, Z=59), with \"59\" also appearing. However, \"Nd\" appears more prominently and \"ody\" fits \"neodymium.\" The number 59 could relate to Praseodymium.\n\nGiven \" Nd\" at rank 3 with high score and \"Nd\" at rank 8, plus \"ody\" fitting \"neodymium,\" I'll go with Neodymium as the primary answer, with Praseodymium as backup.\n\n{\"answer\": \"Neodymium\", \"confidence\": 0.55, \"backups\": [\"Praseodymium\", \"Promethium\"]}"
+  },
+  {
+    "idx": 122,
+    "element": "Neptunium",
+    "atomic_number": 93,
+    "pred": "Uranium",
+    "backups": [
+      "Neptunium",
+      "Americium",
+      "Neon"
+    ],
+    "got": false,
+    "top_k": {
+      "1": false,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top token is overwhelmingly ' uranium' (score 89), with '铀' (Chinese for uranium) also appearing, along with 'radioactive' and '放射性' (radioactive in Chinese). The element is clearly Uranium.\n\n{\"answer\": \"Uranium\", \"confidence\": 0.97, \"backups\": [\"Neptunium\", \"Americium\", \"Neon\"]}"
+  },
+  {
+    "idx": 123,
+    "element": "Yttrium",
+    "atomic_number": 39,
+    "pred": "Yttrium",
+    "backups": [
+      "Ytterbium",
+      "Radium",
+      "Magnesium",
+      "Promethium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly suggest Yttrium: \"ytt\" (rank 5), \"rium\" (rank 4), \"=Y\", \"/Y\", \"(Y\", \">Y\", \",Y\" all pointing to the chemical symbol Y, and \"ium\" as the ending.\n\n{\"answer\": \"Yttrium\", \"confidence\": 0.92, \"backups\": [\"Ytterbium\", \"Radium\", \"Magnesium\", \"Promethium\"]}"
+  },
+  {
+    "idx": 124,
+    "element": "Silicon",
+    "atomic_number": 14,
+    "pred": "Silicon",
+    "backups": [
+      "Carbon",
+      "Germanium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "{\"answer\": \"Silicon\", \"confidence\": 0.99, \"backups\": [\"Carbon\", \"Germanium\"]}"
+  },
+  {
+    "idx": 125,
+    "element": "Europium",
+    "atomic_number": 63,
+    "pred": "Europium",
+    "backups": [
+      "Erbium",
+      "Einsteinium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly point to Europium: ' europ', ' Europ', 'urop', 'rope', ' Eu', 'ropa', 'Eu' all fragment \"Europium\". The Chinese tokens '稀土' (rare earth) and context about atomic properties further support this, as Europium is a rare earth (lanthanide) element.\n\n{\"answer\": \"Europium\", \"confidence\": 0.97, \"backups\": [\"Erbium\", \"Einsteinium\"]}"
+  },
+  {
+    "idx": 126,
+    "element": "Cadmium",
+    "atomic_number": 48,
+    "pred": "Cadmium",
+    "backups": [
+      "Zinc",
+      "Cobalt",
+      "Silver"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly point to Cadmium: '镉' (Chinese for Cadmium), ' cad', ' Cd', 'Cd', ' Cad', and 'mium' (completing \"cadmium\").\n\n{\"answer\": \"Cadmium\", \"confidence\": 0.98, \"backups\": [\"Zinc\", \"Cobalt\", \"Silver\"]}"
+  },
+  {
+    "idx": 127,
+    "element": "Sodium",
+    "atomic_number": 11,
+    "pred": "Sodium",
+    "backups": [
+      "Chlorine",
+      "Potassium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly indicate \"Sodium\" — both the English word \"Sodium\" and the Chinese character \"钠\" (which means sodium) appear at the top of the list.\n\n{\"answer\": \"Sodium\", \"confidence\": 0.99, \"backups\": [\"Chlorine\", \"Potassium\"]}"
+  },
+  {
+    "idx": 128,
+    "element": "Argon",
+    "atomic_number": 18,
+    "pred": "Argon",
+    "backups": [
+      "Neon",
+      "Helium",
+      "Krypton"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top token is overwhelmingly 'argon' with a score of 51.444, with related tokens like ' Arg' and 'gon' also appearing. The context suggests noble gases (helium, neon, argon appearing together).\n\n{\"answer\": \"Argon\", \"confidence\": 0.97, \"backups\": [\"Neon\", \"Helium\", \"Krypton\"]}"
+  },
+  {
+    "idx": 129,
+    "element": "Palladium",
+    "atomic_number": 46,
+    "pred": "Palladium",
+    "backups": [
+      "Platinum",
+      "Phosphorus",
+      "Silver"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens are '钯' (Chinese for Palladium), ' pall', and 'adium' — these combine to spell \"Palladium.\"\n\n{\"answer\": \"Palladium\", \"confidence\": 0.97, \"backups\": [\"Platinum\", \"Phosphorus\", \"Silver\"]}"
+  },
+  {
+    "idx": 130,
+    "element": "Curium",
+    "atomic_number": 96,
+    "pred": "Curium",
+    "backups": [
+      "Californium",
+      "Americium",
+      "Mercury",
+      "Cesium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly suggest Curium: 'Cur', 'Cm' (curium's symbol), 'esium' (cur**esium**), 'mium', ' radioactive', ' Californ' (californium as alternative), ' Americ' (americium as alternative). The top token 'ium' combined with 'Cur' and 'esium' points to **Curium**.\n\n{\"answer\": \"Curium\", \"confidence\": 0.85, \"backups\": [\"Californium\", \"Americium\", \"Mercury\", \"Cesium\"]}"
+  },
+  {
+    "idx": 131,
+    "element": "Hydrogen",
+    "atomic_number": 1,
+    "pred": "Hydrogen",
+    "backups": [
+      "Helium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top token is overwhelmingly ' hydrogen' (score 164.942), with supporting tokens like 'dro', 'rogen', '氢' (Chinese for hydrogen), 'Hyd', and 'hyd' all pointing to the same element.\n\n{\"answer\": \"Hydrogen\", \"confidence\": 0.99, \"backups\": [\"Helium\"]}"
+  },
+  {
+    "idx": 132,
+    "element": "Actinium",
+    "atomic_number": 89,
+    "pred": "Uranium",
+    "backups": [
+      "Thorium",
+      "Americium",
+      "Actinium",
+      "Plutonium"
+    ],
+    "got": false,
+    "top_k": {
+      "1": false,
+      "2": false,
+      "3": false,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly point to **uranium** (rank 1 with score 37.876), with supporting tokens like 'uran', ' Uran', '铀' (Chinese for uranium), and ' radioactive'. The tokens 'thor'/'inum' (thorium) appear as secondary thoughts, possibly because both are radioactive actinides. The number '92' isn't present but '95' is (americium), however uranium dominates overwhelmingly.\n\n{\"answer\": \"Uranium\", \"confidence\": 0.92, \"backups\": [\"Thorium\", \"Americium\", \"Actinium\", \"Plutonium\"]}"
+  },
+  {
+    "idx": 133,
+    "element": "Xenon",
+    "atomic_number": 54,
+    "pred": "Xenon",
+    "backups": [
+      "Krypton",
+      "Helium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly point to \"Xen\" and \"Xe\" (the chemical symbol for Xenon), along with \"gases\" and \"gas\" tokens consistent with noble gases.\n\n{\"answer\": \"Xenon\", \"confidence\": 0.97, \"backups\": [\"Krypton\", \"Helium\"]}"
+  },
+  {
+    "idx": 135,
+    "element": "Polonium",
+    "atomic_number": 84,
+    "pred": "Polonium",
+    "backups": [
+      "Uranium",
+      "Selenium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly indicate Polonium: \"Po\", \"pol\", \"ium\", \"84\" (atomic number), \"radioactive\", \"放射性\" (radioactive in Chinese), \"元素\" (element in Chinese).\n\n{\"answer\": \"Polonium\", \"confidence\": 0.97, \"backups\": [\"Uranium\", \"Selenium\"]}"
+  },
+  {
+    "idx": 136,
+    "element": "Xenon",
+    "atomic_number": 54,
+    "pred": "Xenon",
+    "backups": [
+      "Neon",
+      "Radon"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly indicate \"Xenon\" - with ' Xen' scoring 86.651 and 'Xe' scoring 13.056 (the chemical symbol for Xenon).\n\n{\"answer\": \"Xenon\", \"confidence\": 0.98, \"backups\": [\"Neon\", \"Radon\"]}"
+  },
+  {
+    "idx": 137,
+    "element": "Germanium",
+    "atomic_number": 32,
+    "pred": "Germanium",
+    "backups": [
+      "Silicon",
+      "Lead",
+      "Uranium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly suggest \"German\" (rank 1 with highest score), \"ium\" suffix, \"semiconductor\", \"silicon\" as comparison, atomic number 82 hint, and Chinese tokens like \"日耳曼\" (Germanic) and \"元素\" (element). The element named after Germany is **Germanium** (Ge), atomic number 32, which is a semiconductor. The \"82\" token might be a distractor or relate to something else, but the overwhelming evidence points to Germanium.\n\n{\"answer\": \"Germanium\", \"confidence\": 0.95, \"backups\": [\"Silicon\", \"Lead\", \"Uranium\"]}"
+  },
+  {
+    "idx": 139,
+    "element": "Hafnium",
+    "atomic_number": 72,
+    "pred": "Zirconium",
+    "backups": [
+      "Hafnium",
+      "Chromium",
+      "Titanium",
+      "Lutetium",
+      "Tantalum"
+    ],
+    "got": false,
+    "top_k": {
+      "1": false,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "Looking at the top tokens:\n\n1. 'mium' (highest score) - suffix for elements like Chromium, Zirconium\n2. '锆' - Chinese for Zirconium (Zr, element 40)\n3. ' titanium' and ' Titanium' appear\n4. ' chromium' appears\n5. '72' appears - atomic number of Hafnium\n6. 'anium' suffix\n\nThe strongest signal is '锆' (Zirconium in Chinese) at rank 2 with a very high score of 31.761, and 'mium' at rank 1. However, '锆' specifically means Zirconium. The token 'anium' also fits Zirconium. The number '72' could relate to Hafnium (which is chemically similar to Zirconium).\n\nThe dominant signals point to Zirconium: '锆' directly means Zirconium, 'anium' fits \"Zirconium\", and '72' is close to Zr's atomic number 40... but 72 is Hafnium, which is a congener of Zirconium.\n\nGiven '锆' (Zirconium) being the second strongest token and 'anium' fitting, Zirconium seems most likely.\n\n{\"answer\": \"Zirconium\", \"confidence\": 0.72, \"backups\": [\"Hafnium\", \"Chromium\", \"Titanium\", \"Lutetium\", \"Tantalum\"]}"
+  },
+  {
+    "idx": 140,
+    "element": "Sodium",
+    "atomic_number": 11,
+    "pred": "Sodium",
+    "backups": [
+      "Chlorine",
+      "Potassium",
+      "Magnesium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens clearly point to sodium (both English \"sodium\"/\"Sodium\" and Chinese \"钠\" are the top three tokens with very high scores).\n\n{\"answer\": \"Sodium\", \"confidence\": 0.99, \"backups\": [\"Chlorine\", \"Potassium\", \"Magnesium\"]}"
+  },
+  {
+    "idx": 141,
+    "element": "Hydrogen",
+    "atomic_number": 1,
+    "pred": "Hydrogen",
+    "backups": [],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly indicate Hydrogen: rank 1 is ' hydrogen' with a score of 159.824 (dominant), rank 4 is 'ogen', rank 8 is 'rogen', rank 10 is '氢' (Chinese for hydrogen), rank 28 is 'Hyd', rank 32 is ' Hyd'.\n\n{\"answer\": \"Hydrogen\", \"confidence\": 0.99, \"backups\": []}"
+  },
+  {
+    "idx": 143,
+    "element": "Chromium",
+    "atomic_number": 24,
+    "pred": "Chromium",
+    "backups": [],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "{\"answer\": \"Chromium\", \"confidence\": 0.99, \"backups\": []}"
+  },
+  {
+    "idx": 144,
+    "element": "Indium",
+    "atomic_number": 49,
+    "pred": "Indium",
+    "backups": [
+      "Tin",
+      "Iridium",
+      "Radium",
+      "Uranium",
+      "Rhodium",
+      "Titanium",
+      "Manganese",
+      "Lithium",
+      "Cadmium",
+      "Palladium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "Looking at the tokens, I can see strong signals:\n\n- 'ium' (top token) - element ending\n- ' Ind' and 'idium' - pointing to \"Indium\"\n- '元素' (element in Chinese)\n- '锡' (Chinese for Tin, but lower ranked)\n- 'adium' could suggest Indium or similar\n\nThe strongest signals are ' Ind' + 'idium' = **Indium**, combined with 'ium' as the top token. The Chinese token '锡' (Tin) appears but at a much lower score.\n\n{\"answer\": \"Indium\", \"confidence\": 0.82, \"backups\": [\"Tin\", \"Iridium\", \"Radium\", \"Uranium\", \"Rhodium\", \"Titanium\", \"Manganese\", \"Lithium\", \"Cadmium\", \"Palladium\"]}"
+  },
+  {
+    "idx": 145,
+    "element": "Berkelium",
+    "atomic_number": 97,
+    "pred": "Berkelium",
+    "backups": [
+      "Californium",
+      "Americium",
+      "Uranium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly point to \"Berkelium\" — note \"Berk\", \"Berkeley\", \"伯克\" (Chinese for Berkeley), \"Bk\" (the symbol), and \"ium\" as the top tokens.\n\n{\"answer\": \"Berkelium\", \"confidence\": 0.98, \"backups\": [\"Californium\", \"Americium\", \"Uranium\"]}"
+  },
+  {
+    "idx": 146,
+    "element": "Thorium",
+    "atomic_number": 90,
+    "pred": "Thorium",
+    "backups": [
+      "Uranium",
+      "Thulium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly suggest \"Thorium\" — with \"thor\", \"Thor\", \"ium\", \"rium\" all appearing at the top, and the context of spelling/letters (third letter queries) along with \"uranium\" as a related element.\n\n{\"answer\": \"Thorium\", \"confidence\": 0.95, \"backups\": [\"Uranium\", \"Thulium\"]}"
+  },
+  {
+    "idx": 147,
+    "element": "Bromine",
+    "atomic_number": 35,
+    "pred": "Bromine",
+    "backups": [
+      "Iodine",
+      "Krypton",
+      "Chlorine"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens are ' Brom' (strongly dominant) and '溴' (Chinese for Bromine), with 'ine' also appearing (completing \"Bromine\"). The number 36 appears (atomic number of Krypton... wait, Bromine is 35). Actually 36 is Krypton, but the overwhelming signal is Bromine.\n\n{\"answer\": \"Bromine\", \"confidence\": 0.95, \"backups\": [\"Iodine\", \"Krypton\", \"Chlorine\"]}"
+  },
+  {
+    "idx": 148,
+    "element": "Plutonium",
+    "atomic_number": 94,
+    "pred": "Uranium",
+    "backups": [
+      "Plutonium",
+      "Neptunium",
+      "Thorium"
+    ],
+    "got": false,
+    "top_k": {
+      "1": false,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly indicate \"uranium\" (rank 1, score 41.050), with supporting tokens like 'uran', 'Uran', '铀' (Chinese for uranium), and atomic number 94 hints toward plutonium ('Pu', '94', 'Pluto'). However, the dominant signal is clearly uranium, with plutonium as a secondary consideration.\n\nThe task seems to involve something about letters/alphabet (tokens like 'abcdefghijklmnopqrst', 'letters', 'lowercase', 'uppercase', 'counting'), possibly computing uranium's position or atomic number. The element '铀' confirms uranium in Chinese.\n\n{\"answer\": \"Uranium\", \"confidence\": 0.72, \"backups\": [\"Plutonium\", \"Neptunium\", \"Thorium\"]}"
+  },
+  {
+    "idx": 150,
+    "element": "Sulfur",
+    "atomic_number": 16,
+    "pred": "Sulfur",
+    "backups": [
+      "Selenium",
+      "Oxygen"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly indicate **Sulfur**: \" sulfur\" has a score of 183.109 (overwhelmingly dominant), with supporting tokens like 'ulf', ' sulph', '硫' (Chinese for sulfur), '硫磺' (sulfur/brimstone), '硫化' (sulfide), atomic number '16', and '十六' (Chinese for sixteen).\n\n{\"answer\": \"Sulfur\", \"confidence\": 0.99, \"backups\": [\"Selenium\", \"Oxygen\"]}"
+  },
+  {
+    "idx": 151,
+    "element": "Sulfur",
+    "atomic_number": 16,
+    "pred": "Sulfur",
+    "backups": [],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly indicate sulfur: ' sulfur' has a score of 191.737 (overwhelmingly dominant), '硫' (Chinese for sulfur), '硫磺' (sulfur/brimstone), '硫化' (sulfide), and ' sulph' all point to the same element.\n\n{\"answer\": \"Sulfur\", \"confidence\": 0.99, \"backups\": []}"
+  },
+  {
+    "idx": 152,
+    "element": "Sodium",
+    "atomic_number": 11,
+    "pred": "Sodium",
+    "backups": [
+      "Magnesium",
+      "Chlorine",
+      "Potassium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly indicate \"Sodium\" (with ' Sodium', ' sodium', 'odium', '钠' all ranking very highly).\n\n{\"answer\": \"Sodium\", \"confidence\": 0.98, \"backups\": [\"Magnesium\", \"Chlorine\", \"Potassium\"]}"
+  },
+  {
+    "idx": 153,
+    "element": "Carbon",
+    "atomic_number": 6,
+    "pred": "Carbon",
+    "backups": [
+      "Calcium",
+      "Chromium",
+      "Cobalt"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly indicate Carbon (rank 1 with highest score, plus 'arbon', 'carbon', 'Carbon', '碳' which is Chinese for carbon, '氧化碳' meaning carbon oxide, '碳化' meaning carbide, and 'graphite' which is a form of carbon).\n\n{\"answer\": \"Carbon\", \"confidence\": 0.99, \"backups\": [\"Calcium\", \"Chromium\", \"Cobalt\"]}"
+  },
+  {
+    "idx": 154,
+    "element": "Fluorine",
+    "atomic_number": 9,
+    "pred": "Fluorine",
+    "backups": [
+      "Chlorine",
+      "Bromine"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly indicate \"fluor\" (rank 1), \"fluoride\" (rank 2), \"氟\" (Chinese for Fluorine, rank 10), and \"rine\" (rank 25) — together spelling \"fluorine.\" The atomic number 9 is also hinted at by \"nine\" (rank 5) and \"9\" context, consistent with Fluorine (atomic number 9).\n\n{\"answer\": \"Fluorine\", \"confidence\": 0.98, \"backups\": [\"Chlorine\", \"Bromine\"]}"
+  },
+  {
+    "idx": 155,
+    "element": "Palladium",
+    "atomic_number": 46,
+    "pred": "Palladium",
+    "backups": [
+      "Platinum",
+      "Silver"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens are '钯' (Chinese for Palladium) and ' pall' + 'adium' which together spell \"palladium\".\n\n{\"answer\": \"Palladium\", \"confidence\": 0.97, \"backups\": [\"Platinum\", \"Silver\"]}"
+  },
+  {
+    "idx": 156,
+    "element": "Silver",
+    "atomic_number": 47,
+    "pred": "Silver",
+    "backups": [],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "{\"answer\": \"Silver\", \"confidence\": 0.99, \"backups\": []}"
+  },
+  {
+    "idx": 157,
+    "element": "Neodymium",
+    "atomic_number": 60,
+    "pred": "Neodymium",
+    "backups": [
+      "Praseodymium",
+      "Samarium",
+      "Promethium",
+      "Neon"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly point to Neodymium:\n- ' Nd' (rank 3) and 'Nd' (rank 28) are the chemical symbol for Neodymium\n- '稀土' means \"rare earth\" in Chinese — Neodymium is a rare earth element\n- '60' (rank 40) matches Neodymium's atomic number (60)\n- '元素' means \"element\" in Chinese\n- 'mium' and 'ium' are endings consistent with \"Neodymium\"\n\n{\"answer\": \"Neodymium\", \"confidence\": 0.95, \"backups\": [\"Praseodymium\", \"Samarium\", \"Promethium\", \"Neon\"]}"
+  },
+  {
+    "idx": 159,
+    "element": "Thallium",
+    "atomic_number": 81,
+    "pred": "Mercury",
+    "backups": [
+      "Thallium",
+      "Tungsten",
+      "Uranium",
+      "Potassium",
+      "Silver",
+      "Lithium"
+    ],
+    "got": false,
+    "top_k": {
+      "1": false,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly point to Mercury:\n- Token 2: ' mercury' (score 27.404)\n- Token 9: '汞' (score 6.462) — this is the Chinese character for mercury\n- Token 48: ' Mercury' (score 0.736)\n- Token 1.746: '37' could relate to atomic number considerations, but Hg is 80\n- '81' appears (thallium's atomic number), and 'hall'/'thal' tokens suggest thallium as a secondary candidate\n- '汞' is definitively mercury in Chinese\n\n{\"answer\": \"Mercury\", \"confidence\": 0.87, \"backups\": [\"Thallium\", \"Tungsten\", \"Uranium\", \"Potassium\", \"Silver\", \"Lithium\"]}"
+  },
+  {
+    "idx": 161,
+    "element": "Erbium",
+    "atomic_number": 68,
+    "pred": "Erbium",
+    "backups": [
+      "Lutetium",
+      "Holmium",
+      "Europium",
+      "Uranium",
+      "Phosphorus"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "Looking at the tokens, I can see strong hints:\n\n1. `'mium'` - ending common to many elements\n2. `'稀土'` - Chinese for \"rare earth\"\n3. `'erb'` - strong hint toward \"Erbium\"\n4. `' Er'` and `'Er'` - the chemical symbol for Erbium\n5. `' lut'` and `' Lut'` - could be Lutetium (another rare earth)\n6. `'holm'` - could be Holmium or Stockholm connection\n7. `'第三个'` and `' third'` - \"third\" in Chinese and English, suggesting a letter position task\n\nThe combination of `'erb'` + `'mium'` = **Erbium**, with the symbol `Er` appearing explicitly, and the rare earth (`稀土`) context makes Erbium the clear answer. The \"third letter\" tokens suggest the task may involve finding the third letter of the element's name or symbol.\n\n{\"answer\": \"Erbium\", \"confidence\": 0.82, \"backups\": [\"Lutetium\", \"Holmium\", \"Europium\", \"Uranium\", \"Phosphorus\"]}"
+  },
+  {
+    "idx": 163,
+    "element": "Iodine",
+    "atomic_number": 53,
+    "pred": "Iodine",
+    "backups": [
+      "Indium",
+      "Iron",
+      "Ionium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The dominant tokens are ' iod', 'ine', '碘' (Chinese for iodine), and 'iod' — all pointing clearly to Iodine.\n\n{\"answer\": \"Iodine\", \"confidence\": 0.99, \"backups\": [\"Indium\", \"Iron\", \"Ionium\"]}"
+  },
+  {
+    "idx": 164,
+    "element": "Bismuth",
+    "atomic_number": 83,
+    "pred": "Bismuth",
+    "backups": [
+      "Lead",
+      "Mercury",
+      "Antimony",
+      "Arsenic",
+      "Uranium",
+      "Phosphorus"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly point to Bismuth (Bi) as the primary element, with \"Bi\", \"Bismuth\", \"imuth\" all appearing near the top. There are also hints of Lead (Pb, lead, 铅) and Mercury (汞).\n\n{\"answer\": \"Bismuth\", \"confidence\": 0.72, \"backups\": [\"Lead\", \"Mercury\", \"Antimony\", \"Arsenic\", \"Uranium\", \"Phosphorus\"]}"
+  },
+  {
+    "idx": 166,
+    "element": "Antimony",
+    "atomic_number": 51,
+    "pred": "Antimony",
+    "backups": [
+      "Bismuth",
+      "Arsenic"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens clearly show \" antim\" (rank 1, score 120.719) and \"imony\" (rank 3), which together form \"antimony\". The chemical symbol \"Sb\" also appears at rank 11, confirming this is Antimony.\n\n{\"answer\": \"Antimony\", \"confidence\": 0.99, \"backups\": [\"Bismuth\", \"Arsenic\"]}"
+  },
+  {
+    "idx": 168,
+    "element": "Aluminum",
+    "atomic_number": 13,
+    "pred": "Aluminum",
+    "backups": [
+      "Phosphorus"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "{\"answer\": \"Aluminum\", \"confidence\": 0.98, \"backups\": [\"Phosphorus\"]}"
+  },
+  {
+    "idx": 169,
+    "element": "Radium",
+    "atomic_number": 88,
+    "pred": "Radium",
+    "backups": [
+      "Uranium",
+      "Radon",
+      "Caesium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly point to \"Radium\" — tokens like ' rad', 'adium', ' radioactive', ' Ra', '镭' (Chinese for radium), and ' Radi' all converge on this element.\n\n{\"answer\": \"Radium\", \"confidence\": 0.95, \"backups\": [\"Uranium\", \"Radon\", \"Caesium\"]}"
+  },
+  {
+    "idx": 171,
+    "element": "Radon",
+    "atomic_number": 86,
+    "pred": "Radon",
+    "backups": [
+      "Radium",
+      "Uranium",
+      "Helium",
+      "Americium",
+      "Lead"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly suggest Radon: \" rad\", \" Rn\", \" Rad\", \"Rad\", \"Rn\", \" radioactive\", \" noble\", \" gases\", \"放射性\" (radioactive in Chinese), \"元素\" (element), along with \"ium\" (radon**ium** ending). The atomic number hints (95, 82) are somewhat ambiguous, but the combination of radioactive noble gas clues points clearly to Radon (element 86).\n\n{\"answer\": \"Radon\", \"confidence\": 0.92, \"backups\": [\"Radium\", \"Uranium\", \"Helium\", \"Americium\", \"Lead\"]}"
+  },
+  {
+    "idx": 172,
+    "element": "Cerium",
+    "atomic_number": 58,
+    "pred": "Cerium",
+    "backups": [
+      "Chromium",
+      "Caesium",
+      "Germanium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly point to Cerium: \"Ce\" (the chemical symbol), \"cer\" (prefix), \"ium\"/\"mium\" endings, atomic number 58, and 稀土 (rare earth) in Chinese.\n\n{\"answer\": \"Cerium\", \"confidence\": 0.97, \"backups\": [\"Chromium\", \"Caesium\", \"Germanium\"]}"
+  },
+  {
+    "idx": 173,
+    "element": "Curium",
+    "atomic_number": 96,
+    "pred": "Californium",
+    "backups": [
+      "Curium",
+      "Berkelium",
+      "Americium",
+      "Uranium",
+      "Cobalt"
+    ],
+    "got": false,
+    "top_k": {
+      "1": false,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly point to **Californium**: \"Californ\" (rank 2, score 26.136), \"ium\" (rank 1, score 72.019), atomic number 97 (rank 16), \"Bk\" nearby (Berkelium, atomic number 97's neighbor), and \"radioactive\" all fit. However, \"Californ\" + \"ium\" = Californium (element 98). The atomic number 97 token could be a distractor or nearby element. \"Cm\" (Curium, 96) and \"Cur\" also appear, but \"Californ\" is the dominant signal.\n\n{\"answer\": \"Californium\", \"confidence\": 0.82, \"backups\": [\"Curium\", \"Berkelium\", \"Americium\", \"Uranium\", \"Cobalt\"]}"
+  },
+  {
+    "idx": 174,
+    "element": "Palladium",
+    "atomic_number": 46,
+    "pred": "Palladium",
+    "backups": [
+      "Platinum",
+      "Silver"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly indicate Palladium: '钯' (Chinese for Palladium), 'pall' + 'adium' = \"palladium\", '46' (atomic number of Pd), and '贵金属' (precious metal).\n\n{\"answer\": \"Palladium\", \"confidence\": 0.98, \"backups\": [\"Platinum\", \"Silver\"]}"
+  },
+  {
+    "idx": 175,
+    "element": "Praseodymium",
+    "atomic_number": 59,
+    "pred": "Neodymium",
+    "backups": [
+      "Praseodymium",
+      "Dysprosium",
+      "Cerium",
+      "Ytterbium"
+    ],
+    "got": false,
+    "top_k": {
+      "1": false,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "Looking at the tokens, I can see strong hints:\n\n- ' Nd' and 'Nd' suggest Neodymium (Nd, element 60)\n- ' Pra', ' Pr', 'Pr' suggest Praseodymium (Pr, element 59)\n- '59' appears in the list\n- 'mium' is a suffix for both\n- '稀土' means \"rare earth\" in Chinese\n- 'ody' could be part of \"Neodymium\" but also \"Praseodymium\"\n- ' dys' → \"dysprosium\"? No, more likely part of Neodymium\n- 'ODY' → part of \"NEODYMIUM\"\n\nThe score for ' Nd' (11.451) vs ' Pra' (9.994) and ' Pr' (3.430) suggests Neodymium is slightly more prominent, but '59' specifically is Praseodymium's atomic number.\n\nThe token 'ody' is part of \"Praseodymium\" (Praseo**dymi**um) as well as Neodymium. Given '59' appearing and the 'Pr' tokens being quite prominent, and ' Pra' being the stronger of the Pr-related tokens...\n\nActually, ' Nd' has a higher score than ' Pra'. But '59' = Praseodymium's atomic number. The competition between these two adjacent rare earth elements is notable. The highest-scoring element-specific tokens lean toward Nd (Neodymium, 60).\n\n{\"answer\": \"Neodymium\", \"confidence\": 0.45, \"backups\": [\"Praseodymium\", \"Dysprosium\", \"Cerium\", \"Ytterbium\"]}"
+  },
+  {
+    "idx": 176,
+    "element": "Francium",
+    "atomic_number": 87,
+    "pred": "Francium",
+    "backups": [
+      "Fermium",
+      "Francium",
+      "Radium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly suggest \"Francium\" - we have 'franc', 'Franc', ' Fr', 'ium', and ' radioactive' (francium is indeed radioactive, being the heaviest alkali metal).\n\n{\"answer\": \"Francium\", \"confidence\": 0.97, \"backups\": [\"Fermium\", \"Francium\", \"Radium\"]}"
+  },
+  {
+    "idx": 178,
+    "element": "Tellurium",
+    "atomic_number": 52,
+    "pred": "Tellurium",
+    "backups": [
+      "Selenium",
+      "Krypton",
+      "Lead"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly suggest \"Tellurium\" (Te, atomic number 52), with \"selenium\" appearing as a related element. The top tokens ' Tell', ' Te', 'tell', 'Tell', 'Te' all point to Tellurium. The number 36 could be a red herring (Krypton), but the dominant signal is clearly Tellurium.\n\n{\"answer\": \"Tellurium\", \"confidence\": 0.88, \"backups\": [\"Selenium\", \"Krypton\", \"Lead\"]}"
+  },
+  {
+    "idx": 180,
+    "element": "Californium",
+    "atomic_number": 98,
+    "pred": "Californium",
+    "backups": [
+      "Uranium",
+      "Cobalt"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly indicate \"Californium\" (token 1: ' Californ' + token 2: 'ium'), with supporting tokens like ' Cf' (the chemical symbol), atomic number 98 context, and '加利福尼亚' (California in Chinese).\n\n{\"answer\": \"Californium\", \"confidence\": 0.97, \"backups\": [\"Uranium\", \"Cobalt\"]}"
+  },
+  {
+    "idx": 181,
+    "element": "Tantalum",
+    "atomic_number": 73,
+    "pred": "Tantalum",
+    "backups": [
+      "Tungsten",
+      "Titanium",
+      "Potassium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top token is 'tantal' (tantalum, Ta) with a very high score of 72.446, and token 15 is ' Ta'. There's also 'ungsten' (tungsten, W) and '钨' (Chinese for tungsten) with significant scores.\n\nThe highest score by far is 'tantal' suggesting Tantalum, with ' Ta' also appearing. The task seems to involve letter counting or spelling (tokens like 'lowercase', 'letters', 'spelled', 'third'), possibly counting letters in element names.\n\n{\"answer\": \"Tantalum\", \"confidence\": 0.72, \"backups\": [\"Tungsten\", \"Titanium\", \"Potassium\"]}"
+  },
+  {
+    "idx": 182,
+    "element": "Strontium",
+    "atomic_number": 38,
+    "pred": "Strontium",
+    "backups": [
+      "Calcium",
+      "Potassium",
+      "Radium",
+      "Magnesium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly point to \"Sr\" (Strontium) — tokens 1 and 3 are directly \"Sr\", token 9 is \" Str\" (beginning of Strontium), and token 47 \"adium\" could complete \"Str-adium\" → Strontium. The high scores for \"Sr\" make this clear.\n\n{\"answer\": \"Strontium\", \"confidence\": 0.92, \"backups\": [\"Calcium\", \"Potassium\", \"Radium\", \"Magnesium\"]}"
+  },
+  {
+    "idx": 183,
+    "element": "Copper",
+    "atomic_number": 29,
+    "pred": "Copper",
+    "backups": [
+      "Chromium",
+      "Curium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly indicate copper: \"copper\", \"Copper\", \"铜\" (Chinese for copper), \"Cu\" (copper's chemical symbol), \"opper\", \"Cop\", \"pper\".\n\n{\"answer\": \"Copper\", \"confidence\": 0.99, \"backups\": [\"Chromium\", \"Curium\"]}"
+  },
+  {
+    "idx": 184,
+    "element": "Lithium",
+    "atomic_number": 3,
+    "pred": "Lithium",
+    "backups": [
+      "Helium",
+      "Beryllium",
+      "Sodium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly indicate \"lithium\" (tokens 1, 2, 6 '锂', and 'lium').\n\n{\"answer\": \"Lithium\", \"confidence\": 0.98, \"backups\": [\"Helium\", \"Beryllium\", \"Sodium\"]}"
+  },
+  {
+    "idx": 186,
+    "element": "Carbon",
+    "atomic_number": 6,
+    "pred": "Carbon",
+    "backups": [],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly point to Carbon (碳 in Chinese, with \"Carbon\" appearing multiple times, along with \"monoxide\", \"dioxide\", \"木炭\" meaning charcoal, \"氧化碳\" meaning carbon oxide).\n\n{\"answer\": \"Carbon\", \"confidence\": 0.99, \"backups\": []}"
+  },
+  {
+    "idx": 188,
+    "element": "Samarium",
+    "atomic_number": 62,
+    "pred": "Samarium",
+    "backups": [
+      "Europium",
+      "Cobalt",
+      "Sodium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly point to Samarium: \"Sm\" (rank 8), \"sam\" (ranks 3, 9), \"mium\" (rank 15), \"esium\" (rank 27), \"smi\" (rank 36), \" Samar\" (rank 43), \"arium\" (rank 46). The \"稀土\" (rare earth) token also fits, as Samarium is a rare earth element.\n\n{\"answer\": \"Samarium\", \"confidence\": 0.97, \"backups\": [\"Europium\", \"Cobalt\", \"Sodium\"]}"
+  },
+  {
+    "idx": 189,
+    "element": "Scandium",
+    "atomic_number": 21,
+    "pred": "Scandium",
+    "backups": [
+      "Titanium",
+      "Chromium",
+      "Aluminium",
+      "Vanadium",
+      "Calcium",
+      "Selenium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly suggest Scandium: \"Sc\", \"(SC\", \".sc\", \"(sc\", \"_sc\", \".Sc\", \" sc\" all point to the chemical symbol Sc. The \"-ium\" suffix fits \"Scandium,\" and it's a fourth-period element (token \" fourth\"). Titanium and Chromium appear as nearby alternatives but with much lower scores.\n\n{\"answer\": \"Scandium\", \"confidence\": 0.92, \"backups\": [\"Titanium\", \"Chromium\", \"Aluminium\", \"Vanadium\", \"Calcium\", \"Selenium\"]}"
+  },
+  {
+    "idx": 190,
+    "element": "Uranium",
+    "atomic_number": 92,
+    "pred": "Uranium",
+    "backups": [
+      "Plutonium",
+      "Radium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly indicate Uranium: ' uranium' has by far the highest score (108.426), followed by 'anium', ' Uran', '92' (atomic number of uranium), '铀' (Chinese for uranium), and '(U' (its symbol).\n\n{\"answer\": \"Uranium\", \"confidence\": 0.99, \"backups\": [\"Plutonium\", \"Radium\"]}"
+  },
+  {
+    "idx": 191,
+    "element": "Samarium",
+    "atomic_number": 62,
+    "pred": "Samarium",
+    "backups": [
+      "Barium",
+      "Europium",
+      "Uranium",
+      "Cobalt"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly point to Samarium: \"sam\", \"/sam\", \"mium\", \" Sm\", \" Sam\", \" Samar\", \"Smi\" all clearly indicate Samarium (Sm).\n\n{\"answer\": \"Samarium\", \"confidence\": 0.97, \"backups\": [\"Barium\", \"Europium\", \"Uranium\", \"Cobalt\"]}"
+  },
+  {
+    "idx": 192,
+    "element": "Cerium",
+    "atomic_number": 58,
+    "pred": "Cerium",
+    "backups": [
+      "Caesium",
+      "Chromium",
+      "Erbium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly point to Cerium: ' Ce', ' cer', 'ium', ' Cer', 'Cer', 'cer', and '58' (atomic number of Ce), plus '稀土' (rare earth in Chinese).\n\n{\"answer\": \"Cerium\", \"confidence\": 0.97, \"backups\": [\"Caesium\", \"Chromium\", \"Erbium\"]}"
+  },
+  {
+    "idx": 193,
+    "element": "Iron",
+    "atomic_number": 26,
+    "pred": "Iron",
+    "backups": [],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "{\"answer\": \"Iron\", \"confidence\": 0.99, \"backups\": []}"
+  },
+  {
+    "idx": 194,
+    "element": "Iridium",
+    "atomic_number": 77,
+    "pred": "Iridium",
+    "backups": [
+      "Platinum",
+      "Palladium",
+      "Osmium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens show \"idium\" (completing \"Iridium\"), \" Ir\", \" ir\", \"Ir\", and \"(IR\" all pointing strongly to Iridium. There are also references to platinum-group metals (platinum, palladium 钯, 铂) which are neighbors of Iridium, consistent with thinking about Iridium in context.\n\n{\"answer\": \"Iridium\", \"confidence\": 0.95, \"backups\": [\"Platinum\", \"Palladium\", \"Osmium\"]}"
+  },
+  {
+    "idx": 197,
+    "element": "Vanadium",
+    "atomic_number": 23,
+    "pred": "Vanadium",
+    "backups": [
+      "Chromium",
+      "Radium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top token is '钒' which is the Chinese character for Vanadium. The second token 'adium' could be part of \"Vanadium\". The token '(V' also suggests Vanadium's symbol. Additionally, tokens like ' van', ' Van', 'Van', 'van' all point to Vanadium.\n\n{\"answer\": \"Vanadium\", \"confidence\": 0.92, \"backups\": [\"Chromium\", \"Radium\"]}"
+  },
+  {
+    "idx": 198,
+    "element": "Francium",
+    "atomic_number": 87,
+    "pred": "Francium",
+    "backups": [
+      "Potassium",
+      "Cesium",
+      "Uranium",
+      "Radium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly suggest Francium: 'franc' (rank 6), ' franc' (rank 6), ' Franc' (rank 12), 'Franc' (rank 14), ' Fr' (rank 40), combined with 'radioactive' (rank 8) and 'ium' (rank 1). Francium is a highly radioactive alkali metal, symbol Fr.\n\n{\"answer\": \"Francium\", \"confidence\": 0.92, \"backups\": [\"Potassium\", \"Cesium\", \"Uranium\", \"Radium\"]}"
+  },
+  {
+    "idx": 199,
+    "element": "Indium",
+    "atomic_number": 49,
+    "pred": "Indium",
+    "backups": [
+      "Mercury",
+      "Iodine",
+      "Silver",
+      "Tin",
+      "Zinc"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly suggest **Indium**:\n\n- `' Ind'`, `'Ind'`, `'ind'`, `'ndi'`, `'idium'`, `'ium'` all point to \"Indium\"\n- `'49'` and `'四十九'` (Chinese for \"forty-nine\") match Indium's atomic number **49**\n- `' Zinc'` is adjacent to Indium in the periodic table (group 13, period 5)\n- `'银'` (silver) and `'锡'` (tin) are nearby elements\n\n{\"answer\": \"Indium\", \"confidence\": 0.95, \"backups\": [\"Mercury\", \"Iodine\", \"Silver\", \"Tin\", \"Zinc\"]}"
+  },
+  {
+    "idx": 200,
+    "element": "Chlorine",
+    "atomic_number": 17,
+    "pred": "Chlorine",
+    "backups": [
+      "Krypton",
+      "Bromine"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly indicate Chlorine: ' chlorine' has by far the highest score (118.230), followed by ' Chlor', 'chlor', and the Chinese character '氯' (chlorine). The atomic number 36 appears (though chlorine is 17, krypton is 36 — but 36 could relate to something else), and 37 also appears.\n\nThe overwhelming evidence points to Chlorine.\n\n{\"answer\": \"Chlorine\", \"confidence\": 0.97, \"backups\": [\"Krypton\", \"Bromine\"]}"
+  },
+  {
+    "idx": 202,
+    "element": "Cesium",
+    "atomic_number": 55,
+    "pred": "Caesium",
+    "backups": [
+      "Calcium",
+      "Potassium"
+    ],
+    "got": false,
+    "top_k": {
+      "1": false,
+      "2": false,
+      "3": false,
+      "5": false,
+      "10": false
+    },
+    "raw": "The top tokens strongly indicate \"Cesium\" — token 1 is 'esium' (the ending of \"Caesium/Cesium\"), token 2 is ' Cs' (the chemical symbol for Cesium), token 14 is '55' (Cesium's atomic number), and token 12 is 'Cs'.\n\n{\"answer\": \"Caesium\", \"confidence\": 0.98, \"backups\": [\"Calcium\", \"Potassium\"]}"
+  },
+  {
+    "idx": 203,
+    "element": "Oxygen",
+    "atomic_number": 8,
+    "pred": "Oxygen",
+    "backups": [],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly point to Oxygen: \"Oxygen\", \"xygen\", \"oxygen\", \"氧\" (Chinese for oxygen), \"氧气\" (oxygen gas) all appear prominently.\n\n{\"answer\": \"Oxygen\", \"confidence\": 0.99, \"backups\": []}"
+  },
+  {
+    "idx": 205,
+    "element": "Uranium",
+    "atomic_number": 92,
+    "pred": "Uranium",
+    "backups": [
+      "Neptunium",
+      "Plutonium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly indicate Uranium: \"uranium\", \"Uran\", \"uran\", \"anium\", \"铀\" (Chinese for uranium), and \"(U\" all point clearly to Uranium.\n\n{\"answer\": \"Uranium\", \"confidence\": 0.99, \"backups\": [\"Neptunium\", \"Plutonium\"]}"
+  },
+  {
+    "idx": 206,
+    "element": "Europium",
+    "atomic_number": 63,
+    "pred": "Europium",
+    "backups": [
+      "Einsteinium",
+      "Erbium",
+      "Europium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly point to **Europium** — \"europ\" and \"ium\" are the top tokens, along with \"Eu\" and \"Europ\".\n\n{\"answer\": \"Europium\", \"confidence\": 0.99, \"backups\": [\"Einsteinium\", \"Erbium\", \"Europium\"]}"
+  },
+  {
+    "idx": 207,
+    "element": "Manganese",
+    "atomic_number": 25,
+    "pred": "Manganese",
+    "backups": [],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly indicate Manganese: ' manganese' has by far the highest score (143.233), followed by 'anganese', '锰' (Chinese for manganese), ' ese' (suffix of manganese), and ' Mn' (its chemical symbol).\n\n{\"answer\": \"Manganese\", \"confidence\": 0.99, \"backups\": []}"
+  },
+  {
+    "idx": 208,
+    "element": "Promethium",
+    "atomic_number": 61,
+    "pred": "Promethium",
+    "backups": [
+      "Neodymium",
+      "Praseodymium",
+      "Samarium",
+      "Europium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "Looking at the tokens, I can see strong hints:\n\n- 'mium' / 'ium' — element ending\n- '稀土' — rare earth (Chinese)\n- ' Nd' — Neodymium? But also...\n- 'etheus' — Prometheus → **Promethium**\n- 'Pm' — symbol for Promethium\n- ' Prom' / 'prom' — Prom**ethium**\n- '-last' / '/third' / '-second' — possibly counting letters in the name\n\nThe tokens 'etheus', 'Prom', 'Pm', and 'mium' strongly point to **Promethium** (Pm), a rare earth element (稀土元素).\n\n{\"answer\": \"Promethium\", \"confidence\": 0.95, \"backups\": [\"Neodymium\", \"Praseodymium\", \"Samarium\", \"Europium\"]}"
+  },
+  {
+    "idx": 209,
+    "element": "Calcium",
+    "atomic_number": 20,
+    "pred": "Calcium",
+    "backups": [
+      "Magnesium",
+      "Cesium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly indicate Calcium (rank 1 and 2 are ' Calcium' and ' calcium', with very high scores, and '钙' is the Chinese word for calcium).\n\n{\"answer\": \"Calcium\", \"confidence\": 0.99, \"backups\": [\"Magnesium\", \"Cesium\"]}"
+  },
+  {
+    "idx": 210,
+    "element": "Arsenic",
+    "atomic_number": 33,
+    "pred": "Arsenic",
+    "backups": [
+      "Phosphorus",
+      "Chromium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens clearly point to \"arsenic\" — token 1 is ' arsen', token 2 is '砷' (Chinese for arsenic), and token 4 is 'enic', which together spell \"arsenic\".\n\n{\"answer\": \"Arsenic\", \"confidence\": 0.99, \"backups\": [\"Phosphorus\", \"Chromium\"]}"
+  },
+  {
+    "idx": 211,
+    "element": "Selenium",
+    "atomic_number": 34,
+    "pred": "Selenium",
+    "backups": [
+      "Chromium",
+      "Krypton"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens clearly indicate \"selenium\" (rank 1 with score 84.307), confirmed by the Chinese character '硒' (rank 4) which is the Chinese word for selenium.\n\n{\"answer\": \"Selenium\", \"confidence\": 0.99, \"backups\": [\"Chromium\", \"Krypton\"]}"
+  },
+  {
+    "idx": 212,
+    "element": "Sulfur",
+    "atomic_number": 16,
+    "pred": "Sulfur",
+    "backups": [
+      "Phosphorus"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "{\"answer\": \"Sulfur\", \"confidence\": 0.98, \"backups\": [\"Phosphorus\"]}"
+  },
+  {
+    "idx": 213,
+    "element": "Selenium",
+    "atomic_number": 34,
+    "pred": "Selenium",
+    "backups": [],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "{\"answer\": \"Selenium\", \"confidence\": 0.99, \"backups\": []}"
+  },
+  {
+    "idx": 214,
+    "element": "Rhenium",
+    "atomic_number": 75,
+    "pred": "Tungsten",
+    "backups": [
+      "Rhenium",
+      "Osmium",
+      "Molybdenum",
+      "Manganese",
+      "Chromium"
+    ],
+    "got": false,
+    "top_k": {
+      "1": false,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens are dominated by 'ungsten' (completing \"Tungsten\"), '钨' (Chinese for Tungsten), with secondary signals for Rhenium ('enium', ' Re', '(Re') and Osmium (' Osm').\n\nThe strongest signal by far is \"Tungsten\" (W), with '钨' confirming this.\n\n{\"answer\": \"Tungsten\", \"confidence\": 0.82, \"backups\": [\"Rhenium\", \"Osmium\", \"Molybdenum\", \"Manganese\", \"Chromium\"]}"
+  },
+  {
+    "idx": 215,
+    "element": "Cerium",
+    "atomic_number": 58,
+    "pred": "Cerium",
+    "backups": [
+      "Chromium",
+      "Caesium",
+      "Helium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly point to Cerium: ' Ce', 'rium', ' cer', 'cer', ' Cer', 'Cer', 'Ce' all appear prominently, along with '稀土' (rare earth), which is consistent with Cerium being a rare earth element.\n\n{\"answer\": \"Cerium\", \"confidence\": 0.93, \"backups\": [\"Chromium\", \"Caesium\", \"Helium\"]}"
+  },
+  {
+    "idx": 216,
+    "element": "Molybdenum",
+    "atomic_number": 42,
+    "pred": "Molybdenum",
+    "backups": [
+      "Ytterbium",
+      "Chromium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top token is '钼' (Chinese for Molybdenum), and there are also tokens like ' Mo' and 'Mo' which are the chemical symbol for Molybdenum.\n\n{\"answer\": \"Molybdenum\", \"confidence\": 0.98, \"backups\": [\"Ytterbium\", \"Chromium\"]}"
+  },
+  {
+    "idx": 217,
+    "element": "Fermium",
+    "atomic_number": 100,
+    "pred": "Fermium",
+    "backups": [
+      "Uranium",
+      "Curium",
+      "Californium",
+      "Einsteinium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly suggest \"fermium\" - with ' ferm' at rank 3 (score 21.178) and 'ium' at rank 1 (46.725), plus 'mium' at rank 8. The context also includes references to letter counting/positions (third, second, nth, third-letter) which aligns with a task about properties of \"Fermium.\"\n\n{\"answer\": \"Fermium\", \"confidence\": 0.92, \"backups\": [\"Uranium\", \"Curium\", \"Californium\", \"Einsteinium\"]}"
+  },
+  {
+    "idx": 218,
+    "element": "Bromine",
+    "atomic_number": 35,
+    "pred": "Bromine",
+    "backups": [
+      "Iodine",
+      "Chlorine",
+      "Krypton"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly point to Bromine:\n- Token 1: ' Brom' (German/prefix for Bromine)\n- Token 2: '溴' (Chinese character for Bromine)\n- Token 4: '36' (atomic number of Bromine... actually 35)\n- Token 32: '35' (atomic number of Bromine)\n\n{\"answer\": \"Bromine\", \"confidence\": 0.97, \"backups\": [\"Iodine\", \"Chlorine\", \"Krypton\"]}"
+  },
+  {
+    "idx": 219,
+    "element": "Neon",
+    "atomic_number": 10,
+    "pred": "Neon",
+    "backups": [
+      "Helium",
+      "Argon"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens overwhelmingly point to Neon: 'Neon', 'neon', ' neon', 'NEON', '_neon', \"on's\", 'eon', and even the Chinese '霓虹' (neon light) all appear prominently.\n\n{\"answer\": \"Neon\", \"confidence\": 0.99, \"backups\": [\"Helium\", \"Argon\"]}"
+  },
+  {
+    "idx": 220,
+    "element": "Titanium",
+    "atomic_number": 22,
+    "pred": "Titanium",
+    "backups": [],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "{\"answer\": \"Titanium\", \"confidence\": 0.99, \"backups\": []}"
+  },
+  {
+    "idx": 221,
+    "element": "Osmium",
+    "atomic_number": 76,
+    "pred": "Osmium",
+    "backups": [
+      "Cobalt",
+      "Uranium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly indicate \"Osmium\" (' Osm' + 'mium').\n\n{\"answer\": \"Osmium\", \"confidence\": 0.98, \"backups\": [\"Cobalt\", \"Uranium\"]}"
+  },
+  {
+    "idx": 222,
+    "element": "Astatine",
+    "atomic_number": 85,
+    "pred": "Iodine",
+    "backups": [
+      "Astatine",
+      "Potassium",
+      "Radium"
+    ],
+    "got": false,
+    "top_k": {
+      "1": false,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly point to Iodine:\n- Token 1: ' iod' (by far the highest score at 59.563)\n- Token 15: '碘' (Chinese for Iodine, score 2.766)\n- Token 30: 'idine' (as in \"iodine\", score 1.640)\n- Token 31: 'iod' (score 1.630)\n\n{\"answer\": \"Iodine\", \"confidence\": 0.97, \"backups\": [\"Astatine\", \"Potassium\", \"Radium\"]}"
+  },
+  {
+    "idx": 223,
+    "element": "Cobalt",
+    "atomic_number": 27,
+    "pred": "Cobalt",
+    "backups": [
+      "Nickel",
+      "Iron",
+      "Copper"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly indicate **cobalt** (rank 1: ' cobalt' with score 131.432, rank 3: '钴' which is the Chinese word for cobalt, rank 4: 'alt' as a fragment of 'cobalt', rank 24: ' Cob' as another fragment).\n\n{\"answer\": \"Cobalt\", \"confidence\": 0.97, \"backups\": [\"Nickel\", \"Iron\", \"Copper\"]}"
+  },
+  {
+    "idx": 224,
+    "element": "Thulium",
+    "atomic_number": 69,
+    "pred": "Thulium",
+    "backups": [
+      "Lutetium",
+      "Ytterbium",
+      "Erbium",
+      "Dysprosium",
+      "Holmium",
+      "Cobalt",
+      "Potassium",
+      "Thorium",
+      "Yttrium",
+      "Chromium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly point to **Thulium**:\n\n- `'Tm'` — symbol for Thulium\n- `'69'` — atomic number of Thulium\n- `' lut'` / `'lut'` / `' Lut'` — part of \"Lutetium\" but also \"Thulium\" context\n- `'mium'` / `'ium'` — element name endings\n- `'holm'` — Stockholm/Thule (Nordic naming connections)\n- `'稀土'` — rare earth (lanthanide series, where Thulium sits)\n- Chinese tokens about element names/symbols\n\nThulium (Tm, atomic number 69) is a rare earth lanthanide element.\n\n{\"answer\": \"Thulium\", \"confidence\": 0.72, \"backups\": [\"Lutetium\", \"Ytterbium\", \"Erbium\", \"Dysprosium\", \"Holmium\", \"Cobalt\", \"Potassium\", \"Thorium\", \"Yttrium\", \"Chromium\"]}"
+  },
+  {
+    "idx": 225,
+    "element": "Titanium",
+    "atomic_number": 22,
+    "pred": "Titanium",
+    "backups": [
+      "Technetium",
+      "Thallium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens overwhelmingly point to \"titanium\" (and its Chinese equivalent 钛).\n\n{\"answer\": \"Titanium\", \"confidence\": 0.99, \"backups\": [\"Technetium\", \"Thallium\"]}"
+  },
+  {
+    "idx": 227,
+    "element": "Francium",
+    "atomic_number": 87,
+    "pred": "Francium",
+    "backups": [
+      "Rubidium",
+      "Potassium",
+      "Cesium",
+      "Radium",
+      "Uranium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly suggest **Francium**:\n\n- `' franc'`, `' Franc'`, `'Franc'`, `' Fran'`, `' Fr'` all point to Francium\n- `'ium'` is the suffix\n- `'Rb'` (Rubidium) and `'assium'` (potassium) are neighboring alkali metals, consistent with thinking about alkali metals in that group\n- `'95'` could relate to atomic number context (Fr is 87, but close neighbors)\n- `' radioactive'` fits Francium perfectly (it's highly radioactive)\n- `'弗朗'` is the Chinese transliteration of \"Franc-\" (as in Francium)\n- `'放射性'` means \"radioactive\" in Chinese\n\n{\"answer\": \"Francium\", \"confidence\": 0.95, \"backups\": [\"Rubidium\", \"Potassium\", \"Cesium\", \"Radium\", \"Uranium\"]}"
+  },
+  {
+    "idx": 228,
+    "element": "Nitrogen",
+    "atomic_number": 7,
+    "pred": "Nitrogen",
+    "backups": [],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly indicate nitrogen: ' nitrogen' has by far the highest score (130.957), '氮' (Chinese for nitrogen) is rank 4, 'rogen', 'ogen', ' Nit', 'nit', 'tro' are all fragments of \"nitrogen\", and '氮肥' (nitrogen fertilizer) also appears.\n\n{\"answer\": \"Nitrogen\", \"confidence\": 0.99, \"backups\": []}"
+  },
+  {
+    "idx": 229,
+    "element": "Gadolinium",
+    "atomic_number": 64,
+    "pred": "Gadolinium",
+    "backups": [
+      "Gallium",
+      "Germanium",
+      "Cobalt"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly point to \"Gadolinium\" - tokens like 'Gad', 'olin', 'mium', 'ium', and 'Gd' (the chemical symbol) all align with this element. The Chinese tokens '稀土' (rare earth) and '元素' (element) are consistent with Gadolinium being a rare earth element.\n\n{\"answer\": \"Gadolinium\", \"confidence\": 0.97, \"backups\": [\"Gallium\", \"Germanium\", \"Cobalt\"]}"
+  },
+  {
+    "idx": 230,
+    "element": "Potassium",
+    "atomic_number": 19,
+    "pred": "Potassium",
+    "backups": [
+      "Sodium",
+      "Helium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "{\"answer\": \"Potassium\", \"confidence\": 0.99, \"backups\": [\"Sodium\", \"Helium\"]}"
+  },
+  {
+    "idx": 231,
+    "element": "Iodine",
+    "atomic_number": 53,
+    "pred": "Iodine",
+    "backups": [
+      "Phosphorus",
+      "Potassium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly indicate \"iodine\" — token 1 is ' iod', token 6 is ' dine' (completing \"iodine\"), token 4 is '碘' (Chinese for iodine), and token 25 is 'iod' again.\n\n{\"answer\": \"Iodine\", \"confidence\": 0.97, \"backups\": [\"Phosphorus\", \"Potassium\"]}"
+  },
+  {
+    "idx": 232,
+    "element": "Arsenic",
+    "atomic_number": 33,
+    "pred": "Arsenic",
+    "backups": [
+      "Phosphorus",
+      "Nitrogen"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly indicate \"arsenic\" — token 1 is ' arsen', token 3 is '砷' (Chinese for arsenic), and token 4 is 'enic', which together spell \"arsenic.\"\n\n{\"answer\": \"Arsenic\", \"confidence\": 0.98, \"backups\": [\"Phosphorus\", \"Nitrogen\"]}"
+  },
+  {
+    "idx": 233,
+    "element": "Iridium",
+    "atomic_number": 77,
+    "pred": "Iridium",
+    "backups": [
+      "Platinum"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens are ' Ir' and 'idium' (combining to \"Iridium\"), with supporting tokens like ' platinum' (a nearby element), '铂金' and '铂' (Chinese for platinum), and '铱' being implied. The strongest signal is \"Ir\" + \"idium\" = Iridium.\n\n{\"answer\": \"Iridium\", \"confidence\": 0.95, \"backups\": [\"Platinum\"]}"
+  },
+  {
+    "idx": 235,
+    "element": "Barium",
+    "atomic_number": 56,
+    "pred": "Caesium",
+    "backups": [
+      "Barium",
+      "Potassium",
+      "Chromium",
+      "Rubidium",
+      "Francium"
+    ],
+    "got": false,
+    "top_k": {
+      "1": false,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly suggest \"Caesium\" (also spelled \"Cesium\"):\n\n- Token 2: `'esium'` — the ending of \"Caesium/Cesium\"\n- Token 11: `' Ba'` and token 35: `'Ba'` — Barium (Ba) is close in the periodic table, but the dominant signal is \"esium\"\n- Token 1: `'ium'` — common ending for many elements\n- Token 37: `' potassium'` and token 39: `'assium'` — potassium is in the same group (alkali metals) as caesium\n- Token 10: `'rium'` could suggest Barium, but \"esium\" is much stronger\n\nCaesium (Cs, atomic number 55) is an alkali metal, and the tokens \"esium,\" \"Ba\" (neighboring element Barium), and \"potassium\" (same group) all point strongly to Caesium.\n\n{\"answer\": \"Caesium\", \"confidence\": 0.82, \"backups\": [\"Barium\", \"Potassium\", \"Chromium\", \"Rubidium\", \"Francium\"]}"
+  },
+  {
+    "idx": 236,
+    "element": "Lanthanum",
+    "atomic_number": 57,
+    "pred": "Lanthanum",
+    "backups": [
+      "Lutetium",
+      "Lithium",
+      "Lawrencium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly suggest Lanthanum:\n\n- \"La\" (chemical symbol for Lanthanum) appears multiple times with high scores (#3, #4, #5)\n- \"稀土\" means \"rare earth\" in Chinese - Lanthanum is a rare earth element\n- \"anth\", \"antan\", \"antha\", \"than\" are fragments of \"lanthanum\"\n- \"esium\" could be from \"lanthanum\" related context\n- \"lut\" could relate to Lutetium but the La tokens dominate\n\n{\"answer\": \"Lanthanum\", \"confidence\": 0.93, \"backups\": [\"Lutetium\", \"Lithium\", \"Lawrencium\"]}"
+  },
+  {
+    "idx": 237,
+    "element": "Tungsten",
+    "atomic_number": 74,
+    "pred": "Tungsten",
+    "backups": [
+      "Wolfram"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens are '钨' (Chinese for Tungsten) and 'ungsten' (part of \"Tungsten\"), making this unambiguous.\n\n{\"answer\": \"Tungsten\", \"confidence\": 0.99, \"backups\": [\"Wolfram\"]}"
+  },
+  {
+    "idx": 238,
+    "element": "Nickel",
+    "atomic_number": 28,
+    "pred": "Nickel",
+    "backups": [],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "{\"answer\": \"Nickel\", \"confidence\": 0.99, \"backups\": []}"
+  },
+  {
+    "idx": 239,
+    "element": "Antimony",
+    "atomic_number": 51,
+    "pred": "Antimony",
+    "backups": [
+      "Titanium",
+      "Thulium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens \" antim\" and \"imony\" together spell \"antimony,\" and the symbol \"Sb\" also appears in the list.\n\n{\"answer\": \"Antimony\", \"confidence\": 0.99, \"backups\": [\"Titanium\", \"Thulium\"]}"
+  },
+  {
+    "idx": 240,
+    "element": "Oxygen",
+    "atomic_number": 8,
+    "pred": "Oxygen",
+    "backups": [],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "{\"answer\": \"Oxygen\", \"confidence\": 0.99, \"backups\": []}"
+  },
+  {
+    "idx": 241,
+    "element": "Bromine",
+    "atomic_number": 35,
+    "pred": "Bromine",
+    "backups": [
+      "Iodine",
+      "Chlorine",
+      "Chromium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly point to Bromine: ' Brom' has a score of 116.300 (overwhelmingly dominant), and '溴' (the Chinese character for bromine) is ranked 3rd with a score of 23.192.\n\n{\"answer\": \"Bromine\", \"confidence\": 0.97, \"backups\": [\"Iodine\", \"Chlorine\", \"Chromium\"]}"
+  },
+  {
+    "idx": 242,
+    "element": "Bismuth",
+    "atomic_number": 83,
+    "pred": "Bismuth",
+    "backups": [
+      "Antimony",
+      "Chromium",
+      "Uranium",
+      "Barium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly suggest \"Bismuth\" - I can see 'Bi', ' Bi', 'uth', 'imuth', and 'mium' (likely from \"Bismuth\") all ranking highly.\n\n{\"answer\": \"Bismuth\", \"confidence\": 0.92, \"backups\": [\"Antimony\", \"Chromium\", \"Uranium\", \"Barium\"]}"
+  },
+  {
+    "idx": 244,
+    "element": "Indium",
+    "atomic_number": 49,
+    "pred": "Indium",
+    "backups": [
+      "Iridium",
+      "Rhodium",
+      "Cadmium",
+      "Osmium",
+      "Indium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "Looking at the tokens, I see strong hints:\n\n- `'ium'` (rank 1, very high score) - element ending in \"-ium\"\n- `' Ind'` (rank 3) - suggesting \"Indium\"\n- `'mium'` (rank 4) - could be part of multiple elements\n- `'idium'` (rank 41) - suggesting \"Indium\" or \"Iridium\"\n- `'49'` (rank 45) - Indium's atomic number is 49!\n- `'Ind'` (rank 44) - again \"Ind\" prefix\n\nThe atomic number 49 combined with \"Ind\" tokens strongly points to **Indium**.\n\n{\"answer\": \"Indium\", \"confidence\": 0.88, \"backups\": [\"Iridium\", \"Rhodium\", \"Cadmium\", \"Osmium\", \"Indium\"]}"
+  },
+  {
+    "idx": 245,
+    "element": "Technetium",
+    "atomic_number": 43,
+    "pred": "Technetium",
+    "backups": [
+      "Manganese",
+      "Tungsten",
+      "Molybdenum",
+      "Chromium",
+      "Cobalt"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly point to \"technetium\" - tokens 1 and 2 combine to form \"technetium\", and token 6 \"Techn\" reinforces this. The element is also radioactive (token 12 ' radioactive'), which matches technetium being the lightest radioactive element with no stable isotopes.\n\n{\"answer\": \"Technetium\", \"confidence\": 0.97, \"backups\": [\"Manganese\", \"Tungsten\", \"Molybdenum\", \"Chromium\", \"Cobalt\"]}"
+  },
+  {
+    "idx": 246,
+    "element": "Dysprosium",
+    "atomic_number": 66,
+    "pred": "Dysprosium",
+    "backups": [
+      "Lutetium",
+      "Phosphorus",
+      "Erbium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly point to Dysprosium:\n- ' dys' (rank 1, highest score)\n- ' Dy' (rank 5)\n- 'Dy' (rank 11)\n- '66' (rank 21, atomic number of Dysprosium)\n- '稀土' (rare earth, rank 3)\n- 'mium' (rank 4, ending of \"Dysprosium\")\n\n{\"answer\": \"Dysprosium\", \"confidence\": 0.98, \"backups\": [\"Lutetium\", \"Phosphorus\", \"Erbium\"]}"
+  },
+  {
+    "idx": 247,
+    "element": "Boron",
+    "atomic_number": 5,
+    "pred": "Boron",
+    "backups": [
+      "Phosphorus",
+      "Nitrogen"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly indicate **Boron**: '硼' (Chinese for Boron), ' Bor', ' bor', 'oron' all point directly to it.\n\n{\"answer\": \"Boron\", \"confidence\": 0.98, \"backups\": [\"Phosphorus\", \"Nitrogen\"]}"
+  },
+  {
+    "idx": 248,
+    "element": "Hafnium",
+    "atomic_number": 72,
+    "pred": "Americium",
+    "backups": [
+      "Chromium",
+      "Zirconium",
+      "Hafnium",
+      "Titanium",
+      "Molybdenum",
+      "Curium",
+      "Fermium",
+      "Lutetium"
+    ],
+    "got": false,
+    "top_k": {
+      "1": false,
+      "2": false,
+      "3": false,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top token is 'mium' (strongly suggesting an element ending in \"-mium\"), and '锆' (zirconium in Chinese, Zr), and '72' (Hafnium's atomic number), '95' (Americium's atomic number or Molybdenum's mass), ' titanium', 'anium', 'rium'.\n\nThe strongest signal: token rank 1 is 'mium' with a very high score of 48.789. This suggests the element name ends in \"-mium\". \n\nToken '锆' is Chinese for Zirconium. But Zirconium ends in \"-ium\" not \"-mium.\"\n\nElements ending in \"-mium\": Chromium, Hafnium... wait, no. Let me think: Chromium, Molybdenum... Actually: **Chromium**, Fermium, Americium, Curium, Einsteinium... \n\nWait - \"mium\" endings: Chro**mium**, Hafnium doesn't end in mium. \n\n'锆' = Zirconium (Zr, 40). But '72' = Hafnium, and Zirconium and Hafnium are in the same group.\n\nThe number '95' could be Americium (Am, 95) which ends in \"-mium.\" Also ' lut' could suggest Lutetium.\n\nGiven the very dominant 'mium' token and '95', **Americium** (element 95) seems likely. But '锆' (Zirconium) and titanium tokens also appear... These are group 4 elements.\n\nZirconium in Chinese is 锆, atomic number 40. \"Zirconium\" ends in \"-ium\" not \"-mium.\" But wait — could the model be thinking about **Chromium** (Cr, 24)? Chro**mium** fits \"-mium.\"\n\nActually with '95' and 'mium' together, **Americium** fits perfectly.\n\n{\"answer\": \"Americium\", \"confidence\": 0.45, \"backups\": [\"Chromium\", \"Zirconium\", \"Hafnium\", \"Titanium\", \"Molybdenum\", \"Curium\", \"Fermium\", \"Lutetium\"]}"
+  },
+  {
+    "idx": 250,
+    "element": "Cesium",
+    "atomic_number": 55,
+    "pred": "Caesium",
+    "backups": [
+      "Phosphorus",
+      "Sodium"
+    ],
+    "got": false,
+    "top_k": {
+      "1": false,
+      "2": false,
+      "3": false,
+      "5": false,
+      "10": false
+    },
+    "raw": "The top tokens are 'esium' (very high score) and ' Cs' (second highest). 'Cs' is the chemical symbol for Caesium, and 'esium' is the suffix of \"Caesium\".\n\n{\"answer\": \"Caesium\", \"confidence\": 0.97, \"backups\": [\"Phosphorus\", \"Sodium\"]}"
+  },
+  {
+    "idx": 251,
+    "element": "Germanium",
+    "atomic_number": 32,
+    "pred": "Germanium",
+    "backups": [
+      "Silicon",
+      "Selenium",
+      "Chromium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly suggest \"german\" (ranks 1, 3, 4, 9, 24 \"日耳曼\" meaning Germanic), combined with \"silicon\"/\"硅\" (Silicon, rank 17/19), \"semiconductor\" (rank 29/36), and \"elenium\" (rank 28). \n\nGermanium was named after Germany, is a semiconductor, and sits below Silicon in the periodic table. The \"german\" tokens overwhelmingly point to Germanium.\n\n{\"answer\": \"Germanium\", \"confidence\": 0.96, \"backups\": [\"Silicon\", \"Selenium\", \"Chromium\"]}"
+  },
+  {
+    "idx": 252,
+    "element": "Uranium",
+    "atomic_number": 92,
+    "pred": "Uranium",
+    "backups": [],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "{\"answer\": \"Uranium\", \"confidence\": 0.99, \"backups\": []}"
+  },
+  {
+    "idx": 253,
+    "element": "Arsenic",
+    "atomic_number": 33,
+    "pred": "Arsenic",
+    "backups": [
+      "Phosphorus",
+      "Chromium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly indicate \"arsen\" (rank 1, score 130.816) and \"砷\" (the Chinese word for arsenic, rank 2, score 53.565), with \"enic\" also appearing (rank 4).\n\n{\"answer\": \"Arsenic\", \"confidence\": 0.99, \"backups\": [\"Phosphorus\", \"Chromium\"]}"
+  },
+  {
+    "idx": 254,
+    "element": "Neon",
+    "atomic_number": 10,
+    "pred": "Neon",
+    "backups": [
+      "Helium",
+      "Argon"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens overwhelmingly point to \"Neon\" (rank 1 with score 87.148, plus multiple other neon-related tokens like 'neon', ' neon', ' NEON', \"on's\").\n\n{\"answer\": \"Neon\", \"confidence\": 0.98, \"backups\": [\"Helium\", \"Argon\"]}"
+  },
+  {
+    "idx": 255,
+    "element": "Erbium",
+    "atomic_number": 68,
+    "pred": "Erbium",
+    "backups": [
+      "Europium",
+      "Lutetium",
+      "Holmium",
+      "Chromium",
+      "Thulium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens include 'mium' (rank 1, highest score by far), 'erb' and 'Er'/'Er' (ranks 3-4), ' europ' (rank 20), 'holm' (rank 30), ' lut'/' Lut' (ranks 10, 37), and '稀土' (rare earth).\n\n- 'mium' → chromium, erbium, europium, lutetium, etc.\n- 'erb' + 'Er' → **Erbium** (Er)\n- ' europ' → Europium\n- ' lut'/' Lut' → Lutetium\n- 'holm' → Holmium\n- '稀土' → rare earth elements\n\nThe strongest signal is 'mium' at rank 1 with a very high score, combined with 'erb' and 'Er' tokens strongly suggesting **Erbium** (Er). The 'europ' and 'lut' tokens could be competing candidates or context clues. Erbium fits 'Er' + 'b' + 'ium' = **erb**ium.\n\n{\"answer\": \"Erbium\", \"confidence\": 0.62, \"backups\": [\"Europium\", \"Lutetium\", \"Holmium\", \"Chromium\", \"Thulium\"]}"
+  },
+  {
+    "idx": 256,
+    "element": "Berkelium",
+    "atomic_number": 97,
+    "pred": "Berkelium",
+    "backups": [
+      "Californium",
+      "Americium",
+      "Curium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly suggest \"Berkelium\" — with 'Berk', 'Berkeley', '伯克' (Chinese for \"Berk\"), 'Bk' (its symbol), and 'Californ' (California, where Berkeley is located) all pointing to this element.\n\n{\"answer\": \"Berkelium\", \"confidence\": 0.97, \"backups\": [\"Californium\", \"Americium\", \"Curium\"]}"
+  },
+  {
+    "idx": 257,
+    "element": "Einsteinium",
+    "atomic_number": 99,
+    "pred": "Einsteinium",
+    "backups": [
+      "Uranium",
+      "Curium",
+      "Fermium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "Looking at the tokens, I see strong signals:\n\n- \"Einstein\" appears prominently (tokens 2, 5, 12, 13)\n- \" Es\" (token 24) - the chemical symbol for Einsteinium is Es\n- \"ium\" (token 1) - suffix for Einsteinium\n- \" uranium\" (token 14) and \" radioactive\" (token 40) suggest a radioactive element\n- \"mium\" (token 19) could be part of Einsteinium\n\nEinsteinium (Es) fits perfectly - it's named after Einstein, is radioactive, and ends in \"-ium\".\n\n{\"answer\": \"Einsteinium\", \"confidence\": 0.92, \"backups\": [\"Uranium\", \"Curium\", \"Fermium\"]}"
+  },
+  {
+    "idx": 258,
+    "element": "Promethium",
+    "atomic_number": 61,
+    "pred": "Promethium",
+    "backups": [
+      "Neodymium",
+      "Samarium",
+      "Europium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "Looking at the tokens, I can see strong hints:\n\n- '稀土' (rare earth)\n- ' Nd' (Neodymium symbol)\n- ' Prom', 'Prom', 'rometheus', 'etheus' → Promethium (named after Prometheus)\n- 'Pm' (Promethium symbol)\n- '61' (atomic number of Promethium)\n- 'mium', 'ium' (element suffix)\n\nThe tokens ' Nd' and 'Nd' suggest Neodymium (element 60), but the stronger cluster around 'Prom'/'etheus'/'Pm'/'61' points to Promethium (element 61). The task likely involved something about element 61 (Promethium), with Nd appearing as an adjacent/related rare earth element.\n\n{\"answer\": \"Promethium\", \"confidence\": 0.82, \"backups\": [\"Neodymium\", \"Samarium\", \"Europium\"]}"
+  },
+  {
+    "idx": 259,
+    "element": "Zirconium",
+    "atomic_number": 40,
+    "pred": "Zirconium",
+    "backups": [
+      "Chromium",
+      "Uranium",
+      "Hafnium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens are very clear:\n- '锆' (rank 1, score 120) is the Chinese word for Zirconium\n- 'ircon' (rank 4) → \"Zircon\"\n- 'ium' (rank 3) → \"...ium\"\n- '40' (rank 38) → atomic number of Zirconium is 40\n- ' z' (rank 10) → \"Z\" for Zirconium\n\n{\"answer\": \"Zirconium\", \"confidence\": 0.99, \"backups\": [\"Chromium\", \"Uranium\", \"Hafnium\"]}"
+  },
+  {
+    "idx": 260,
+    "element": "Copper",
+    "atomic_number": 29,
+    "pred": "Copper",
+    "backups": [],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly indicate Copper: \"copper\", \"Copper\", \"opper\", \"铜\" (Chinese for copper), \"Cu\" (chemical symbol), \"黄铜\" (brass, copper alloy).\n\n{\"answer\": \"Copper\", \"confidence\": 0.99, \"backups\": []}"
+  },
+  {
+    "idx": 261,
+    "element": "Neptunium",
+    "atomic_number": 93,
+    "pred": "Uranium",
+    "backups": [
+      "Neptunium",
+      "Americium",
+      "Neon"
+    ],
+    "got": false,
+    "top_k": {
+      "1": false,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top token is clearly ' uranium' with a very high score of 64.029. Additional supporting tokens include ' Uran', 'uran', 'anium', '铀' (Chinese for uranium), and atomic number '93' hints (actually Neptunium is 93, Uranium is 92), but also 'Np', 'ptune' suggesting Neptunium nearby. However, uranium dominates strongly.\n\n{\"answer\": \"Uranium\", \"confidence\": 0.82, \"backups\": [\"Neptunium\", \"Americium\", \"Neon\"]}"
+  },
+  {
+    "idx": 263,
+    "element": "Californium",
+    "atomic_number": 98,
+    "pred": "Californium",
+    "backups": [
+      "Uranium",
+      "Cesium",
+      "Curium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly point to **Californium**:\n- Token 2: `' Californ'` (very high score)\n- Token 1: `'ium'` (highest score, completing \"Californium\")\n- Token 18: `' Cf'` (chemical symbol for Californium)\n- Token 19 context + \"radioactive\" fits Californium\n\n{\"answer\": \"Californium\", \"confidence\": 0.97, \"backups\": [\"Uranium\", \"Cesium\", \"Curium\"]}"
+  },
+  {
+    "idx": 264,
+    "element": "Zinc",
+    "atomic_number": 30,
+    "pred": "Zinc",
+    "backups": [
+      "Zirconium",
+      "Nitrogen"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "{\"answer\": \"Zinc\", \"confidence\": 0.98, \"backups\": [\"Zirconium\", \"Nitrogen\"]}"
+  },
+  {
+    "idx": 266,
+    "element": "Antimony",
+    "atomic_number": 51,
+    "pred": "Antimony",
+    "backups": [
+      "Sulfur",
+      "Silver"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top token ' antim' (with score 158.052, far above all others) strongly indicates \"antimony\", and token 'Sb' (rank 18) confirms this is the chemical symbol for antimony.\n\n{\"answer\": \"Antimony\", \"confidence\": 0.98, \"backups\": [\"Sulfur\", \"Silver\"]}"
+  },
+  {
+    "idx": 267,
+    "element": "Mercury",
+    "atomic_number": 80,
+    "pred": "Mercury",
+    "backups": [],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "{\"answer\": \"Mercury\", \"confidence\": 0.99, \"backups\": []}"
+  },
+  {
+    "idx": 268,
+    "element": "Niobium",
+    "atomic_number": 41,
+    "pred": "Niobium",
+    "backups": [
+      "Vanadium",
+      "Nickel",
+      "Nobelium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly point to \"Nb\" (rank 1 with score 111.882, and rank 6), which is the chemical symbol for Niobium.\n\n{\"answer\": \"Niobium\", \"confidence\": 0.97, \"backups\": [\"Vanadium\", \"Nickel\", \"Nobelium\"]}"
+  },
+  {
+    "idx": 270,
+    "element": "Rubidium",
+    "atomic_number": 37,
+    "pred": "Rubidium",
+    "backups": [
+      "Cesium",
+      "Potassium",
+      "Iridium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly point to **Rubidium**:\n- 'Rb' is the chemical symbol for Rubidium\n- ' rub', 'Rub', 'rub' all suggest \"Rubidium\"\n- 'idium' is the ending of \"Rubidium\"\n- ' potassium' and '钾' (Chinese for potassium) appear as related/alternative thoughts, which makes sense since Rb is in the same group as potassium\n- 'esium' might relate to Caesium, another nearby alkali metal\n\n{\"answer\": \"Rubidium\", \"confidence\": 0.93, \"backups\": [\"Cesium\", \"Potassium\", \"Iridium\"]}"
+  },
+  {
+    "idx": 271,
+    "element": "Carbon",
+    "atomic_number": 6,
+    "pred": "Carbon",
+    "backups": [
+      "Oxygen",
+      "Nitrogen"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens overwhelmingly point to Carbon: \"Carbon\", \" Carbon\", \"arbon\", \" carbon\", \"碳\" (Chinese for carbon), \" monoxide\", \" dioxide\", \"氧化碳\" (carbon monoxide/dioxide), \"炭\" (charcoal/carbon).\n\n{\"answer\": \"Carbon\", \"confidence\": 0.99, \"backups\": [\"Oxygen\", \"Nitrogen\"]}"
+  },
+  {
+    "idx": 272,
+    "element": "Protactinium",
+    "atomic_number": 91,
+    "pred": "Uranium",
+    "backups": [
+      "Thorium",
+      "Protactinium",
+      "Radium"
+    ],
+    "got": false,
+    "top_k": {
+      "1": false,
+      "2": false,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly indicate \"uranium\" (rank 1 with highest score, plus 'uran', ' Uran', '铀' which is the Chinese character for uranium).\n\n{\"answer\": \"Uranium\", \"confidence\": 0.95, \"backups\": [\"Thorium\", \"Protactinium\", \"Radium\"]}"
+  },
+  {
+    "idx": 273,
+    "element": "Technetium",
+    "atomic_number": 43,
+    "pred": "Technetium",
+    "backups": [
+      "Manganese",
+      "Molybdenum",
+      "Chromium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly point to Technetium: ' techn', 'Tc', 'Techn', ' Techn', 'Technetium' (via 'ium' suffix), ' radioactive' (Tc is the lightest radioactive element), ' manganese' (Tc is below Mn in the periodic table), '钼' (molybdenum, adjacent to Tc), '放射性' (Chinese for \"radioactive\").\n\n{\"answer\": \"Technetium\", \"confidence\": 0.98, \"backups\": [\"Manganese\", \"Molybdenum\", \"Chromium\"]}"
+  },
+  {
+    "idx": 275,
+    "element": "Argon",
+    "atomic_number": 18,
+    "pred": "Argon",
+    "backups": [
+      "Neon",
+      "Helium",
+      "Krypton"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens show 'argon' (rank 2, high score), 'Arg' (rank 7), '(Arg' (rank 25), ' arg' (rank 29), 'gon' (rank 38) — all pointing to argon. Neon and helium also appear as noble gases, but argon dominates.\n\n{\"answer\": \"Argon\", \"confidence\": 0.85, \"backups\": [\"Neon\", \"Helium\", \"Krypton\"]}"
+  },
+  {
+    "idx": 276,
+    "element": "Nitrogen",
+    "atomic_number": 7,
+    "pred": "Nitrogen",
+    "backups": [
+      "Oxygen",
+      "Carbon",
+      "Hydrogen"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly point to **Nitrogen**: rank 1 is \"nitrogen\" with an overwhelmingly high score of 136.794, rank 3 is \"rogen\" (part of \"nitrogen\"), rank 11 is \" Nit\" (start of \"Nitrogen\"), rank 12 is \"氮\" (Chinese for nitrogen), and rank 25/28/54 contain \"tro\" fragments of \"nitrogen.\"\n\n{\"answer\": \"Nitrogen\", \"confidence\": 0.99, \"backups\": [\"Oxygen\", \"Carbon\", \"Hydrogen\"]}"
+  },
+  {
+    "idx": 277,
+    "element": "Nitrogen",
+    "atomic_number": 7,
+    "pred": "Nitrogen",
+    "backups": [
+      "Neon",
+      "Nickel"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly point to **nitrogen**: token 1 is ' nitrogen' with a score of 121.099, token 3 is ' Nit', token 8 is '氮' (Chinese for nitrogen), token 23 is 'nit', token 40 is 'rogen', and token 18 is ' tro' — all fragments of \"nitrogen.\"\n\n{\"answer\": \"Nitrogen\", \"confidence\": 0.99, \"backups\": [\"Neon\", \"Nickel\"]}"
+  },
+  {
+    "idx": 278,
+    "element": "Osmium",
+    "atomic_number": 76,
+    "pred": "Osmium",
+    "backups": [
+      "Platinum",
+      "Tungsten"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly point to **Osmium** - tokens 1 and 3 combine to form \"Osmium\", and token 22/24/25 also suggest \"Os\" (the chemical symbol). The context of \"third\" tokens and alphabetical references might relate to computing the third letter or some property of the element.\n\n{\"answer\": \"Osmium\", \"confidence\": 0.97, \"backups\": [\"Platinum\", \"Tungsten\"]}"
+  },
+  {
+    "idx": 279,
+    "element": "Chlorine",
+    "atomic_number": 17,
+    "pred": "Chlorine",
+    "backups": [
+      "Phosphorus"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "{\"answer\": \"Chlorine\", \"confidence\": 0.98, \"backups\": [\"Phosphorus\"]}"
+  },
+  {
+    "idx": 281,
+    "element": "Calcium",
+    "atomic_number": 20,
+    "pred": "Calcium",
+    "backups": [
+      "Cesium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly indicate Calcium: \"Calcium\", \"calcium\", \"钙\" (Chinese for calcium), \"20\" (atomic number of calcium), \"第二十\" (twentieth in Chinese), \"补钙\" (calcium supplementation in Chinese), and \"Calc\" all point clearly to this element.\n\n{\"answer\": \"Calcium\", \"confidence\": 0.99, \"backups\": [\"Cesium\"]}"
+  },
+  {
+    "idx": 282,
+    "element": "Iron",
+    "atomic_number": 26,
+    "pred": "Iron",
+    "backups": [
+      "Steel"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens overwhelmingly point to Iron: \"iron\", \"Iron\", \"IRON\", \"Fe\", \"铁\" (Chinese for iron), \"铁矿石\" (iron ore), \"含铁\" (iron-containing), \"缺铁\" (iron deficiency), etc.\n\n{\"answer\": \"Iron\", \"confidence\": 0.99, \"backups\": [\"Steel\"]}"
+  },
+  {
+    "idx": 283,
+    "element": "Molybdenum",
+    "atomic_number": 42,
+    "pred": "Molybdenum",
+    "backups": [
+      "Tungsten",
+      "Ytterbium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top token is '钼' (score 109.223), which is the Chinese word for Molybdenum. This is strongly reinforced by ' Mo' (rank 8) and 'Mo' (rank 14), which are the chemical symbol for Molybdenum.\n\n{\"answer\": \"Molybdenum\", \"confidence\": 0.97, \"backups\": [\"Tungsten\", \"Ytterbium\"]}"
+  },
+  {
+    "idx": 284,
+    "element": "Rhodium",
+    "atomic_number": 45,
+    "pred": "Rhodium",
+    "backups": [
+      "Palladium",
+      "Radium",
+      "Radon",
+      "Ruthenium"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly suggest \"Rh\" - Rhodium. The tokens ' Rh', 'Rh', 'odium' (completing \"Rhodium\"), and '钯' (palladium in Chinese, which is adjacent to Rhodium in the periodic table) all point to Rhodium. The Chinese token '钯' (palladium) might appear as the model considers neighboring elements.\n\n{\"answer\": \"Rhodium\", \"confidence\": 0.92, \"backups\": [\"Palladium\", \"Radium\", \"Radon\", \"Ruthenium\"]}"
+  }
+]

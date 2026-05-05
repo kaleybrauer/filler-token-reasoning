@@ -1,0 +1,4454 @@
+[
+  {
+    "idx": 0,
+    "intermediate": "Berlin",
+    "answer": "n",
+    "pred": "Berlin",
+    "backups": [
+      "Tegucigalpa"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "{\"answer\": \"Berlin\", \"confidence\": 0.99, \"backups\": [\"Tegucigalpa\"]}"
+  },
+  {
+    "idx": 1,
+    "intermediate": "Paris",
+    "answer": "s",
+    "pred": "Paris",
+    "backups": [
+      "Prague",
+      "Mexico City",
+      "Tokyo",
+      "Tegucigalpa"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly indicate \"Paris\" (rank 1 with overwhelming score, plus the Chinese equivalent 巴黎, and France).\n\n{\"answer\": \"Paris\", \"confidence\": 0.99, \"backups\": [\"Prague\", \"Mexico City\", \"Tokyo\", \"Tegucigalpa\"]}"
+  },
+  {
+    "idx": 2,
+    "intermediate": "Rome",
+    "answer": "e",
+    "pred": "Rome",
+    "backups": [
+      "Mexico City",
+      "Paris",
+      "Madrid"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly indicate \"Rome\" with overwhelming scores, along with supporting tokens like \"Italy,\" \"Italian,\" \"Italia,\" and \"capitale.\"\n\n{\"answer\": \"Rome\", \"confidence\": 0.98, \"backups\": [\"Mexico City\", \"Paris\", \"Madrid\"]}"
+  },
+  {
+    "idx": 3,
+    "intermediate": "Madrid",
+    "answer": "d",
+    "pred": "Madrid",
+    "backups": [
+      "Barcelona",
+      "Mexico City",
+      "Athens",
+      "Tegucigalpa"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly indicate Madrid: ' Madrid' has an overwhelming score of 193.652, with supporting tokens ' Spain', 'Spain', ' capital', and '西班牙' (Spanish for \"Spain\"). The model was thinking about Madrid as the capital of Spain.\n\n{\"answer\": \"Madrid\", \"confidence\": 0.99, \"backups\": [\"Barcelona\", \"Mexico City\", \"Athens\", \"Tegucigalpa\"]}"
+  },
+  {
+    "idx": 5,
+    "intermediate": "London",
+    "answer": "n",
+    "pred": "London",
+    "backups": [
+      "Prague",
+      "Tegucigalpa",
+      "Washington D.C."
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly indicate London: \"London\" appears at ranks 1-2 with very high scores, \"Londres\" (French for London) at rank 3, \"伦敦\" (Chinese for London) at rank 6, and \"Britain\" at rank 32.\n\n{\"answer\": \"London\", \"confidence\": 0.99, \"backups\": [\"Prague\", \"Tegucigalpa\", \"Washington D.C.\"]}"
+  },
+  {
+    "idx": 6,
+    "intermediate": "Dublin",
+    "answer": "n",
+    "pred": "Dublin",
+    "backups": [
+      "Ireland",
+      "Tegucigalpa",
+      "Prague"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "{\"answer\": \"Dublin\", \"confidence\": 0.99, \"backups\": [\"Ireland\", \"Tegucigalpa\", \"Prague\"]}"
+  },
+  {
+    "idx": 7,
+    "intermediate": "Amsterdam",
+    "answer": "m",
+    "pred": "Amsterdam",
+    "backups": [
+      "The Hague",
+      "Rotterdam"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "{\"answer\": \"Amsterdam\", \"confidence\": 0.99, \"backups\": [\"The Hague\", \"Rotterdam\"]}"
+  },
+  {
+    "idx": 8,
+    "intermediate": "Brussels",
+    "answer": "s",
+    "pred": "Brussels",
+    "backups": [
+      "Vienna",
+      "Tegucigalpa",
+      "Budapest",
+      "Mexico City"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly indicate \"Brussels\" with \"Belgium\" and \"比利时\" (Chinese for Belgium) as supporting evidence.\n\n{\"answer\": \"Brussels\", \"confidence\": 0.98, \"backups\": [\"Vienna\", \"Tegucigalpa\", \"Budapest\", \"Mexico City\"]}"
+  },
+  {
+    "idx": 10,
+    "intermediate": "Vienna",
+    "answer": "a",
+    "pred": "Vienna",
+    "backups": [
+      "Prague",
+      "Mexico City",
+      "Tegucigalpa",
+      "Riga",
+      "Warsaw"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly indicate Vienna (with \"Vienna\", \"维也纳\" which is Vienna in Chinese, \"Wien\" which is Vienna in German, and \"Austria\"/\"Austrian\"/\"奥地利\").\n\n{\"answer\": \"Vienna\", \"confidence\": 0.98, \"backups\": [\"Prague\", \"Mexico City\", \"Tegucigalpa\", \"Riga\", \"Warsaw\"]}"
+  },
+  {
+    "idx": 11,
+    "intermediate": "Warsaw",
+    "answer": "w",
+    "pred": "Warsaw",
+    "backups": [
+      "Krakow",
+      "Prague",
+      "Vilnius"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly indicate Warsaw (with \"Warsaw\" at rank 1 with a very high score, \"Warszawa\" at rank 2, \"Poland\" at rank 6, \"波兰\" (Poland in Chinese) at rank 17, \"Polski\" and \"Polish\" also present).\n\n{\"answer\": \"Warsaw\", \"confidence\": 0.99, \"backups\": [\"Krakow\", \"Prague\", \"Vilnius\"]}"
+  },
+  {
+    "idx": 12,
+    "intermediate": "Bratislava",
+    "answer": "a",
+    "pred": "Bratislava",
+    "backups": [
+      "Ljubljana",
+      "Mexico City",
+      "Tegucigalpa"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly point to Slovakia, with \"Brat\" + \"ava\" + \"jana\" clearly spelling out \"Bratislava.\" The model is thinking about the capital of Slovakia.\n\n{\"answer\": \"Bratislava\", \"confidence\": 0.97, \"backups\": [\"Ljubljana\", \"Mexico City\", \"Tegucigalpa\"]}"
+  },
+  {
+    "idx": 13,
+    "intermediate": "Budapest",
+    "answer": "t",
+    "pred": "Budapest",
+    "backups": [
+      "Mexico City",
+      "Warsaw",
+      "Stockholm",
+      "Bratislava"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "{\"answer\": \"Budapest\", \"confidence\": 0.99, \"backups\": [\"Mexico City\", \"Warsaw\", \"Stockholm\", \"Bratislava\"]}"
+  },
+  {
+    "idx": 15,
+    "intermediate": "Sofia",
+    "answer": "a",
+    "pred": "Sofia",
+    "backups": [
+      "Budapest",
+      "Bratislava",
+      "Tirana"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly indicate \"Sofia\" (the capital of Bulgaria).\n\n{\"answer\": \"Sofia\", \"confidence\": 0.98, \"backups\": [\"Budapest\", \"Bratislava\", \"Tirana\"]}"
+  },
+  {
+    "idx": 16,
+    "intermediate": "Athens",
+    "answer": "s",
+    "pred": "Athens",
+    "backups": [
+      "Prague",
+      "Budapest"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens overwhelmingly point to Athens: \"Athens\" ranks #1 with a very high score, followed by \"Greece,\" \"Greek,\" and the Chinese equivalents \"雅典\" (Athens) and \"希腊\" (Greece).\n\n{\"answer\": \"Athens\", \"confidence\": 0.99, \"backups\": [\"Prague\", \"Budapest\"]}"
+  },
+  {
+    "idx": 17,
+    "intermediate": "Belgrade",
+    "answer": "e",
+    "pred": "Belgrade",
+    "backups": [
+      "Prague",
+      "Novi Sad",
+      "Zagreb"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly indicate Belgrade, with Serbia and Serbian as supporting context.\n\n{\"answer\": \"Belgrade\", \"confidence\": 0.98, \"backups\": [\"Prague\", \"Novi Sad\", \"Zagreb\"]}"
+  },
+  {
+    "idx": 19,
+    "intermediate": "Ljubljana",
+    "answer": "a",
+    "pred": "Ljubljana",
+    "backups": [
+      "Zagreb",
+      "Bratislava",
+      "Prague"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly point to Ljubljana: \"Slovenia\" (rank 1), \"Lj\" (rank 2), \"jana\" (rank 4), and \"Lj\" again (rank 9) together spell \"Ljubljana,\" the capital of Slovenia.\n\n{\"answer\": \"Ljubljana\", \"confidence\": 0.98, \"backups\": [\"Zagreb\", \"Bratislava\", \"Prague\"]}"
+  },
+  {
+    "idx": 22,
+    "intermediate": "Skopje",
+    "answer": "e",
+    "pred": "Skopje",
+    "backups": [
+      "Belgrade",
+      "Athens",
+      "Tirana"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly point to Macedonia, with \"Sk\" and \"kop\" suggesting Skopje (Sk + op + je = Skopje), and \"Macedonian/Macedonia\" being dominant.\n\n{\"answer\": \"Skopje\", \"confidence\": 0.92, \"backups\": [\"Belgrade\", \"Athens\", \"Tirana\"]}"
+  },
+  {
+    "idx": 23,
+    "intermediate": "Tirana",
+    "answer": "a",
+    "pred": "Tirana",
+    "backups": [
+      "Tegucigalpa",
+      "Prague",
+      "Ulaanbaatar",
+      "Riga",
+      "Tallinn"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly suggest \"Albania\" (rank 1), with \"Tir\" + \"ana\" = \"Tirana\" (ranks 2 and 5), which is the capital of Albania.\n\n{\"answer\": \"Tirana\", \"confidence\": 0.97, \"backups\": [\"Tegucigalpa\", \"Prague\", \"Ulaanbaatar\", \"Riga\", \"Tallinn\"]}"
+  },
+  {
+    "idx": 24,
+    "intermediate": "Pristina",
+    "answer": "a",
+    "pred": "Pristina",
+    "backups": [
+      "Belgrade",
+      "Kosovo",
+      "Prishtina"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "Looking at the tokens, I can see strong signals:\n- \"Kosovo\" (rank 1, very high score)\n- \"Belgrade\" (rank 2)\n- \"Albanian\" (rank 3)\n- \"disputed\" (rank 4)\n- \"Pris\" (rank 7) — this looks like the beginning of \"Pristina\"\n- \"rina\" (rank 36) and \"rist\" (rank 39) — fragments of \"Pristina\"\n- \"capitals\" / \"capital\" — the task involves a capital city\n\nKosovo is a disputed territory, with Pristina as its capital. Belgrade is the capital of Serbia (which disputes Kosovo's independence). The model seems to be thinking about Pristina as the capital of Kosovo, which is a disputed/contested case.\n\n{\"answer\": \"Pristina\", \"confidence\": 0.82, \"backups\": [\"Belgrade\", \"Kosovo\", \"Prishtina\"]}"
+  },
+  {
+    "idx": 25,
+    "intermediate": "Copenhagen",
+    "answer": "n",
+    "pred": "Copenhagen",
+    "backups": [
+      "Stockholm",
+      "Oslo",
+      "Helsinki"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top token is overwhelmingly ' Copenhagen', with supporting tokens like '丹麦' (Denmark in Chinese), ' Denmark', 'openhagen', ' Danish', and Nordic neighbors ' Sweden', ' Norway', ' Finland'.\n\n{\"answer\": \"Copenhagen\", \"confidence\": 0.99, \"backups\": [\"Stockholm\", \"Oslo\", \"Helsinki\"]}"
+  },
+  {
+    "idx": 26,
+    "intermediate": "Stockholm",
+    "answer": "m",
+    "pred": "Stockholm",
+    "backups": [
+      "Helsinki",
+      "Oslo",
+      "Prague"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top token is overwhelmingly ' Stockholm', with supporting tokens like 'olm', 'holm', '瑞典' (Sweden in Chinese), ' Sweden', ' Swedish' all strongly corroborating this.\n\n{\"answer\": \"Stockholm\", \"confidence\": 0.99, \"backups\": [\"Helsinki\", \"Oslo\", \"Prague\"]}"
+  },
+  {
+    "idx": 27,
+    "intermediate": "Oslo",
+    "answer": "o",
+    "pred": "Oslo",
+    "backups": [
+      "Tegucigalpa",
+      "Mexico City"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "{\"answer\": \"Oslo\", \"confidence\": 0.99, \"backups\": [\"Tegucigalpa\", \"Mexico City\"]}"
+  },
+  {
+    "idx": 28,
+    "intermediate": "Helsinki",
+    "answer": "i",
+    "pred": "Helsinki",
+    "backups": [
+      "Mexico City",
+      "Prague",
+      "Riga",
+      "Tallinn"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly point to Helsinki - it appears as the top token with a very high score (205.109), and is reinforced by \"Finnish\", \"Finland\", \"芬兰\" (Finland in Chinese), and \"inki\" (part of Helsinki).\n\n{\"answer\": \"Helsinki\", \"confidence\": 0.99, \"backups\": [\"Mexico City\", \"Prague\", \"Riga\", \"Tallinn\"]}"
+  },
+  {
+    "idx": 29,
+    "intermediate": "Reykjavik",
+    "answer": "k",
+    "pred": "Reykjavik",
+    "backups": [
+      "Prague",
+      "Ulaanbaatar"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly point to Iceland (rank 1, very high score), with \"vik\" (rank 3) and \"ík\" (rank 10) suggesting Reykjavík, plus \"capital\" tokens indicating this is about a capital city.\n\n{\"answer\": \"Reykjavik\", \"confidence\": 0.96, \"backups\": [\"Prague\", \"Ulaanbaatar\"]}"
+  },
+  {
+    "idx": 30,
+    "intermediate": "Tallinn",
+    "answer": "n",
+    "pred": "Tallinn",
+    "backups": [
+      "Helsinki",
+      "Riga",
+      "Ljubljana",
+      "Tegucigalpa",
+      "Mexico City"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly point to **Tallinn** — \"Tall\", \" Tall\", \" Linn\", \"lin\", \"LIN\" all fragment \"Tallinn\", and \" Estonia\" is the dominant token (Tallinn is the capital of Estonia). \" Latvia\" and \" Helsinki\" are nearby Baltic/Nordic capitals appearing as distractors.\n\n{\"answer\": \"Tallinn\", \"confidence\": 0.97, \"backups\": [\"Helsinki\", \"Riga\", \"Ljubljana\", \"Tegucigalpa\", \"Mexico City\"]}"
+  },
+  {
+    "idx": 31,
+    "intermediate": "Riga",
+    "answer": "a",
+    "pred": "Riga",
+    "backups": [
+      "Tallinn",
+      "Vilnius",
+      "Ljubljana",
+      "Bratislava",
+      "Tegucigalpa"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly indicate Latvia (score 211.892), with \"capital\" also prominent, and \"iga\" (rank 4) which completes \"Riga.\" The model is thinking about Riga, the capital of Latvia.\n\n{\"answer\": \"Riga\", \"confidence\": 0.97, \"backups\": [\"Tallinn\", \"Vilnius\", \"Ljubljana\", \"Bratislava\", \"Tegucigalpa\"]}"
+  },
+  {
+    "idx": 32,
+    "intermediate": "Vilnius",
+    "answer": "s",
+    "pred": "Vilnius",
+    "backups": [
+      "Riga",
+      "Prague",
+      "Mexico City"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly point to Lithuania (rank 1, 2, 7), with \"Vil\" (rank 3) being the start of \"Vilnius,\" the capital of Lithuania. The token \"capital\" also appears prominently.\n\n{\"answer\": \"Vilnius\", \"confidence\": 0.92, \"backups\": [\"Riga\", \"Prague\", \"Mexico City\"]}"
+  },
+  {
+    "idx": 34,
+    "intermediate": "Kyiv",
+    "answer": "v",
+    "pred": "Kyiv",
+    "backups": [
+      "Kiev",
+      "Lviv"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly point to **Kyiv** — it's the highest-scoring token by a large margin (235.821), with supporting tokens like 'Ukraine', 'Ukrainian', 'Kiev' (alternative spelling), 'iv'/'viv'/'ivi' (substrings of Kyiv), and '乌克兰' (Chinese for Ukraine). The 'capital' tokens also make sense as Kyiv is the capital of Ukraine.\n\n{\"answer\": \"Kyiv\", \"confidence\": 0.99, \"backups\": [\"Kiev\", \"Lviv\"]}"
+  },
+  {
+    "idx": 35,
+    "intermediate": "Chisinau",
+    "answer": "u",
+    "pred": "Chișinău",
+    "backups": [
+      "Moldova",
+      "Prague",
+      "Tirana",
+      "Ljubljana",
+      "Riga",
+      "Tallinn",
+      "Tegucigalpa",
+      "Mexico City",
+      "Bishkek"
+    ],
+    "got": false,
+    "top_k": {
+      "1": false,
+      "2": false,
+      "3": false,
+      "5": false,
+      "10": false
+    },
+    "raw": "The top tokens strongly suggest Moldova, with \"Chi\" + \"inu\" = \"Chișinău\" (tokens 7, 9, 19 \"ș\", 26 \"ști\"), plus \"Kish\" (token 10) also pointing to Chișinău. Moldova is the dominant token by far.\n\n{\"answer\": \"Chișinău\", \"confidence\": 0.93, \"backups\": [\"Moldova\", \"Prague\", \"Tirana\", \"Ljubljana\", \"Riga\", \"Tallinn\", \"Tegucigalpa\", \"Mexico City\", \"Bishkek\"]}"
+  },
+  {
+    "idx": 37,
+    "intermediate": "Valletta",
+    "answer": "a",
+    "pred": "Valletta",
+    "backups": [
+      "Malta",
+      "Ljubljana",
+      "Prague",
+      "Bratislava",
+      "London"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly point to Malta, with \"letta\" and \"Val\" as fragments suggesting \"Valletta\" (the capital of Malta).\n\n{\"answer\": \"Valletta\", \"confidence\": 0.92, \"backups\": [\"Malta\", \"Ljubljana\", \"Prague\", \"Bratislava\", \"London\"]}"
+  },
+  {
+    "idx": 40,
+    "intermediate": "Beijing",
+    "answer": "g",
+    "pred": "Beijing",
+    "backups": [
+      "Tegucigalpa",
+      "Mexico City",
+      "Tokyo",
+      "Canberra"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly point to Beijing, with \"Beijing\", \" Beijing\", \"ijing\" (partial token), \"China\", and \" China\" all appearing prominently.\n\n{\"answer\": \"Beijing\", \"confidence\": 0.98, \"backups\": [\"Tegucigalpa\", \"Mexico City\", \"Tokyo\", \"Canberra\"]}"
+  },
+  {
+    "idx": 41,
+    "intermediate": "Tokyo",
+    "answer": "o",
+    "pred": "Tokyo",
+    "backups": [
+      "Kyoto",
+      "Mexico City",
+      "Tegucigalpa"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "Tokyo is overwhelmingly dominant in the token list, with both \"Tokyo\" and \" Tokyo\" at the top by a huge margin, plus supporting tokens like \"Japanese\", \"Japan\", \"yo\", \"oky\", \"东京\" (Tokyo in Chinese), and \"日本語\" (Japanese language).\n\n{\"answer\": \"Tokyo\", \"confidence\": 0.99, \"backups\": [\"Kyoto\", \"Mexico City\", \"Tegucigalpa\"]}"
+  },
+  {
+    "idx": 42,
+    "intermediate": "Seoul",
+    "answer": "l",
+    "pred": "Seoul",
+    "backups": [
+      "Tegucigalpa",
+      "Prague"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "{\"answer\": \"Seoul\", \"confidence\": 0.99, \"backups\": [\"Tegucigalpa\", \"Prague\"]}"
+  },
+  {
+    "idx": 43,
+    "intermediate": "Pyongyang",
+    "answer": "g",
+    "pred": "Seoul",
+    "backups": [
+      "Pyongyang",
+      "Seoul"
+    ],
+    "got": false,
+    "top_k": {
+      "1": false,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top token is clearly 'Seoul' with a dominant score of 193.356, with supporting tokens like 'Korea', 'Korean', and references to Korean geography.\n\n{\"answer\": \"Seoul\", \"confidence\": 0.97, \"backups\": [\"Pyongyang\", \"Seoul\"]}"
+  },
+  {
+    "idx": 44,
+    "intermediate": "Ulaanbaatar",
+    "answer": "r",
+    "pred": "Ulaanbaatar",
+    "backups": [
+      "Tegucigalpa",
+      "Tirana",
+      "Riga",
+      "Thimphu"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly point to Mongolia's capital. Key evidence:\n- \"Mongolia\" and \"Mongolian\" are top tokens\n- \"乌兰\" (Chinese for \"Ulan\") token #6 — this is the start of 乌兰巴托 (Ulaanbaatar)\n- \"aar\" and \"uur\" fragments match \"Ulaanbaatar\"\n- \"ulan\" token #22\n- \"capital\" tokens throughout\n\n{\"answer\": \"Ulaanbaatar\", \"confidence\": 0.97, \"backups\": [\"Tegucigalpa\", \"Tirana\", \"Riga\", \"Thimphu\"]}"
+  },
+  {
+    "idx": 45,
+    "intermediate": "Taipei",
+    "answer": "i",
+    "pred": "Taipei",
+    "backups": [
+      "Taiwan"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "{\"answer\": \"Taipei\", \"confidence\": 0.99, \"backups\": [\"Taiwan\"]}"
+  },
+  {
+    "idx": 46,
+    "intermediate": "Hanoi",
+    "answer": "i",
+    "pred": "Hanoi",
+    "backups": [
+      "Ho Chi Minh City",
+      "Vientiane",
+      "Mexico City"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top token is overwhelmingly ' Hanoi' with a score of 239.389, with supporting tokens like ' Vietnamese', 'anoi', ' Vietnam', '越南' (Vietnam in Chinese), and ' capital' all confirming this.\n\n{\"answer\": \"Hanoi\", \"confidence\": 0.99, \"backups\": [\"Ho Chi Minh City\", \"Vientiane\", \"Mexico City\"]}"
+  },
+  {
+    "idx": 47,
+    "intermediate": "Bangkok",
+    "answer": "k",
+    "pred": "Bangkok",
+    "backups": [
+      "Thailand"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "{\"answer\": \"Bangkok\", \"confidence\": 0.99, \"backups\": [\"Thailand\"]}"
+  },
+  {
+    "idx": 48,
+    "intermediate": "Phnom Penh",
+    "answer": "h",
+    "pred": "Phnom Penh",
+    "backups": [
+      "Phnom Penh",
+      "Bangkok",
+      "Vientiane"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly point to Cambodia (ranks 1-2), with \"Phen\" (rank 4), \"Pen\" (rank 10, 43), and \"nom\" (rank 17) suggesting Phnom Penh — the capital of Cambodia.\n\n{\"answer\": \"Phnom Penh\", \"confidence\": 0.95, \"backups\": [\"Phnom Penh\", \"Bangkok\", \"Vientiane\"]}"
+  },
+  {
+    "idx": 49,
+    "intermediate": "Vientiane",
+    "answer": "e",
+    "pred": "Vientiane",
+    "backups": [
+      "Bangkok",
+      "Hanoi",
+      "Luang Prabang",
+      "Mexico City"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly suggest Vientiane (capital of Laos):\n- Token 1: ' Laos' (very high score)\n- Token 2: 'iane' (completing \"Vientiane\")\n- Token 5: ' Lao'\n- Token 21: '万象' (Chinese for Vientiane)\n- Token 36: '挝' (part of 老挝, Chinese for Laos)\n- Token 20: ' Prab' (possibly Luang Prabang, another Lao city)\n\n{\"answer\": \"Vientiane\", \"confidence\": 0.95, \"backups\": [\"Bangkok\", \"Hanoi\", \"Luang Prabang\", \"Mexico City\"]}"
+  },
+  {
+    "idx": 52,
+    "intermediate": "Jakarta",
+    "answer": "a",
+    "pred": "Jakarta",
+    "backups": [
+      "Nusantara"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "{\"answer\": \"Jakarta\", \"confidence\": 0.99, \"backups\": [\"Nusantara\"]}"
+  },
+  {
+    "idx": 57,
+    "intermediate": "Dhaka",
+    "answer": "a",
+    "pred": "Dhaka",
+    "backups": [
+      "Islamabad",
+      "Prague",
+      "Mexico City",
+      "Dhaka"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly suggest Bangladesh, with \"Dh\" (as in Dhaka), \"Bengali\", \"capitals\", and \"capital\" all pointing to the capital of Bangladesh.\n\n{\"answer\": \"Dhaka\", \"confidence\": 0.93, \"backups\": [\"Islamabad\", \"Prague\", \"Mexico City\", \"Dhaka\"]}"
+  },
+  {
+    "idx": 61,
+    "intermediate": "Male",
+    "answer": "e",
+    "pred": "Malé",
+    "backups": [
+      "Tegucigalpa",
+      "Luxembourg",
+      "Islamabad",
+      "Prague"
+    ],
+    "got": false,
+    "top_k": {
+      "1": false,
+      "2": false,
+      "3": false,
+      "5": false,
+      "10": false
+    },
+    "raw": "The top tokens strongly point to \"Malé\" (tokens 'Mald', 'Male', 'Male', 'male', 'Mal', 'lé') — the capital of the Maldives.\n\n{\"answer\": \"Malé\", \"confidence\": 0.95, \"backups\": [\"Tegucigalpa\", \"Luxembourg\", \"Islamabad\", \"Prague\"]}"
+  },
+  {
+    "idx": 62,
+    "intermediate": "Kabul",
+    "answer": "l",
+    "pred": "Kabul",
+    "backups": [
+      "Islamabad",
+      "Kabul"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly indicate \"Kabul\" (score 252.857), with \"Afghanistan\" as the second token (51.617), and \"Afghan\" (5.418) also appearing. The token 'abul' further confirms this.\n\n{\"answer\": \"Kabul\", \"confidence\": 0.98, \"backups\": [\"Islamabad\", \"Kabul\"]}"
+  },
+  {
+    "idx": 63,
+    "intermediate": "Tehran",
+    "answer": "n",
+    "pred": "Tehran",
+    "backups": [
+      "Mexico City",
+      "Baghdad",
+      "Tehran"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The dominant token is ' Tehran' with a score of 225.705, far above all others. Tehran is the capital of Iran, which is also strongly represented.\n\n{\"answer\": \"Tehran\", \"confidence\": 0.99, \"backups\": [\"Mexico City\", \"Baghdad\", \"Tehran\"]}"
+  },
+  {
+    "idx": 64,
+    "intermediate": "Baghdad",
+    "answer": "d",
+    "pred": "Baghdad",
+    "backups": [
+      "Tehran",
+      "Kabul",
+      "Amman"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "{\"answer\": \"Baghdad\", \"confidence\": 0.99, \"backups\": [\"Tehran\", \"Kabul\", \"Amman\"]}"
+  },
+  {
+    "idx": 66,
+    "intermediate": "Beirut",
+    "answer": "t",
+    "pred": "Beirut",
+    "backups": [
+      "Prague",
+      "Baku",
+      "Vientiane"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "Beirut dominates the top tokens with a very high score, supported by \"Lebanon,\" \"Lebanese,\" and \"Leb.\"\n\n{\"answer\": \"Beirut\", \"confidence\": 0.99, \"backups\": [\"Prague\", \"Baku\", \"Vientiane\"]}"
+  },
+  {
+    "idx": 67,
+    "intermediate": "Amman",
+    "answer": "n",
+    "pred": "Amman",
+    "backups": [
+      "Beirut",
+      "Baghdad",
+      "Damascus",
+      "Abu Dhabi"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly suggest \"Jordan\" (ranks 1 and 2 with very high scores), with \"Amman\" hinted at by the \"-Am\" and \"man\" tokens (rank 4 and 11), which together form \"Amman\" — the capital of Jordan. The token \" Beirut\" also appears, but Jordan dominates.\n\nThe model was thinking about **Amman**, the capital of Jordan.\n\n{\"answer\": \"Amman\", \"confidence\": 0.82, \"backups\": [\"Beirut\", \"Baghdad\", \"Damascus\", \"Abu Dhabi\"]}"
+  },
+  {
+    "idx": 68,
+    "intermediate": "Jerusalem",
+    "answer": "m",
+    "pred": "Jerusalem",
+    "backups": [
+      "Tel Aviv"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "{\"answer\": \"Jerusalem\", \"confidence\": 0.99, \"backups\": [\"Tel Aviv\"]}"
+  },
+  {
+    "idx": 69,
+    "intermediate": "Riyadh",
+    "answer": "h",
+    "pred": "Riyadh",
+    "backups": [
+      "Jeddah",
+      "Mecca",
+      "Medina",
+      "Prague",
+      "Amman"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly point to Riyadh: \" Riy\" (rank 1), \" Saudi\" (rank 2), \" Arabia\" (rank 4), \"adh\"/\"iyah\" (parts of \"Riyadh\"), and Chinese tokens 沙特/阿拉伯 (Saudi Arabia).\n\n{\"answer\": \"Riyadh\", \"confidence\": 0.98, \"backups\": [\"Jeddah\", \"Mecca\", \"Medina\", \"Prague\", \"Amman\"]}"
+  },
+  {
+    "idx": 70,
+    "intermediate": "Sanaa",
+    "answer": "a",
+    "pred": "Sana'a",
+    "backups": [
+      "Aden",
+      "Sanaa"
+    ],
+    "got": false,
+    "top_k": {
+      "1": false,
+      "2": false,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly suggest Yemen, with \"Aden\" also appearing (rank 16). The model is thinking about the capital of Yemen. Yemen has two cities that have served as capital: Sana'a (the official capital) and Aden (the seat of the internationally recognized government). Given that \"Yemen\" dominates and \"Aden\" appears, but Sana'a is the internationally recognized official capital, the model is likely computing the capital of Yemen.\n\n{\"answer\": \"Sana'a\", \"confidence\": 0.65, \"backups\": [\"Aden\", \"Sanaa\"]}"
+  },
+  {
+    "idx": 71,
+    "intermediate": "Muscat",
+    "answer": "t",
+    "pred": "Muscat",
+    "backups": [
+      "Abu Dhabi",
+      "Tegucigalpa",
+      "Dubai",
+      "Ulaanbaatar",
+      "Vientiane",
+      "Riga"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top token is ' Oman' with a very high score, and 'Mus' fragments (ranks 9, 12, 13) suggest \"Muscat\" — the capital of Oman. ' Dhabi' (rank 2) could be Abu Dhabi but Oman dominates strongly.\n\n{\"answer\": \"Muscat\", \"confidence\": 0.82, \"backups\": [\"Abu Dhabi\", \"Tegucigalpa\", \"Dubai\", \"Ulaanbaatar\", \"Vientiane\", \"Riga\"]}"
+  },
+  {
+    "idx": 72,
+    "intermediate": "Abu Dhabi",
+    "answer": "i",
+    "pred": "Abu Dhabi",
+    "backups": [
+      "Dubai",
+      "Tegucigalpa",
+      "Manama",
+      "Doha"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly indicate \"Abu Dhabi\" (tokens 1 and 7 together, plus UAE/Emirates context). Dubai appears as a secondary option.\n\n{\"answer\": \"Abu Dhabi\", \"confidence\": 0.92, \"backups\": [\"Dubai\", \"Tegucigalpa\", \"Manama\", \"Doha\"]}"
+  },
+  {
+    "idx": 73,
+    "intermediate": "Doha",
+    "answer": "a",
+    "pred": "Doha",
+    "backups": [
+      "Abu Dhabi",
+      "Tegucigalpa",
+      "Beirut",
+      "Prague",
+      "Manama"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "Looking at the top tokens:\n\n1. ' Qatar' is overwhelmingly dominant (227.611)\n2. 'oha' and 'hdad' together suggest \"Doha\" (the capital of Qatar)\n3. ' capital' and ' capitals' reinforce this is about a capital city\n4. ' Dhabi' (as in Abu Dhabi) is present but much weaker\n\nThe tokens 'oha' + 'hdad' strongly suggest \"Doha\" — the capital of Qatar, which aligns perfectly with the top token ' Qatar'.\n\n{\"answer\": \"Doha\", \"confidence\": 0.93, \"backups\": [\"Abu Dhabi\", \"Tegucigalpa\", \"Beirut\", \"Prague\", \"Manama\"]}"
+  },
+  {
+    "idx": 74,
+    "intermediate": "Manama",
+    "answer": "a",
+    "pred": "Manama",
+    "backups": [
+      "Abu Dhabi",
+      "Bahrain",
+      "Bandar Seri Begawan",
+      "Prague"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top token is overwhelmingly ' Bahrain', and token 3 is ' Dhabi' (as in Abu Dhabi). Token 47 'adah' could be part of a city name. Bahrain is a country, but its capital is Manama (tokens 'Man', 'mana', 'ama', 'rah' all fit \"Manama\"). The task is about a city, and the model seems to be thinking about Manama (capital of Bahrain).\n\n{\"answer\": \"Manama\", \"confidence\": 0.85, \"backups\": [\"Abu Dhabi\", \"Bahrain\", \"Bandar Seri Begawan\", \"Prague\"]}"
+  },
+  {
+    "idx": 75,
+    "intermediate": "Ankara",
+    "answer": "a",
+    "pred": "Ankara",
+    "backups": [
+      "Istanbul",
+      "Tegucigalpa",
+      "Prague"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top token is overwhelmingly ' Ankara', with supporting tokens like ' Istanbul', 'Turkey', ' Turkish', and '土耳其' (Turkish in Chinese). Ankara is the capital of Turkey, which aligns with the 'capitals' token.\n\n{\"answer\": \"Ankara\", \"confidence\": 0.97, \"backups\": [\"Istanbul\", \"Tegucigalpa\", \"Prague\"]}"
+  },
+  {
+    "idx": 76,
+    "intermediate": "Yerevan",
+    "answer": "n",
+    "pred": "Yerevan",
+    "backups": [
+      "Baku",
+      "Tirana",
+      "Prague"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly point to Armenia's capital. Token 1 is \"Armenia\", token 3 is \"capital\", token 7 is \"Երևան\" (Yerevan in Armenian script), and token 8 is \"ivan\" (part of Yerevan). This is clearly Yerevan.\n\n{\"answer\": \"Yerevan\", \"confidence\": 0.98, \"backups\": [\"Baku\", \"Tirana\", \"Prague\"]}"
+  },
+  {
+    "idx": 79,
+    "intermediate": "Astana",
+    "answer": "a",
+    "pred": "Astana",
+    "backups": [
+      "Nur-Sultan",
+      "Almaty",
+      "Bishkek",
+      "Tashkent"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly point to Kazakhstan's capital city. Key hints:\n- \"Kazakhstan\", \"Kazakh\" dominate\n- \"Ast\" (rank 5, 7) → Astana\n- \"Nurs\" (rank 6), \"Nur\" (rank 13) → Nur-Sultan (the renamed version)\n- \"renamed\" (rank 10), \"改名\" (rank 4, meaning \"renamed\"), \"原名\" (rank 16, meaning \"original name\")\n- \"orda\" (rank 18) → could relate to \"Aqmola\" or just part of place names\n- \"哈萨克\" (rank 31) = \"Kazakhstan\" in Chinese\n\nThe city is Astana (which was renamed Nur-Sultan and then back to Astana), the capital of Kazakhstan.\n\n{\"answer\": \"Astana\", \"confidence\": 0.93, \"backups\": [\"Nur-Sultan\", \"Almaty\", \"Bishkek\", \"Tashkent\"]}"
+  },
+  {
+    "idx": 80,
+    "intermediate": "Tashkent",
+    "answer": "t",
+    "pred": "Tashkent",
+    "backups": [
+      "Ashgabat",
+      "Islamabad",
+      "Bishkek",
+      "Nur-Sultan",
+      "Tegucigalpa"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly point to Uzbekistan, with \"Uzbek\", \"abad\" (as in Tashkent... wait, actually \"abad\" suffix appears in cities like Islamabad, Ashgabat, etc.), \"zbek\", and the capital context. The capital of Uzbekistan is Tashkent. But \"abad\" and \"ash\" could hint at Ashgabat (Turkmenistan's capital). However, Uzbekistan dominates overwhelmingly.\n\nThe capital of Uzbekistan is Tashkent.\n\n{\"answer\": \"Tashkent\", \"confidence\": 0.72, \"backups\": [\"Ashgabat\", \"Islamabad\", \"Bishkek\", \"Nur-Sultan\", \"Tegucigalpa\"]}"
+  },
+  {
+    "idx": 81,
+    "intermediate": "Bishkek",
+    "answer": "k",
+    "pred": "Bishkek",
+    "backups": [
+      "Ashgabat",
+      "Tashkent",
+      "Islamabad",
+      "Astana",
+      "Almaty"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top token is overwhelmingly ' Kyrgyz' (score 219.557), with related Central Asian tokens like ' Uzbekistan', ' Turkmen', ' Kazakhstan', and 'abad' (as in city names ending in \"-abad\"). The model is thinking about the capital of Kyrgyzstan.\n\nThe capital of Kyrgyzstan is Bishkek (note token 10: 'ishop' could be part of \"Bishkek\" but 'abad' suggests maybe not — however, Bishkek is still the capital). Actually, 'abad' endings are common in Central Asian cities (Ashgabat, Islamabad, etc.), and ' Islamabad' appears at rank 32. But the dominant signal is ' Kyrgyz', pointing to Bishkek.\n\n{\"answer\": \"Bishkek\", \"confidence\": 0.72, \"backups\": [\"Ashgabat\", \"Tashkent\", \"Islamabad\", \"Astana\", \"Almaty\"]}"
+  },
+  {
+    "idx": 84,
+    "intermediate": "Cairo",
+    "answer": "o",
+    "pred": "Cairo",
+    "backups": [
+      "Alexandria",
+      "Giza"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "{\"answer\": \"Cairo\", \"confidence\": 0.99, \"backups\": [\"Alexandria\", \"Giza\"]}"
+  },
+  {
+    "idx": 86,
+    "intermediate": "Tunis",
+    "answer": "s",
+    "pred": "Tunis",
+    "backups": [
+      "Tunisia",
+      "Istanbul",
+      "Ulaanbaatar",
+      "Riga"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly indicate \"Tunis\" (the capital of Tunisia).\n\n{\"answer\": \"Tunis\", \"confidence\": 0.98, \"backups\": [\"Tunisia\", \"Istanbul\", \"Ulaanbaatar\", \"Riga\"]}"
+  },
+  {
+    "idx": 87,
+    "intermediate": "Algiers",
+    "answer": "s",
+    "pred": "Algiers",
+    "backups": [
+      "Algeria",
+      "Prague",
+      "Tirana"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly point to \"Algiers\" (Alger in French, Algeria's capital).\n\n{\"answer\": \"Algiers\", \"confidence\": 0.97, \"backups\": [\"Algeria\", \"Prague\", \"Tirana\"]}"
+  },
+  {
+    "idx": 88,
+    "intermediate": "Rabat",
+    "answer": "t",
+    "pred": "Rabat",
+    "backups": [
+      "Casablanca",
+      "Tegucigalpa",
+      "Mexico City",
+      "Amman",
+      "Tunis"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly suggest Morocco, with \"Rab\" + \"abat\" = Rabat (capital of Morocco), and \"capital\" appearing multiple times.\n\n{\"answer\": \"Rabat\", \"confidence\": 0.93, \"backups\": [\"Casablanca\", \"Tegucigalpa\", \"Mexico City\", \"Amman\", \"Tunis\"]}"
+  },
+  {
+    "idx": 89,
+    "intermediate": "Khartoum",
+    "answer": "m",
+    "pred": "Khartoum",
+    "backups": [
+      "Omdurman",
+      "Dakar",
+      "Astana",
+      "Ulaanbaatar"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly suggest Sudan (rank 1 and 2 are 'Sudan' and 'Sudanese'), with 'capital' also prominent. The capital of Sudan is Khartoum. The token ' Kh' (rank 16) also hints at Khartoum.\n\n{\"answer\": \"Khartoum\", \"confidence\": 0.85, \"backups\": [\"Omdurman\", \"Dakar\", \"Astana\", \"Ulaanbaatar\"]}"
+  },
+  {
+    "idx": 90,
+    "intermediate": "Juba",
+    "answer": "a",
+    "pred": "Juba",
+    "backups": [
+      "Khartoum",
+      "Omdurman",
+      "Tegucigalpa",
+      "Nairobi",
+      "Prague"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "Looking at the top tokens, I see strong signals:\n\n1. \"Sudan\" (rank 1, very high score)\n2. \"Sudanese\" (rank 4)\n3. \"capitals\" (rank 3) and \"capital\" (rank 5, 14)\n4. \"uba\" (rank 2) — likely \"Khartoum\" or possibly part of a word... but could also suggest \"Juba\" (capital of South Sudan)\n5. \"South\" (rank 29, 31) — suggests South Sudan\n6. \"jang\" (rank 41) — could be part of \"Juba\"... but more likely not\n\nThe combination of \"Sudan\" + \"South\" + \"uba\" (likely the ending of \"Juba\") strongly points to **Juba**, the capital of South Sudan.\n\n{\"answer\": \"Juba\", \"confidence\": 0.72, \"backups\": [\"Khartoum\", \"Omdurman\", \"Tegucigalpa\", \"Nairobi\", \"Prague\"]}"
+  },
+  {
+    "idx": 91,
+    "intermediate": "Addis Ababa",
+    "answer": "a",
+    "pred": "Addis Ababa",
+    "backups": [
+      "Addis Abeba",
+      "Prague",
+      "Tegucigalpa",
+      "Nur-Sultan",
+      "Baku"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly indicate Ethiopia, and with \"capital\" appearing multiple times, the model is thinking about the capital of Ethiopia.\n\nThe capital of Ethiopia is Addis Ababa (note token 'Ad' and 'abis' and 'bba' which together spell \"Ad-dis-A-bba\" → Addis Ababa).\n\n{\"answer\": \"Addis Ababa\", \"confidence\": 0.92, \"backups\": [\"Addis Abeba\", \"Prague\", \"Tegucigalpa\", \"Nur-Sultan\", \"Baku\"]}"
+  },
+  {
+    "idx": 92,
+    "intermediate": "Asmara",
+    "answer": "a",
+    "pred": "Asmara",
+    "backups": [
+      "Addis Ababa",
+      "Tegucigalpa",
+      "Bishkek",
+      "Dushanbe",
+      "Windhoek"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "Looking at the top tokens:\n\n1. ' Erit' (overwhelmingly dominant at 203.789) → **Eritrea**\n2. 'ibia' (rank 31) → could be part of \"Namibia\" or similar\n3. ' Ethiop' / ' Ethiopia' / ' Ethiopian' → geographic region clues pointing to East Africa\n4. 'awa' / 'ewa' / 'awi' → could be parts of \"Asmara\" (capital of Eritrea)\n5. '阿斯' (Chinese token) → likely \"阿斯马拉\" = **Asmara**\n6. ' capital' / ' capitals' → the model is thinking about a capital city\n\nThe model is clearly thinking about **Asmara**, the capital of Eritrea. The ' Erit' token is overwhelmingly dominant, pointing to Eritrea, and '阿斯' in Chinese is the start of 阿斯马拉 (Asmara).\n\n{\"answer\": \"Asmara\", \"confidence\": 0.91, \"backups\": [\"Addis Ababa\", \"Tegucigalpa\", \"Bishkek\", \"Dushanbe\", \"Windhoek\"]}"
+  },
+  {
+    "idx": 94,
+    "intermediate": "Nairobi",
+    "answer": "i",
+    "pred": "Nairobi",
+    "backups": [
+      "Mombasa"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens clearly point to Nairobi, with \"Nairobi,\" \"Kenya,\" \"airobi,\" \"Kenyan,\" and related fragments dominating the list.\n\n{\"answer\": \"Nairobi\", \"confidence\": 0.99, \"backups\": [\"Mombasa\"]}"
+  },
+  {
+    "idx": 95,
+    "intermediate": "Kampala",
+    "answer": "a",
+    "pred": "Kampala",
+    "backups": [
+      "Nairobi",
+      "Abuja",
+      "Prague",
+      "Tegucigalpa",
+      "Tashkent",
+      "Nur-Sultan"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The strongest signals here are:\n- Token 1: ' Uganda' (by far the highest score)\n- Token 2: ' Kamp' (likely part of \"Kampala\")\n- Token 37: 'kamp' (reinforcing \"Kampala\")\n- Token 5: 'ala' (completing \"Kampala\")\n\n\"Kamp\" + \"ala\" = **Kampala**, the capital of Uganda.\n\n{\"answer\": \"Kampala\", \"confidence\": 0.95, \"backups\": [\"Nairobi\", \"Abuja\", \"Prague\", \"Tegucigalpa\", \"Tashkent\", \"Nur-Sultan\"]}"
+  },
+  {
+    "idx": 96,
+    "intermediate": "Dodoma",
+    "answer": "a",
+    "pred": "Dodoma",
+    "backups": [
+      "Dar es Salaam",
+      "Nairobi",
+      "Prague",
+      "Nur-Sultan",
+      "Tashkent",
+      "Tegucigalpa"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "Looking at the top tokens, I can see strong signals:\n\n1. \"Tanzania\" is the top token by far (154.253)\n2. \"Dod\" + \"oma\" fragments (ranks 2, 7) suggest \"Dodoma\" — the capital of Tanzania\n3. \"Nairobi\" appears (rank 4) as a nearby/competing capital\n4. \"Dar\" (rank 47) hints at Dar es Salaam (former capital of Tanzania)\n5. \"capitals\" and \"capital\" tokens confirm this is about a capital city\n\nThe model is thinking about **Dodoma**, the capital of Tanzania. The \"Dod\" and \"oma\" tokens strongly suggest this, and Tanzania is the dominant token.\n\n{\"answer\": \"Dodoma\", \"confidence\": 0.88, \"backups\": [\"Dar es Salaam\", \"Nairobi\", \"Prague\", \"Nur-Sultan\", \"Tashkent\", \"Tegucigalpa\"]}"
+  },
+  {
+    "idx": 98,
+    "intermediate": "Gitega",
+    "answer": "a",
+    "pred": "Bujumbura",
+    "backups": [
+      "Kigali",
+      "Nairobi",
+      "Tegucigalpa",
+      "Prague",
+      "Suriname"
+    ],
+    "got": false,
+    "top_k": {
+      "1": false,
+      "2": false,
+      "3": false,
+      "5": false,
+      "10": false
+    },
+    "raw": "The top tokens strongly suggest Rwanda (rank 2) and \"Bur\" (rank 1, 3), which together point to **Bujumbura** — though Bujumbura is the capital of Burundi, not Rwanda. However, \"uru\" (rank 31), \"nda\" (rank 47), and \"jum\" (rank 35) all fragment into \"Bu-**jum**-**bur**a\". The capital of **Burundi** is Bujumbura (historically), and Rwanda's capital is Kigali. The token fragments \"Bur\"+\"jum\"+\"bur\"+\"uru\"+\"nda\" strongly suggest **Bujumbura**.\n\n{\"answer\": \"Bujumbura\", \"confidence\": 0.82, \"backups\": [\"Kigali\", \"Nairobi\", \"Tegucigalpa\", \"Prague\", \"Suriname\"]}"
+  },
+  {
+    "idx": 99,
+    "intermediate": "Abuja",
+    "answer": "a",
+    "pred": "Abuja",
+    "backups": [
+      "Lagos",
+      "Islamabad",
+      "Prague",
+      "Buenos Aires",
+      "Ankara"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly indicate \"Abuja\" (capital of Nigeria).\n\n{\"answer\": \"Abuja\", \"confidence\": 0.99, \"backups\": [\"Lagos\", \"Islamabad\", \"Prague\", \"Buenos Aires\", \"Ankara\"]}"
+  },
+  {
+    "idx": 100,
+    "intermediate": "Accra",
+    "answer": "a",
+    "pred": "Accra",
+    "backups": [
+      "Tegucigalpa",
+      "Abuja",
+      "Ulaanbaatar",
+      "Dakar",
+      "Prague"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly point to Ghana (rank 1) and \"Acc\" (rank 2, likely \"Accra\"), which is the capital of Ghana.\n\n{\"answer\": \"Accra\", \"confidence\": 0.95, \"backups\": [\"Tegucigalpa\", \"Abuja\", \"Ulaanbaatar\", \"Dakar\", \"Prague\"]}"
+  },
+  {
+    "idx": 102,
+    "intermediate": "Dakar",
+    "answer": "r",
+    "pred": "Dakar",
+    "backups": [
+      "Tegucigalpa",
+      "Mexico City",
+      "Tirana",
+      "Bishkek",
+      "Prague"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly point to Dakar: \"Dak\" + \"akar\" = Dakar, and \"Senegal\" is the top token (Dakar is the capital of Senegal).\n\n{\"answer\": \"Dakar\", \"confidence\": 0.97, \"backups\": [\"Tegucigalpa\", \"Mexico City\", \"Tirana\", \"Bishkek\", \"Prague\"]}"
+  },
+  {
+    "idx": 103,
+    "intermediate": "Bamako",
+    "answer": "o",
+    "pred": "Bamako",
+    "backups": [
+      "Mexico City",
+      "Abuja",
+      "Niamey",
+      "Lima"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens are ' Mali', ' Bam', 'ako' (which together form \"Bamako\"), and '巴马' (Chinese for part of \"Bamako\" - 巴马科). The model is clearly thinking about Bamako, the capital of Mali.\n\n{\"answer\": \"Bamako\", \"confidence\": 0.97, \"backups\": [\"Mexico City\", \"Abuja\", \"Niamey\", \"Lima\"]}"
+  },
+  {
+    "idx": 106,
+    "intermediate": "N'Djamena",
+    "answer": "a",
+    "pred": "N'Djamena",
+    "backups": [
+      "Chad",
+      "Khartoum",
+      "Abuja",
+      "Vientiane",
+      "Ndjamena"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly suggest \"Chad\" (rank 1, score 162.538), with \"capital\" appearing multiple times and \"Sudanese/Sudan\" as neighboring context. The capital of Chad is N'Djamena.\n\n{\"answer\": \"N'Djamena\", \"confidence\": 0.72, \"backups\": [\"Chad\", \"Khartoum\", \"Abuja\", \"Vientiane\", \"Ndjamena\"]}"
+  },
+  {
+    "idx": 108,
+    "intermediate": "Bangui",
+    "answer": "i",
+    "pred": "Bangui",
+    "backups": [
+      "Abuja",
+      "Kinshasa",
+      "Bangui"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "Looking at the top tokens:\n\n1. **\"Abuja\"** is the strongest signal by far (score 36.4) — Abuja is the capital of Nigeria\n2. **\"CAR\"** (score 21.2) — Central African Republic, whose capital is Bangui\n3. **\"Bang\"** (score 13.9) and **\"ango\"/\"angu\"/\"anga\"** tokens — these fragments spell out \"Bangui\"\n4. **\"Central\"** and **\"Republic\"** also point to Central African Republic\n5. **\"Cameroon\"**, **\"Congo\"** are neighboring countries to CAR\n6. **\"gui\"** completes \"Bangui\"\n\nThe task seems to be about identifying a capital city. While Abuja scored highest, the fragmented tokens \"Bang\" + \"ango/angu/anga/gui\" strongly suggest **Bangui** (capital of the Central African Republic). The model may have been considering multiple capitals in the region, with Abuja being a strong competitor, but the CAR-related tokens and the Bangui fragments are compelling.\n\nThe high score for \"Abuja\" might reflect it being a nearby/competing answer, while the numerous fragment tokens pointing to \"Bangui\" suggest that's what the model was converging on.\n\n{\"answer\": \"Bangui\", \"confidence\": 0.52, \"backups\": [\"Abuja\", \"Kinshasa\", \"Bangui\"]}"
+  },
+  {
+    "idx": 109,
+    "intermediate": "Libreville",
+    "answer": "e",
+    "pred": "Libreville",
+    "backups": [
+      "Abuja",
+      "Brazzaville",
+      "Kinshasa"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens are ' Gab' and ' Libre', which together strongly suggest \"Libreville\" — the capital of Gabon. The token 'ille' and 'ville' further support this (Libre**ville**). The presence of ' Congo' also fits the Central/West Africa region context.\n\n{\"answer\": \"Libreville\", \"confidence\": 0.95, \"backups\": [\"Abuja\", \"Brazzaville\", \"Kinshasa\"]}"
+  },
+  {
+    "idx": 112,
+    "intermediate": "Luanda",
+    "answer": "a",
+    "pred": "Luanda",
+    "backups": [
+      "Abuja",
+      "Angola",
+      "Prague",
+      "Astana",
+      "Baku",
+      "Ulaanbaatar"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The dominant token is ' Angola' with an overwhelming score of 264.685, and token 29 is ' Abuja' (the capital of Angola). The task involves capitals, and Luanda is the capital of Angola. Tokens ' Lu' and 'Lu' (ranks 2, 9) suggest \"Luanda.\"\n\n{\"answer\": \"Luanda\", \"confidence\": 0.92, \"backups\": [\"Abuja\", \"Angola\", \"Prague\", \"Astana\", \"Baku\", \"Ulaanbaatar\"]}"
+  },
+  {
+    "idx": 113,
+    "intermediate": "Lusaka",
+    "answer": "a",
+    "pred": "Lusaka",
+    "backups": [
+      "Zambia",
+      "Harare",
+      "Gaborone",
+      "Johannesburg"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly point to Zambia (rank 1), with \"Lus\" + \"aka\" forming \"Lusaka\" (ranks 2-3), which is the capital of Zambia.\n\n{\"answer\": \"Lusaka\", \"confidence\": 0.97, \"backups\": [\"Zambia\", \"Harare\", \"Gaborone\", \"Johannesburg\"]}"
+  },
+  {
+    "idx": 114,
+    "intermediate": "Harare",
+    "answer": "e",
+    "pred": "Harare",
+    "backups": [
+      "Salisbury",
+      "Prague",
+      "Mexico City"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly suggest Zimbabwe, with \"Har\" (rank 2) + \"abwe\" (rank 3) pointing to **Harare**, and \"Salisbury\" (rank 5) being the former name of Harare. The model is thinking about the capital of Zimbabwe.\n\n{\"answer\": \"Harare\", \"confidence\": 0.95, \"backups\": [\"Salisbury\", \"Prague\", \"Mexico City\"]}"
+  },
+  {
+    "idx": 115,
+    "intermediate": "Maputo",
+    "answer": "o",
+    "pred": "Maputo",
+    "backups": [
+      "Mozambique",
+      "Baku",
+      "Astana",
+      "Bishkek"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly suggest \"Mozambique\" with its capital being Maputo (tokens 'uto', 'apu' suggest \"Maputo\"). The model was thinking about the capital of Mozambique.\n\n{\"answer\": \"Maputo\", \"confidence\": 0.85, \"backups\": [\"Mozambique\", \"Baku\", \"Astana\", \"Bishkek\"]}"
+  },
+  {
+    "idx": 116,
+    "intermediate": "Lilongwe",
+    "answer": "e",
+    "pred": "Lilongwe",
+    "backups": [
+      "Malawi",
+      "Harare",
+      "Lusaka",
+      "Gaborone",
+      "Windhoek"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly suggest \"Malawi\" (score 189.626, dominant), with \"abwe\" (rank 7) likely being part of \"Zimbabwe\" or \"Lilongwe\" (the capital of Malawi). Token \"Lil\" (rank 2) combined with \"abwe\" (rank 7) points to **Lilongwe**, but the city being thought about is most likely **Lilongwe** (capital of Malawi), or the model is thinking about Malawi itself as a country whose capital is being computed.\n\nGiven \"capital\" tokens appearing frequently, the model was likely computing the capital of Malawi, which is **Lilongwe**.\n\n{\"answer\": \"Lilongwe\", \"confidence\": 0.72, \"backups\": [\"Malawi\", \"Harare\", \"Lusaka\", \"Gaborone\", \"Windhoek\"]}"
+  },
+  {
+    "idx": 117,
+    "intermediate": "Antananarivo",
+    "answer": "o",
+    "pred": "Antananarivo",
+    "backups": [
+      "Madagascar",
+      "Tegucigalpa",
+      "Nur-Sultan",
+      "Prague",
+      "Bishkek"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly point to Madagascar, with \"Malagasy\" (the language/people of Madagascar) as a strong secondary signal. The capital of Madagascar is Antananarivo — and I can see 'Ant' and 'ANA' and 'anao' in the token list, which are fragments of \"Antananarivo.\"\n\n{\"answer\": \"Antananarivo\", \"confidence\": 0.92, \"backups\": [\"Madagascar\", \"Tegucigalpa\", \"Nur-Sultan\", \"Prague\", \"Bishkek\"]}"
+  },
+  {
+    "idx": 118,
+    "intermediate": "Port Louis",
+    "answer": "s",
+    "pred": "Port Louis",
+    "backups": [
+      "Mauritius",
+      "Port-au-Prince",
+      "Luxembourg",
+      "Prague"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top token is overwhelmingly ' Mauritius', and there are also strong signals for 'Port' and 'Louis' (ranks 2, 7, 9, 12, 38), which together suggest \"Port Louis\" — the capital of Mauritius.\n\n{\"answer\": \"Port Louis\", \"confidence\": 0.93, \"backups\": [\"Mauritius\", \"Port-au-Prince\", \"Luxembourg\", \"Prague\"]}"
+  },
+  {
+    "idx": 122,
+    "intermediate": "Gaborone",
+    "answer": "e",
+    "pred": "Gaborone",
+    "backups": [
+      "Botswana",
+      "Harare",
+      "Windhoek",
+      "Lusaka"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly suggest \"Botswana\" (rank 1 with overwhelming score, plus \"swana\", \"Bot\", \"bot\", \"abwe\" which could relate to Zimbabwe/Harare context). The task involves a capital city, and the model is thinking about Botswana's capital, which is **Gaborone** (note tokens \"abor\", \"aber\", \"ane\" which are fragments of \"Gaborone\").\n\n{\"answer\": \"Gaborone\", \"confidence\": 0.82, \"backups\": [\"Botswana\", \"Harare\", \"Windhoek\", \"Lusaka\"]}"
+  },
+  {
+    "idx": 123,
+    "intermediate": "Maseru",
+    "answer": "u",
+    "pred": "Gaborone",
+    "backups": [
+      "Maseru",
+      "Johannesburg",
+      "Nairobi",
+      "Mbabane",
+      "Windhoek"
+    ],
+    "got": false,
+    "top_k": {
+      "1": false,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly suggest the model is thinking about **Gaborone** (capital of Botswana).\n\nKey hints:\n- 'swana' → Bo**tswana**\n- ' Botswana' (rank 25)\n- 'otho' → Lesotho (neighboring country, possibly in context)\n- ' capitals' → capital cities task\n- ' Johannesburg' → Southern Africa context\n- '南非' → \"South Africa\" in Chinese\n- 'uru' → could relate to Gaboro**ne** or regional context\n\n{\"answer\": \"Gaborone\", \"confidence\": 0.72, \"backups\": [\"Maseru\", \"Johannesburg\", \"Nairobi\", \"Mbabane\", \"Windhoek\"]}"
+  },
+  {
+    "idx": 124,
+    "intermediate": "Mbabane",
+    "answer": "e",
+    "pred": "Gaborone",
+    "backups": [
+      "Harare",
+      "Johannesburg",
+      "Pretoria",
+      "Lobatse",
+      "Prague",
+      "Bishkek"
+    ],
+    "got": false,
+    "top_k": {
+      "1": false,
+      "2": false,
+      "3": false,
+      "5": false,
+      "10": false
+    },
+    "raw": "The tokens strongly suggest \"Botswana\" (tokens 'bab', 'swana', 'Sw') and mention of capitals, with Johannesburg nearby. The token fragments 'bab' + 'swana' = Gaborone's country (Botswana), and ' Lob' could hint at \"Lobatse\" or more likely the capital is **Gaborone**. The 'bab' token likely refers to \"Gaborone\" being in Botswana, but more specifically 'bab' could be part of nothing... wait — 'bab' + something? Could be related to Zimbabwe (token 24) capital Harare, or Botswana capital Gaborone.\n\nActually: tokens 1 ('bab') + 4 ('swana') strongly suggest **Botswana**, and the capital of Botswana is **Gaborone**. The model is thinking about Gaborone as the capital of Botswana.\n\n{\"answer\": \"Gaborone\", \"confidence\": 0.72, \"backups\": [\"Harare\", \"Johannesburg\", \"Pretoria\", \"Lobatse\", \"Prague\", \"Bishkek\"]}"
+  },
+  {
+    "idx": 125,
+    "intermediate": "Monrovia",
+    "answer": "a",
+    "pred": "Monrovia",
+    "backups": [
+      "Liberia",
+      "Abuja",
+      "Ulaanbaatar",
+      "Tegucigalpa"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly suggest \"Liberia\" with tokens like ' Liberia', 'Liber', 'ovia', 'rov', 'Mon' — these point to **Monrovia**, the capital of Liberia.\n\n{\"answer\": \"Monrovia\", \"confidence\": 0.92, \"backups\": [\"Liberia\", \"Abuja\", \"Ulaanbaatar\", \"Tegucigalpa\"]}"
+  },
+  {
+    "idx": 126,
+    "intermediate": "Freetown",
+    "answer": "n",
+    "pred": "Freetown",
+    "backups": [
+      "Sierra Leone",
+      "Monrovia",
+      "Abuja",
+      "Ouagadougou"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens are ' Sierra' and ' Leone', strongly suggesting Sierra Leone. The token 'town' and 'Fre' suggest Freetown, the capital of Sierra Leone.\n\n{\"answer\": \"Freetown\", \"confidence\": 0.95, \"backups\": [\"Sierra Leone\", \"Monrovia\", \"Abuja\", \"Ouagadougou\"]}"
+  },
+  {
+    "idx": 128,
+    "intermediate": "Banjul",
+    "answer": "l",
+    "pred": "Banjul",
+    "backups": [
+      "Gambia",
+      "Dakar",
+      "Tegucigalpa",
+      "Abuja",
+      "Thimphu"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top token is ' Gamb' (by a huge margin), which strongly suggests \"Gambia.\" Token 2 is ' Ban' and token 13 is 'anj' and token 47 is 'ajn' — these could relate to \"Banjul,\" the capital of Gambia. Token 3 ' Senegal' is consistent (Gambia is surrounded by Senegal). The task seems to be about identifying a capital city, and Banjul is the capital of Gambia.\n\n{\"answer\": \"Banjul\", \"confidence\": 0.82, \"backups\": [\"Gambia\", \"Dakar\", \"Tegucigalpa\", \"Abuja\", \"Thimphu\"]}"
+  },
+  {
+    "idx": 133,
+    "intermediate": "Porto-Novo",
+    "answer": "o",
+    "pred": "Porto-Novo",
+    "backups": [
+      "Cotonou",
+      "Abuja",
+      "Ouagadougou",
+      "Conakry",
+      "Bissau"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens are \" Benin\" (dominant) and \" Porto\" with \" Novo\" also appearing. Porto-Novo is the capital of Benin. The tokens \"capital\" and \"capitals\" also appear, suggesting the model is computing a capital city property. Porto-Novo is the capital of Benin.\n\n{\"answer\": \"Porto-Novo\", \"confidence\": 0.88, \"backups\": [\"Cotonou\", \"Abuja\", \"Ouagadougou\", \"Conakry\", \"Bissau\"]}"
+  },
+  {
+    "idx": 134,
+    "intermediate": "Washington",
+    "answer": "n",
+    "pred": "Washington, D.C.",
+    "backups": [
+      "Washington",
+      "Tegucigalpa"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "{\"answer\": \"Washington, D.C.\", \"confidence\": 0.99, \"backups\": [\"Washington\", \"Tegucigalpa\"]}"
+  },
+  {
+    "idx": 135,
+    "intermediate": "Ottawa",
+    "answer": "a",
+    "pred": "Ottawa",
+    "backups": [
+      "Toronto",
+      "Vancouver",
+      "Montreal"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens overwhelmingly point to Ottawa, with \"Ottawa,\" \"Canada,\" \"Ott,\" \"awa,\" \"capital,\" and \"加拿大\" (Canada in Chinese) all strongly represented.\n\n{\"answer\": \"Ottawa\", \"confidence\": 0.99, \"backups\": [\"Toronto\", \"Vancouver\", \"Montreal\"]}"
+  },
+  {
+    "idx": 137,
+    "intermediate": "Managua",
+    "answer": "a",
+    "pred": "Managua",
+    "backups": [
+      "Tegucigalpa",
+      "Guatemala City",
+      "Mexico City",
+      "Caracas",
+      "Asuncion"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly point to Nicaragua (rank 1) and \"Manag\" (rank 2, which is the start of \"Managua\"), with supporting tokens like \"capital\" and Central American country references.\n\n{\"answer\": \"Managua\", \"confidence\": 0.97, \"backups\": [\"Tegucigalpa\", \"Guatemala City\", \"Mexico City\", \"Caracas\", \"Asuncion\"]}"
+  },
+  {
+    "idx": 139,
+    "intermediate": "Havana",
+    "answer": "a",
+    "pred": "Havana",
+    "backups": [
+      "Prague",
+      "Bogota"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "{\"answer\": \"Havana\", \"confidence\": 0.98, \"backups\": [\"Prague\", \"Bogota\"]}"
+  },
+  {
+    "idx": 140,
+    "intermediate": "Kingston",
+    "answer": "n",
+    "pred": "Kingston",
+    "backups": [
+      "Jamaica",
+      "Mexico City",
+      "Tegucigalpa",
+      "London"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens are \"Jamaica\" and \"Kingston,\" which strongly indicate the model was thinking about Kingston, the capital city of Jamaica.\n\n{\"answer\": \"Kingston\", \"confidence\": 0.97, \"backups\": [\"Jamaica\", \"Mexico City\", \"Tegucigalpa\", \"London\"]}"
+  },
+  {
+    "idx": 142,
+    "intermediate": "Santo Domingo",
+    "answer": "o",
+    "pred": "Santo Domingo",
+    "backups": [
+      "Tegucigalpa",
+      "Mexico City",
+      "Prague"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly point to \"Santo Domingo\" (tokens: 'Dominican', 'Santo', 'Domingo'), which is the capital of the Dominican Republic.\n\n{\"answer\": \"Santo Domingo\", \"confidence\": 0.97, \"backups\": [\"Tegucigalpa\", \"Mexico City\", \"Prague\"]}"
+  },
+  {
+    "idx": 144,
+    "intermediate": "Bridgetown",
+    "answer": "n",
+    "pred": "Bridgetown",
+    "backups": [
+      "Barbados",
+      "Georgetown"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The dominant token is 'Barbados' (score 154, far above all others), and tokens like 'capitals', 'town', 'stown', 'burg' suggest the model is thinking about the capital city of Barbados, which is **Bridgetown** (also supported by 'Bridget', 'idget', 'idge' tokens).\n\n{\"answer\": \"Bridgetown\", \"confidence\": 0.97, \"backups\": [\"Barbados\", \"Georgetown\"]}"
+  },
+  {
+    "idx": 146,
+    "intermediate": "Saint George's",
+    "answer": "s",
+    "pred": "Saint George's",
+    "backups": [
+      "Grenada",
+      "Georgetown",
+      "Granada",
+      "Bridgetown",
+      "Port of Spain"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "Looking at the top tokens:\n\n- \" Gren\" (rank 1, very high score) → likely \"Grenada\"\n- \"乔治\" (rank 3) → Chinese for \"George\"\n- \" Tobago\" (rank 4) → Caribbean context\n- \" Georgetown\" (rank 13)\n- \" Granada\" (rank 18)\n- \" Caribbean\" (rank 49)\n- \" Saint\" (rank 21/22)\n- \" Georges\" (rank 23)\n\nThe strongest signal is \" Gren\" + Caribbean context + \"Saint Georges\" → this points to **Grenada**, whose capital is **Saint George's**. The Chinese \"乔治\" means \"George,\" further confirming Saint George's, Grenada.\n\n{\"answer\": \"Saint George's\", \"confidence\": 0.72, \"backups\": [\"Grenada\", \"Georgetown\", \"Granada\", \"Bridgetown\", \"Port of Spain\"]}"
+  },
+  {
+    "idx": 147,
+    "intermediate": "Castries",
+    "answer": "s",
+    "pred": "Castries",
+    "backups": [
+      "Saint Lucia",
+      "Barbados",
+      "Trinidad and Tobago",
+      "Guyana"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly suggest \"Saint Lucia\" (tokens 1 and 6), with \"Caribbean\" and \"Barbados\" as context, and \"capital\" suggesting the task involves identifying a capital city. The capital of Saint Lucia is Castries (note \"Cast\", \"Cast\", \"cast\", \"CAST\", \"_cast\" tokens — all pointing to \"Castries\").\n\n{\"answer\": \"Castries\", \"confidence\": 0.85, \"backups\": [\"Saint Lucia\", \"Barbados\", \"Trinidad and Tobago\", \"Guyana\"]}"
+  },
+  {
+    "idx": 149,
+    "intermediate": "Saint John's",
+    "answer": "s",
+    "pred": "Saint John's",
+    "backups": [
+      "Bridgetown",
+      "Basseterre",
+      "Belmopan",
+      "Georgetown",
+      "Guatemala City",
+      "Port of Spain"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "Looking at the tokens, I can see strong signals:\n\n- \"Barbados\" is the top token by far\n- \"Saint\" / \"john\" / \"Johns\" / \"john\" / \"itts\" suggest \"Saint John's\" or \"Saint Kitts\"\n- \"Caribbean\" confirms the region\n- \"capital\" tokens suggest this is about a capital city\n- \"Ant\" + \"igua\" could point to Antigua, whose capital is **Saint John's**\n- But \"itts\" + \"Saint\" could also suggest Saint Kitts\n\nThe combination of \"Ant\" (Antigua), \"Saint\", \"john/Johns\", and \"Caribbean\" strongly points to **Saint John's** (capital of Antigua and Barbuda). \"Barbados\" is the top token, but Bridgetown (Barbados's capital) doesn't match the other tokens as well. The \"Ant\" tokens and \"Saint Johns/john\" combination most consistently points to Saint John's, Antigua.\n\n{\"answer\": \"Saint John's\", \"confidence\": 0.45, \"backups\": [\"Bridgetown\", \"Basseterre\", \"Belmopan\", \"Georgetown\", \"Guatemala City\", \"Port of Spain\"]}"
+  },
+  {
+    "idx": 152,
+    "intermediate": "Brasilia",
+    "answer": "a",
+    "pred": "Brasilia",
+    "backups": [
+      "Buenos Aires",
+      "Mexico City",
+      "Prague",
+      "Tegucigalpa",
+      "Canberra"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens \" Bras\" and \"ilia\" together form \"Brasilia,\" and this is reinforced by \"巴西\" (Chinese for Brazil) and \" Brazil\" appearing prominently.\n\n{\"answer\": \"Brasilia\", \"confidence\": 0.98, \"backups\": [\"Buenos Aires\", \"Mexico City\", \"Prague\", \"Tegucigalpa\", \"Canberra\"]}"
+  },
+  {
+    "idx": 154,
+    "intermediate": "Santiago",
+    "answer": "o",
+    "pred": "Santiago",
+    "backups": [
+      "Prague",
+      "Tegucigalpa",
+      "Mexico City"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly indicate \"Santiago\" with \"Chile\" as the second token, making this very clear.\n\n{\"answer\": \"Santiago\", \"confidence\": 0.98, \"backups\": [\"Prague\", \"Tegucigalpa\", \"Mexico City\"]}"
+  },
+  {
+    "idx": 156,
+    "intermediate": "Bogota",
+    "answer": "a",
+    "pred": "Bogotá",
+    "backups": [
+      "Bogota",
+      "Tegucigalpa",
+      "Mexico City"
+    ],
+    "got": false,
+    "top_k": {
+      "1": false,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly point to Bogotá:\n- ' Bog' (rank 2) + 'ota' (rank 16) + 'otta' (rank 41) = \"Bogota\"\n- ' Colombia' (rank 1), ' Colomb' (rank 6), ' Colombian' (rank 7), '哥伦比亚' (rank 19, Chinese for \"Colombia\")\n- ' capital' / ' capitals' tokens suggest this is the capital city of Colombia\n\n{\"answer\": \"Bogotá\", \"confidence\": 0.98, \"backups\": [\"Bogota\", \"Tegucigalpa\", \"Mexico City\"]}"
+  },
+  {
+    "idx": 157,
+    "intermediate": "Caracas",
+    "answer": "s",
+    "pred": "Caracas",
+    "backups": [
+      "Maracas",
+      "Caracas, Venezuela"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly point to Venezuela, with \"acas\" (rank 3) being a suffix — together forming \"Caracas\" (the capital of Venezuela). The token \" Car\" (rank 10) also supports this.\n\n{\"answer\": \"Caracas\", \"confidence\": 0.97, \"backups\": [\"Maracas\", \"Caracas, Venezuela\"]}"
+  },
+  {
+    "idx": 158,
+    "intermediate": "Quito",
+    "answer": "o",
+    "pred": "Quito",
+    "backups": [
+      "Tegucigalpa",
+      "Prague",
+      "Mexico City"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly point to \"Quito\" (tokens 2-3: 'quito', 'uito') and \"Ecuador\" (token 1). Quito is the capital of Ecuador.\n\n{\"answer\": \"Quito\", \"confidence\": 0.97, \"backups\": [\"Tegucigalpa\", \"Prague\", \"Mexico City\"]}"
+  },
+  {
+    "idx": 160,
+    "intermediate": "Asuncion",
+    "answer": "n",
+    "pred": "Asunción",
+    "backups": [
+      "Tegucigalpa",
+      "Montevideo",
+      "Buenos Aires",
+      "Prague",
+      "Dakar",
+      "Ulaanbaatar"
+    ],
+    "got": false,
+    "top_k": {
+      "1": false,
+      "2": false,
+      "3": false,
+      "5": false,
+      "10": false
+    },
+    "raw": "The dominant tokens are \"Paraguay\" (by far the highest score), \"capital/capitals/capitale/Capital\", and \"Paragu\" — clearly pointing to Paraguay's capital.\n\nThe capital of Paraguay is Asunción (note tokens \"ción\", \"ión\", \"ón\" which are the ending of \"Asunción\", and \" As\" which could be the start).\n\n{\"answer\": \"Asunción\", \"confidence\": 0.92, \"backups\": [\"Tegucigalpa\", \"Montevideo\", \"Buenos Aires\", \"Prague\", \"Dakar\", \"Ulaanbaatar\"]}"
+  },
+  {
+    "idx": 161,
+    "intermediate": "Montevideo",
+    "answer": "o",
+    "pred": "Montevideo",
+    "backups": [
+      "Asuncion",
+      "Buenos Aires",
+      "Bogota"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly point to Uruguay (rank 1, score 136), with \"Monte\" (rank 2) and \"deo\" (rank 8) combining to form \"Montevideo\" — the capital of Uruguay.\n\n{\"answer\": \"Montevideo\", \"confidence\": 0.97, \"backups\": [\"Asuncion\", \"Buenos Aires\", \"Bogota\"]}"
+  },
+  {
+    "idx": 162,
+    "intermediate": "Georgetown",
+    "answer": "n",
+    "pred": "Georgetown",
+    "backups": [
+      "Tegucigalpa",
+      "Mexico City"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly indicate \"Georgetown\" (rank 2) in \"Guyana\" (rank 1). The model was thinking about Georgetown, the capital of Guyana.\n\n{\"answer\": \"Georgetown\", \"confidence\": 0.97, \"backups\": [\"Tegucigalpa\", \"Mexico City\"]}"
+  },
+  {
+    "idx": 163,
+    "intermediate": "Paramaribo",
+    "answer": "o",
+    "pred": "Paramaribo",
+    "backups": [
+      "Georgetown",
+      "Surin",
+      "Tegucigalpa",
+      "Colombo"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top token is ' Surin' with an overwhelming score of 164.787, far above everything else. \"Surin\" is a city in Thailand. However, looking at other tokens like ' Honduras', ' Georgetown', ' Guyana', ' Paraguay', ' capital', 'orgetown', 'ambo' (Colombo?), I need to consider context.\n\nWait - the task is about a capital city. ' Georgetown' is the capital of Guyana, and both ' Georgetown' and ' Guyana' appear. But ' Surin' dominates massively.\n\nActually, \"Surin\" could relate to \"Paramaribo\" (capital of Suriname) - tokens like 'ambo', 'obo', 'ibo', 'Param' all suggest \"Paramaribo.\" And ' Honduras' capital is Tegucigalpa. ' Georgetown' is Guyana's capital.\n\nThe token 'Param' + 'ambo' + 'obo' + 'ibo' strongly suggest **Paramaribo** (capital of Suriname). And ' Surin' is the start of \"Suriname.\" This all fits together perfectly - the model is thinking about Paramaribo, the capital of Suriname.\n\n{\"answer\": \"Paramaribo\", \"confidence\": 0.82, \"backups\": [\"Georgetown\", \"Surin\", \"Tegucigalpa\", \"Colombo\"]}"
+  },
+  {
+    "idx": 164,
+    "intermediate": "Canberra",
+    "answer": "a",
+    "pred": "Canberra",
+    "backups": [
+      "Sydney"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "{\"answer\": \"Canberra\", \"confidence\": 0.99, \"backups\": [\"Sydney\"]}"
+  },
+  {
+    "idx": 165,
+    "intermediate": "Wellington",
+    "answer": "n",
+    "pred": "Wellington",
+    "backups": [
+      "Auckland",
+      "Canberra"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly point to Wellington, with Auckland as secondary (both in New Zealand), and \"Zealand\", \"NZ\", \"新西兰\" all confirming the New Zealand context. Wellington is the capital of New Zealand.\n\n{\"answer\": \"Wellington\", \"confidence\": 0.97, \"backups\": [\"Auckland\", \"Canberra\"]}"
+  },
+  {
+    "idx": 166,
+    "intermediate": "Suva",
+    "answer": "a",
+    "pred": "Suva",
+    "backups": [
+      "Fiji",
+      "Auckland",
+      "Tegucigalpa",
+      "Georgetown"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "Looking at the top tokens:\n\n1. **' Fiji'** dominates overwhelmingly (score ~199)\n2. 'Su' and ' Su' appear — likely \"Suva\" (capital of Fiji)\n3. ' capital' / ' capitals' strongly present\n4. 'vu' appears (rank 36) — completing \"Su\" + \"va\" = **Suva**\n\nThe model is clearly thinking about **Suva**, the capital of Fiji.\n\n{\"answer\": \"Suva\", \"confidence\": 0.95, \"backups\": [\"Fiji\", \"Auckland\", \"Tegucigalpa\", \"Georgetown\"]}"
+  },
+  {
+    "idx": 168,
+    "intermediate": "Apia",
+    "answer": "a",
+    "pred": "Apia",
+    "backups": [
+      "Samoa",
+      "Suva",
+      "Nuku'alofa",
+      "Pago Pago"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly indicate \"Samoa\" (rank 1, score 238) and \"apia\" (rank 6), \"Ap\" (rank 7), \"Ap\" (rank 10) — these all point to **Apia**, the capital of Samoa.\n\n{\"answer\": \"Apia\", \"confidence\": 0.97, \"backups\": [\"Samoa\", \"Suva\", \"Nuku'alofa\", \"Pago Pago\"]}"
+  },
+  {
+    "idx": 171,
+    "intermediate": "Honiara",
+    "answer": "a",
+    "pred": "Honiara",
+    "backups": [
+      "Canberra",
+      "Suva",
+      "Port Moresby",
+      "Apia",
+      "Prague"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "Looking at the top tokens:\n\n- \"Solomon\" is ranked #1 with a very high score\n- \"Samoa\" and \"Papua\" appear (Pacific island nations)\n- \"Canberra\" appears (capital of Australia)\n- \"Hon\" appears multiple times (could be Honiara)\n- \"capitals\" and \"capital\" appear prominently\n\nSolomon Islands' capital is **Honiara** — this fits perfectly with \"Solomon\" (#1), \"Hon\" (#26, #27), \"hon\" (#41), and the Pacific region context (Samoa, Papua, Fiji).\n\n{\"answer\": \"Honiara\", \"confidence\": 0.92, \"backups\": [\"Canberra\", \"Suva\", \"Port Moresby\", \"Apia\", \"Prague\"]}"
+  },
+  {
+    "idx": 172,
+    "intermediate": "Tarawa",
+    "answer": "a",
+    "pred": "Tarawa",
+    "backups": [
+      "South Tarawa",
+      "Kiribati",
+      "Apia",
+      "Suva",
+      "Honiara",
+      "Port Moresby",
+      "Nuku'alofa",
+      "Funafuti"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly suggest \"Kir\" + \"iki\" = **Kirikati** (Kiribati), and \"Tar\" likely pointing to **Tarawa** (the capital of Kiribati). The tokens for Pacific islands (Samoa, Fiji, Pacific) and capitals support this. \"Tarawa\" is the capital of Kiribati.\n\nThe model seems to be thinking about the capital city **Tarawa**.\n\n{\"answer\": \"Tarawa\", \"confidence\": 0.72, \"backups\": [\"South Tarawa\", \"Kiribati\", \"Apia\", \"Suva\", \"Honiara\", \"Port Moresby\", \"Nuku'alofa\", \"Funafuti\"]}"
+  },
+  {
+    "idx": 174,
+    "intermediate": "Majuro",
+    "answer": "o",
+    "pred": "Majuro",
+    "backups": [
+      "Hagåtña",
+      "Honolulu",
+      "Apia",
+      "Pago Pago",
+      "Prague"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly suggest \"Majuro\" — the capital of the Marshall Islands. The tokens \"Maj\", \"Marshall\", \"capital\", \"Islands\", and \"Pacific\" all point directly to this. \"Maj\"+\"uro\" fragments, \"roj\"/\"aju\"/\"aja\"/\"uja\" are all substrings of \"Majuro\".\n\n{\"answer\": \"Majuro\", \"confidence\": 0.95, \"backups\": [\"Hagåtña\", \"Honolulu\", \"Apia\", \"Pago Pago\", \"Prague\"]}"
+  },
+  {
+    "idx": 175,
+    "intermediate": "Ngerulmud",
+    "answer": "d",
+    "pred": "Palau",
+    "backups": [
+      "Koror",
+      "Palestine",
+      "Panama",
+      "Palermo",
+      "Monaco",
+      "Bhutan",
+      "Czech Republic",
+      "Liechtenstein",
+      "Samoa",
+      "Guam"
+    ],
+    "got": false,
+    "top_k": {
+      "1": false,
+      "2": false,
+      "3": false,
+      "5": false,
+      "10": false
+    },
+    "raw": "The top tokens are 'Pal', ' Pal', '-Pal', along with ' Kor' (Korea?), ' capital', ' Monaco', ' Liechtenstein' (' Lie'), ' Bhutan', ' Guam', ' Samoa', ' Czech'.\n\nThe strong 'Pal' signal combined with 'capital' and small countries/territories suggests **Palau** — a small Pacific island nation whose capital is Ngerulmud (or sometimes associated with Koror). The ' Kor' token could hint at Koror (the former capital/largest city of Palau).\n\n{\"answer\": \"Palau\", \"confidence\": 0.55, \"backups\": [\"Koror\", \"Palestine\", \"Panama\", \"Palermo\", \"Monaco\", \"Bhutan\", \"Czech Republic\", \"Liechtenstein\", \"Samoa\", \"Guam\"]}"
+  },
+  {
+    "idx": 178,
+    "intermediate": "Montgomery",
+    "answer": "y",
+    "pred": "Montgomery",
+    "backups": [
+      "Birmingham",
+      "Mobile",
+      "Huntsville"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly point to Montgomery, Alabama — with \"Alabama\" at rank 1 and \"Montgomery\" at rank 2, plus \"gomery\" and \"Mont\" as subword fragments.\n\n{\"answer\": \"Montgomery\", \"confidence\": 0.98, \"backups\": [\"Birmingham\", \"Mobile\", \"Huntsville\"]}"
+  },
+  {
+    "idx": 179,
+    "intermediate": "Juneau",
+    "answer": "u",
+    "pred": "Juneau",
+    "backups": [
+      "Anchorage",
+      "Tegucigalpa",
+      "Fairbanks"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly suggest \"Alaska\" (rank 1, score 161) and \"neau\" (rank 2) which together form \"Juneau\" — the capital of Alaska. This is reinforced by \"capitals\"/\"capital\" tokens and \"June\"/\"eau\"/\"une\" fragments that spell out \"Juneau.\"\n\n{\"answer\": \"Juneau\", \"confidence\": 0.97, \"backups\": [\"Anchorage\", \"Tegucigalpa\", \"Fairbanks\"]}"
+  },
+  {
+    "idx": 180,
+    "intermediate": "Phoenix",
+    "answer": "x",
+    "pred": "Phoenix",
+    "backups": [
+      "Tucson",
+      "Tegucigalpa"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly point to Phoenix, Arizona — with \"Arizona\", \"enix\", \"Phoenix\", \"Pho\", \"rizona\" all appearing at the top.\n\n{\"answer\": \"Phoenix\", \"confidence\": 0.97, \"backups\": [\"Tucson\", \"Tegucigalpa\"]}"
+  },
+  {
+    "idx": 182,
+    "intermediate": "Sacramento",
+    "answer": "o",
+    "pred": "Sacramento",
+    "backups": [
+      "California",
+      "Tegucigalpa",
+      "Brasília"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly indicate Sacramento, with supporting tokens like \"ifornia\", \"ramento\", \"California\", and \"加州\" (Chinese for California) all pointing to Sacramento as the capital of California.\n\n{\"answer\": \"Sacramento\", \"confidence\": 0.98, \"backups\": [\"California\", \"Tegucigalpa\", \"Brasília\"]}"
+  },
+  {
+    "idx": 184,
+    "intermediate": "Hartford",
+    "answer": "d",
+    "pred": "Hartford",
+    "backups": [
+      "New Haven",
+      "Bridgeport",
+      "Stamford"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly indicate \"Hartford\" and \"Connecticut,\" with \"capitals\" and \"capital\" also appearing prominently.\n\n{\"answer\": \"Hartford\", \"confidence\": 0.97, \"backups\": [\"New Haven\", \"Bridgeport\", \"Stamford\"]}"
+  },
+  {
+    "idx": 187,
+    "intermediate": "Atlanta",
+    "answer": "a",
+    "pred": "Atlanta",
+    "backups": [
+      "Augusta",
+      "Prague",
+      "Columbus"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly indicate Atlanta, Georgia — Atlanta is the capital of Georgia (US state), and the tokens include 'Atlanta', 'Georgia', 'capital', and 'Atl'/'anta' fragments.\n\n{\"answer\": \"Atlanta\", \"confidence\": 0.97, \"backups\": [\"Augusta\", \"Prague\", \"Columbus\"]}"
+  },
+  {
+    "idx": 188,
+    "intermediate": "Honolulu",
+    "answer": "u",
+    "pred": "Honolulu",
+    "backups": [
+      "Hawaii",
+      "Prague"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly point to Honolulu, with \"Honolulu,\" \"olulu,\" \"Hawaii,\" \"Hawaiian,\" and \"Hawai\" all appearing prominently.\n\n{\"answer\": \"Honolulu\", \"confidence\": 0.98, \"backups\": [\"Hawaii\", \"Prague\"]}"
+  },
+  {
+    "idx": 191,
+    "intermediate": "Indianapolis",
+    "answer": "s",
+    "pred": "Indianapolis",
+    "backups": [
+      "Annapolis",
+      "Minneapolis",
+      "Tegucigalpa"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top token is overwhelmingly ' Indianapolis', with supporting tokens like ' Indiana', 'olis', 'apolis', and 'polis' all pointing to the same city.\n\n{\"answer\": \"Indianapolis\", \"confidence\": 0.98, \"backups\": [\"Annapolis\", \"Minneapolis\", \"Tegucigalpa\"]}"
+  },
+  {
+    "idx": 195,
+    "intermediate": "Baton Rouge",
+    "answer": "e",
+    "pred": "Baton Rouge",
+    "backups": [
+      "New Orleans",
+      "Louisiana"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly suggest \"Baton Rouge\" (tokens: ' Louisiana', ' Bat', ' Rouge') and it's the capital of Louisiana.\n\n{\"answer\": \"Baton Rouge\", \"confidence\": 0.97, \"backups\": [\"New Orleans\", \"Louisiana\"]}"
+  },
+  {
+    "idx": 196,
+    "intermediate": "Augusta",
+    "answer": "a",
+    "pred": "Augusta",
+    "backups": [
+      "Portland",
+      "Tegucigalpa",
+      "Bar Harbor"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens are ' Maine' and ' Augusta', which clearly point to Augusta, Maine — the capital of the US state of Maine.\n\n{\"answer\": \"Augusta\", \"confidence\": 0.98, \"backups\": [\"Portland\", \"Tegucigalpa\", \"Bar Harbor\"]}"
+  },
+  {
+    "idx": 201,
+    "intermediate": "Jackson",
+    "answer": "n",
+    "pred": "Jackson",
+    "backups": [
+      "Jackson, Mississippi"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly point to Jackson, Mississippi. The top token is ' Mississippi' with an overwhelming score of 183, followed by 'ackson' and 'Jackson' variants. The Chinese token '杰克' (Jié kè) is the beginning of 杰克逊 (Jackson). This is clearly Jackson, the capital of Mississippi.\n\n{\"answer\": \"Jackson\", \"confidence\": 0.98, \"backups\": [\"Jackson, Mississippi\"]}"
+  },
+  {
+    "idx": 203,
+    "intermediate": "Helena",
+    "answer": "a",
+    "pred": "Helena",
+    "backups": [
+      "Montana",
+      "Prague",
+      "Tegucigalpa"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens are ' Montana' and ' Helena', which strongly indicate the model is thinking about Helena, Montana — the capital city of Montana.\n\n{\"answer\": \"Helena\", \"confidence\": 0.97, \"backups\": [\"Montana\", \"Prague\", \"Tegucigalpa\"]}"
+  },
+  {
+    "idx": 206,
+    "intermediate": "Concord",
+    "answer": "d",
+    "pred": "Concord",
+    "backups": [
+      "Portsmouth",
+      "Manchester"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly point to **Concord, NH** — \"Concord\" is the dominant token, with \"NH,\" \"Portsmouth\" (another NH city), and \"Hampshire\" all reinforcing New Hampshire. The model was thinking about the capital of New Hampshire.\n\n{\"answer\": \"Concord\", \"confidence\": 0.97, \"backups\": [\"Portsmouth\", \"Manchester\"]}"
+  },
+  {
+    "idx": 207,
+    "intermediate": "Trenton",
+    "answer": "n",
+    "pred": "Trenton",
+    "backups": [
+      "Newark",
+      "Jersey City"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top token is ' Trent' with a very high score, combined with 'NJ', ' Newark', ' Jersey', ' NJ', and ' Rutgers' — these all point strongly to New Jersey. \"Trenton\" is the capital of New Jersey (note 'nton' and 'enton' also appear, completing \"Trenton\"). The task appears to be about identifying a state capital.\n\n{\"answer\": \"Trenton\", \"confidence\": 0.97, \"backups\": [\"Newark\", \"Jersey City\"]}"
+  },
+  {
+    "idx": 208,
+    "intermediate": "Santa Fe",
+    "answer": "e",
+    "pred": "Albuquerque",
+    "backups": [
+      "Santa Fe",
+      "Tegucigalpa",
+      "Albuquerque"
+    ],
+    "got": false,
+    "top_k": {
+      "1": false,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The dominant token is clearly 'Albuquerque' with an overwhelming score, supported by 'NM' and 'buquerque'/'querque' fragments.\n\n{\"answer\": \"Albuquerque\", \"confidence\": 0.95, \"backups\": [\"Santa Fe\", \"Tegucigalpa\", \"Albuquerque\"]}"
+  },
+  {
+    "idx": 212,
+    "intermediate": "Columbus",
+    "answer": "s",
+    "pred": "Columbus",
+    "backups": [
+      "Ohio City",
+      "Columbus Ohio"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens are overwhelmingly \"Columbus\" and \"Ohio,\" with \"capital\" also prominent — Columbus is the capital of Ohio.\n\n{\"answer\": \"Columbus\", \"confidence\": 0.98, \"backups\": [\"Ohio City\", \"Columbus Ohio\"]}"
+  },
+  {
+    "idx": 213,
+    "intermediate": "Salem",
+    "answer": "m",
+    "pred": "Salem",
+    "backups": [
+      "Portland",
+      "Tegucigalpa",
+      "Mexico City"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly point to **Salem, Oregon** — \"Oregon\" and \"Salem\" are the top two tokens by a large margin, and Salem is the capital of Oregon. The model appears to be computing something about the capital city of Oregon.\n\n{\"answer\": \"Salem\", \"confidence\": 0.95, \"backups\": [\"Portland\", \"Tegucigalpa\", \"Mexico City\"]}"
+  },
+  {
+    "idx": 216,
+    "intermediate": "Columbia",
+    "answer": "a",
+    "pred": "Columbia",
+    "backups": [
+      "Charleston",
+      "Prague",
+      "South Carolina"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly suggest \"Charleston\" and \"Columbia\" — both cities in South Carolina. The context of \"capital\" tokens alongside \"Columbia\" and \"Carolina\" strongly suggests the model was thinking about **Columbia, South Carolina** (the state capital), likely in the context of a question about what the capital of South Carolina is. Charleston is the most common wrong answer people give for South Carolina's capital.\n\n{\"answer\": \"Columbia\", \"confidence\": 0.82, \"backups\": [\"Charleston\", \"Prague\", \"South Carolina\"]}"
+  },
+  {
+    "idx": 218,
+    "intermediate": "Nashville",
+    "answer": "e",
+    "pred": "Nashville",
+    "backups": [
+      "Memphis",
+      "Knoxville",
+      "Chattanooga"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly point to Nashville, with \"Nashville\" having an overwhelming score of 190.279, followed by \"Tennessee\" at 40.246. Nashville is the capital of Tennessee, which aligns with the \"capital\" tokens as well.\n\n{\"answer\": \"Nashville\", \"confidence\": 0.98, \"backups\": [\"Memphis\", \"Knoxville\", \"Chattanooga\"]}"
+  },
+  {
+    "idx": 219,
+    "intermediate": "Austin",
+    "answer": "n",
+    "pred": "Austin",
+    "backups": [
+      "Dallas",
+      "Mexico City"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "{\"answer\": \"Austin\", \"confidence\": 0.99, \"backups\": [\"Dallas\", \"Mexico City\"]}"
+  },
+  {
+    "idx": 222,
+    "intermediate": "Richmond",
+    "answer": "d",
+    "pred": "Richmond",
+    "backups": [
+      "Virginia Beach",
+      "Harrisburg",
+      "Prague"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly indicate Richmond, Virginia — \"Richmond\" has by far the highest score (152.965), followed by \"Virginia\" (ranks 6-7), and \"capital\" tokens (ranks 3-4), suggesting the model was thinking about the capital of Virginia.\n\n{\"answer\": \"Richmond\", \"confidence\": 0.97, \"backups\": [\"Virginia Beach\", \"Harrisburg\", \"Prague\"]}"
+  },
+  {
+    "idx": 223,
+    "intermediate": "Olympia",
+    "answer": "a",
+    "pred": "Olympia",
+    "backups": [
+      "Washington",
+      "Seattle",
+      "Washington D.C."
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "Looking at the top tokens:\n\n1. ' Olymp' (highest score by far) → Olympia\n2. ' Seattle' and ' Washington' → Washington state context\n3. '华盛顿' → Washington in Chinese\n4. '奥林匹' → Olympi... in Chinese (Olympics/Olympia)\n5. 'ymp', 'lymp', 'olis' → fragments of \"Olympia\" or \"Olympics\"\n\nThe task seems to involve identifying a capital city. Olympia is the capital of Washington State, which fits perfectly with the strong signals for both ' Olymp' and ' Washington'/' Seattle' (Seattle being the major city in Washington State, often confused with the capital).\n\n{\"answer\": \"Olympia\", \"confidence\": 0.92, \"backups\": [\"Washington\", \"Seattle\", \"Washington D.C.\"]}"
+  },
+  {
+    "idx": 224,
+    "intermediate": "Charleston",
+    "answer": "n",
+    "pred": "Charleston",
+    "backups": [
+      "Charleston, West Virginia",
+      "Charlestown",
+      "Charleston, South Carolina"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly point to Charleston, West Virginia — \"Charleston\" dominates at rank 1, with \"WV\" and \"West Virginia\" associations (tokens ' WV', ' West', 'WV', ' Appalach') confirming it's the capital of West Virginia.\n\n{\"answer\": \"Charleston\", \"confidence\": 0.97, \"backups\": [\"Charleston, West Virginia\", \"Charlestown\", \"Charleston, South Carolina\"]}"
+  },
+  {
+    "idx": 225,
+    "intermediate": "Madison",
+    "answer": "n",
+    "pred": "Madison",
+    "backups": [
+      "Milwaukee",
+      "Honduras"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly indicate \"Madison\" and \"Wisconsin,\" with Madison being the capital of Wisconsin.\n\n{\"answer\": \"Madison\", \"confidence\": 0.99, \"backups\": [\"Milwaukee\", \"Honduras\"]}"
+  },
+  {
+    "idx": 227,
+    "intermediate": "Hefei",
+    "answer": "i",
+    "pred": "Hefei",
+    "backups": [
+      "Guangzhou",
+      "Nanjing",
+      "Beijing"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top token is '合肥' (Hefei) with a dominant score of 175.189, and it's supported by '安徽省' (Anhui Province) and '安徽' (Anhui), confirming the model was thinking about the capital of Anhui Province.\n\n{\"answer\": \"Hefei\", \"confidence\": 0.98, \"backups\": [\"Guangzhou\", \"Nanjing\", \"Beijing\"]}"
+  },
+  {
+    "idx": 228,
+    "intermediate": "Fuzhou",
+    "answer": "u",
+    "pred": "Fuzhou",
+    "backups": [
+      "Guangzhou",
+      "Nanjing",
+      "Chengdu"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly indicate 福州 (Fuzhou) — rank 1 with a dominant score of 157.860, supported by '福建省' (Fujian Province), '福建', ' Fuj' (partial \"Fujian\"), and '省会' (provincial capital). Fuzhou is indeed the capital of Fujian Province.\n\n{\"answer\": \"Fuzhou\", \"confidence\": 0.97, \"backups\": [\"Guangzhou\", \"Nanjing\", \"Chengdu\"]}"
+  },
+  {
+    "idx": 229,
+    "intermediate": "Lanzhou",
+    "answer": "u",
+    "pred": "Lanzhou",
+    "backups": [
+      "Chengdu",
+      "Guangzhou",
+      "Chongqing"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly indicate **兰州** (Lanzhou) — the character string appears at rank 1 with a very high score, and **甘肃** (Gansu province) appears at ranks 5 and 9, confirming this is about the capital of Gansu province. The token ' Lan' at rank 38 further supports this.\n\n{\"answer\": \"Lanzhou\", \"confidence\": 0.98, \"backups\": [\"Chengdu\", \"Guangzhou\", \"Chongqing\"]}"
+  },
+  {
+    "idx": 230,
+    "intermediate": "Guangzhou",
+    "answer": "u",
+    "pred": "Guangzhou",
+    "backups": [
+      "Chengdu",
+      "Mexico City",
+      "Chongqing"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly indicate **Guangzhou** — it appears directly as the #1 token with a very high score, and is reinforced by **Guangdong** (#2, the province of which Guangzhou is the capital), **'广州'** (#14, Guangzhou in Chinese), and **'省会'** (#10, meaning \"provincial capital\").\n\n{\"answer\": \"Guangzhou\", \"confidence\": 0.97, \"backups\": [\"Chengdu\", \"Mexico City\", \"Chongqing\"]}"
+  },
+  {
+    "idx": 231,
+    "intermediate": "Guiyang",
+    "answer": "g",
+    "pred": "Guiyang",
+    "backups": [
+      "Guizhou",
+      "Guangzhou",
+      "Chengdu",
+      "Chongqing"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly point to 贵阳 (Guiyang), which is the capital of Guizhou Province (贵州省) in China. The tokens \"贵阳\", \"Gui\", \"yang\", \"zhou\", \"贵州\", \"贵州省\", \"省会\" (provincial capital) all confirm this.\n\n{\"answer\": \"Guiyang\", \"confidence\": 0.98, \"backups\": [\"Guizhou\", \"Guangzhou\", \"Chengdu\", \"Chongqing\"]}"
+  },
+  {
+    "idx": 232,
+    "intermediate": "Haikou",
+    "answer": "u",
+    "pred": "Haikou",
+    "backups": [
+      "Guangzhou",
+      "Beijing",
+      "Chengdu"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens clearly point to 海口 (Haikou), the capital of Hainan Province, China. The tokens '海口', '海南省', 'kou', '海南', '省会' all strongly confirm this.\n\n{\"answer\": \"Haikou\", \"confidence\": 0.98, \"backups\": [\"Guangzhou\", \"Beijing\", \"Chengdu\"]}"
+  },
+  {
+    "idx": 233,
+    "intermediate": "Shijiazhuang",
+    "answer": "g",
+    "pred": "Shijiazhuang",
+    "backups": [
+      "Beijing",
+      "Guangzhou",
+      "Chengdu"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top token is '石家庄' (Shijiazhuang) with a dominant score of 168.264, and supporting tokens include '河北省' (Hebei Province), '河北' (Hebei), and 'Heb' (start of Hebei). The context of capitals/province capitals fits perfectly — Shijiazhuang is the capital of Hebei Province.\n\n{\"answer\": \"Shijiazhuang\", \"confidence\": 0.98, \"backups\": [\"Beijing\", \"Guangzhou\", \"Chengdu\"]}"
+  },
+  {
+    "idx": 234,
+    "intermediate": "Harbin",
+    "answer": "n",
+    "pred": "Harbin",
+    "backups": [
+      "Guangzhou",
+      "Beijing",
+      "Chengdu"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top token is '哈尔滨' (Harbin) with a dramatically higher score than anything else, and this is reinforced by tokens like ' Harb' (rank 10), 'Bin'/'bin' (ranks 16, 21), ' Heil' (suggesting Heilongjiang, the province Harbin is the capital of), and '省会' (provincial capital).\n\n{\"answer\": \"Harbin\", \"confidence\": 0.97, \"backups\": [\"Guangzhou\", \"Beijing\", \"Chengdu\"]}"
+  },
+  {
+    "idx": 236,
+    "intermediate": "Wuhan",
+    "answer": "n",
+    "pred": "Wuhan",
+    "backups": [
+      "Guangzhou",
+      "Beijing",
+      "Nanjing"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top token is overwhelmingly ' Wuhan' (score 228), with supporting tokens like 'uhan', '武汉', '湖北省', '湖北', '武汉市' all pointing to the same city.\n\n{\"answer\": \"Wuhan\", \"confidence\": 0.98, \"backups\": [\"Guangzhou\", \"Beijing\", \"Nanjing\"]}"
+  },
+  {
+    "idx": 237,
+    "intermediate": "Changsha",
+    "answer": "a",
+    "pred": "Changsha",
+    "backups": [
+      "Guangzhou",
+      "Beijing",
+      "Chengdu"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly indicate 长沙 (Changsha), the capital of Hunan Province (湖南省) in China.\n\n{\"answer\": \"Changsha\", \"confidence\": 0.97, \"backups\": [\"Guangzhou\", \"Beijing\", \"Chengdu\"]}"
+  },
+  {
+    "idx": 238,
+    "intermediate": "Nanjing",
+    "answer": "g",
+    "pred": "Nanjing",
+    "backups": [
+      "Guangzhou",
+      "Chengdu",
+      "Beijing"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top token is overwhelmingly ' Nanjing', with supporting tokens like ' Jiang' (Jiangsu), '京' (jing, as in Nanjing), 'jing', and '省会' (provincial capital). This strongly suggests the model was thinking about Nanjing, likely as the capital of Jiangsu province.\n\n{\"answer\": \"Nanjing\", \"confidence\": 0.97, \"backups\": [\"Guangzhou\", \"Chengdu\", \"Beijing\"]}"
+  },
+  {
+    "idx": 239,
+    "intermediate": "Nanchang",
+    "answer": "g",
+    "pred": "Nanchang",
+    "backups": [
+      "Guangzhou",
+      "Nanjing",
+      "Chengdu"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top token is '南昌' (Nanchang) with a dominant score of 141.257, and supporting tokens include '江西' and '江西省' (Jiangxi province), of which Nanchang is the capital. The token 'chang', '昌', and ' Nan' also support this.\n\n{\"answer\": \"Nanchang\", \"confidence\": 0.97, \"backups\": [\"Guangzhou\", \"Nanjing\", \"Chengdu\"]}"
+  },
+  {
+    "idx": 240,
+    "intermediate": "Changchun",
+    "answer": "n",
+    "pred": "Changchun",
+    "backups": [
+      "Jilin",
+      "Beijing",
+      "Guangzhou",
+      "Chengdu"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens are dominated by '长春' (Changchun) and '吉林' (Jilin), with '吉林省' also appearing. Changchun is the capital (省会) of Jilin Province, which aligns with the capital-related tokens. The model was clearly thinking about Changchun.\n\n{\"answer\": \"Changchun\", \"confidence\": 0.95, \"backups\": [\"Jilin\", \"Beijing\", \"Guangzhou\", \"Chengdu\"]}"
+  },
+  {
+    "idx": 241,
+    "intermediate": "Shenyang",
+    "answer": "g",
+    "pred": "Shenyang",
+    "backups": [
+      "Guangzhou",
+      "Beijing",
+      "Chengdu"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly point to 沈阳 (Shenyang), which is the capital of 辽宁省 (Liaoning Province) in China.\n\n{\"answer\": \"Shenyang\", \"confidence\": 0.98, \"backups\": [\"Guangzhou\", \"Beijing\", \"Chengdu\"]}"
+  },
+  {
+    "idx": 242,
+    "intermediate": "Xining",
+    "answer": "g",
+    "pred": "Xining",
+    "backups": [
+      "Lhasa",
+      "Chengdu",
+      "Lanzhou",
+      "Beijing",
+      "Guangzhou"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly point to **Xining** (西宁):\n\n- 青海 = Qinghai province\n- 宁市 = part of \"西宁市\" (Xining city)\n- 省会 = \"provincial capital\"\n- 'Qing', 'ining', 'INING', 'zhou' all fragments of \"Qinghai\" or \"Xining\"\n- 的西, 西 = \"西\" as in 西宁\n- Tibet/青藏 context fits Qinghai's location\n\nXining is the capital of Qinghai province, located in western China near the Tibetan Plateau.\n\n{\"answer\": \"Xining\", \"confidence\": 0.95, \"backups\": [\"Lhasa\", \"Chengdu\", \"Lanzhou\", \"Beijing\", \"Guangzhou\"]}"
+  },
+  {
+    "idx": 243,
+    "intermediate": "Xi'an",
+    "answer": "n",
+    "pred": "Xi'an",
+    "backups": [
+      "Shaanxi",
+      "Beijing",
+      "Nanjing",
+      "Chengdu"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens overwhelmingly point to 西安 (Xi'an), with 西安市, 陕西省, and 陕西 also appearing as strong signals. Xi'an is the capital of Shaanxi Province in China.\n\n{\"answer\": \"Xi'an\", \"confidence\": 0.98, \"backups\": [\"Shaanxi\", \"Beijing\", \"Nanjing\", \"Chengdu\"]}"
+  },
+  {
+    "idx": 244,
+    "intermediate": "Jinan",
+    "answer": "n",
+    "pred": "Jinan",
+    "backups": [
+      "Guangzhou",
+      "Nanjing",
+      "Beijing"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top token is '济南' (Jinan) with an overwhelming score of 173.193, and it's supported by '山东省' (Shandong Province), 'inan', 'Jin', and '山东' — all pointing to Jinan, the capital of Shandong Province.\n\n{\"answer\": \"Jinan\", \"confidence\": 0.97, \"backups\": [\"Guangzhou\", \"Nanjing\", \"Beijing\"]}"
+  },
+  {
+    "idx": 246,
+    "intermediate": "Chengdu",
+    "answer": "u",
+    "pred": "Chengdu",
+    "backups": [
+      "Guangzhou",
+      "Beijing",
+      "Chongqing"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly point to Chengdu: '成都' (rank 2), ' Cheng' (rank 3), 'DU' (rank 5), 'du' (rank 16), '成都市' (rank 17), and ' Sichuan' (rank 1, as Chengdu is the capital of Sichuan province). The token '省会' (provincial capital) further confirms this.\n\n{\"answer\": \"Chengdu\", \"confidence\": 0.97, \"backups\": [\"Guangzhou\", \"Beijing\", \"Chongqing\"]}"
+  },
+  {
+    "idx": 247,
+    "intermediate": "Kunming",
+    "answer": "g",
+    "pred": "Kunming",
+    "backups": [
+      "Guangzhou",
+      "Beijing"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top token is '昆明' (Kunming) with an overwhelming score of 171, and it's supported by '云南省' (Yunnan Province) and '云南' (Yunnan), as well as ' Kun' and 'ming' fragments.\n\n{\"answer\": \"Kunming\", \"confidence\": 0.99, \"backups\": [\"Guangzhou\", \"Beijing\"]}"
+  },
+  {
+    "idx": 248,
+    "intermediate": "Hangzhou",
+    "answer": "u",
+    "pred": "Hangzhou",
+    "backups": [
+      "Guangzhou",
+      "Nanjing",
+      "Beijing",
+      "Shanghai"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly indicate 杭州 (Hangzhou) - with \"zhou\", \"杭州\", \"Zhe\" (for Zhejiang province, of which Hangzhou is the capital), and \"杭州市\" all ranking very highly.\n\n{\"answer\": \"Hangzhou\", \"confidence\": 0.95, \"backups\": [\"Guangzhou\", \"Nanjing\", \"Beijing\", \"Shanghai\"]}"
+  },
+  {
+    "idx": 249,
+    "intermediate": "Nanning",
+    "answer": "g",
+    "pred": "Nanning",
+    "backups": [
+      "Guangzhou",
+      "Guilin",
+      "Beijing"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top token is '南宁' (Nanning) with an overwhelming score of 171.334, and supporting tokens like '省会' (provincial capital), 'NING', '宁市', and 'Nan' all point to Nanning — the capital of Guangxi, China.\n\n{\"answer\": \"Nanning\", \"confidence\": 0.97, \"backups\": [\"Guangzhou\", \"Guilin\", \"Beijing\"]}"
+  },
+  {
+    "idx": 250,
+    "intermediate": "Hohhot",
+    "answer": "t",
+    "pred": "Hohhot",
+    "backups": [
+      "Beijing",
+      "Ulaanbaatar"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens are \"呼和\" and \"浩特\" which together form \"呼和浩特\" (Hohhot), the capital of Inner Mongolia Autonomous Region in China.\n\n{\"answer\": \"Hohhot\", \"confidence\": 0.99, \"backups\": [\"Beijing\", \"Ulaanbaatar\"]}"
+  },
+  {
+    "idx": 251,
+    "intermediate": "Yinchuan",
+    "answer": "n",
+    "pred": "Yinchuan",
+    "backups": [
+      "Ningxia",
+      "Beijing",
+      "Chengdu"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top token is '银川' (Yinchuan) with a score nearly 3x higher than the second token. '宁夏' (Ningxia) and '自治区' (autonomous region) also appear, confirming this is Yinchuan, the capital of the Ningxia Hui Autonomous Region in China.\n\n{\"answer\": \"Yinchuan\", \"confidence\": 0.97, \"backups\": [\"Ningxia\", \"Beijing\", \"Chengdu\"]}"
+  },
+  {
+    "idx": 252,
+    "intermediate": "Lhasa",
+    "answer": "a",
+    "pred": "Lhasa",
+    "backups": [
+      "Tegucigalpa",
+      "Prague",
+      "Mexico City"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens are '拉萨' (Lhasa in Chinese) and 'Tibet', with 'hasa' and 'sa' fragments also appearing, clearly pointing to Lhasa.\n\n{\"answer\": \"Lhasa\", \"confidence\": 0.98, \"backups\": [\"Tegucigalpa\", \"Prague\", \"Mexico City\"]}"
+  },
+  {
+    "idx": 253,
+    "intermediate": "Urumqi",
+    "answer": "i",
+    "pred": "Ürümqi",
+    "backups": [
+      "Beijing",
+      "Chengdu"
+    ],
+    "got": false,
+    "top_k": {
+      "1": false,
+      "2": false,
+      "3": false,
+      "5": false,
+      "10": false
+    },
+    "raw": "The top token by far is '乌鲁木齐' (Ürümqi), with supporting tokens like 'Xin' (Xinjiang), 'üm', 'Ü', and 'uru' all pointing to the same city.\n\n{\"answer\": \"Ürümqi\", \"confidence\": 0.98, \"backups\": [\"Beijing\", \"Chengdu\"]}"
+  },
+  {
+    "idx": 257,
+    "intermediate": "Patna",
+    "answer": "a",
+    "pred": "Patna",
+    "backups": [
+      "Kolkata",
+      "Mumbai",
+      "Jaipur",
+      "Bangalore"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly point to **Patna** — the capital of Bihar, India. The tokens 'Bihar' (rank 1, very high score), 'Pat' (rank 3), 'PAT' (rank 10), '-pat' (rank 21), 'pat' (rank 23), 'hta' (rank 15) all combine to suggest \"Patna,\" and it's described as a capital of Bihar (an Indian state).\n\n{\"answer\": \"Patna\", \"confidence\": 0.93, \"backups\": [\"Kolkata\", \"Mumbai\", \"Jaipur\", \"Bangalore\"]}"
+  },
+  {
+    "idx": 259,
+    "intermediate": "Panaji",
+    "answer": "i",
+    "pred": "Goa",
+    "backups": [
+      "Panaji",
+      "Mumbai",
+      "Kolkata"
+    ],
+    "got": false,
+    "top_k": {
+      "1": false,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top token by far is 'Goa', with related tokens like 'Panaji' (tokens 'Pan', 'aji'), which is the capital of Goa, India. The context includes Indian references ('Mumbai', 'India', '印度的').\n\nThe model was thinking about Goa (likely computing its capital, Panaji).\n\n{\"answer\": \"Goa\", \"confidence\": 0.92, \"backups\": [\"Panaji\", \"Mumbai\", \"Kolkata\"]}"
+  },
+  {
+    "idx": 263,
+    "intermediate": "Ranchi",
+    "answer": "i",
+    "pred": "Ranchi",
+    "backups": [
+      "Kolkata",
+      "Patna",
+      "Hyderabad",
+      "Delhi"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "Looking at the top tokens:\n\n- \" Jh\" (rank 1, highest score) — likely \"Jharkhand\"\n- \" Bihar\" (rank 9) — neighboring state\n- \" Ran\" / \"Ran\" — likely \"Ranchi\" (capital of Jharkhand)\n- \"chi\" (rank 11) — completing \"Ranchi\"\n- \" Kolkata\" (rank 2) — nearby major city\n- India-related tokens throughout\n\nThe model seems to be thinking about **Ranchi** — the capital of Jharkhand, India. The tokens \" Ran\" + \"chi\" = \"Ranchi\", and \" Jh\" = \"Jharkhand\" strongly support this. The task was likely \"What is the capital of Jharkhand?\"\n\n{\"answer\": \"Ranchi\", \"confidence\": 0.82, \"backups\": [\"Kolkata\", \"Patna\", \"Hyderabad\", \"Delhi\"]}"
+  },
+  {
+    "idx": 265,
+    "intermediate": "Thiruvananthapuram",
+    "answer": "m",
+    "pred": "Thiruvananthapuram",
+    "backups": [
+      "Kerala",
+      "Bangalore",
+      "Chennai",
+      "Kolkata"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly suggest Kerala (rank 1, very high score), with \"Thir\" (rank 2) likely being the start of \"Thiruvananthapuram\" — the capital of Kerala, India. The tokens \"capital,\" \"Indian,\" and \"India\" further support this being about the capital city of Kerala.\n\n{\"answer\": \"Thiruvananthapuram\", \"confidence\": 0.85, \"backups\": [\"Kerala\", \"Bangalore\", \"Chennai\", \"Kolkata\"]}"
+  },
+  {
+    "idx": 266,
+    "intermediate": "Bhopal",
+    "answer": "l",
+    "pred": "Bhopal",
+    "backups": [
+      "Jaipur",
+      "Hyderabad",
+      "New Delhi",
+      "Chennai",
+      "Kolkata",
+      "Lucknow"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "Looking at the top tokens, I can see strong signals:\n\n- \"Mad\" (rank 6, 9) + \"opal\" (rank 14) → **Madhopal**? No...\n- \"Mad\" + \"ipur\" (rank 17) → **Madipur**? No...\n- Actually \"Mad\" + \"opal\" = **Madhopal**? \n- Wait: \"Mad\" + \"opal\" → **Madhopal** doesn't work, but \"Bhopal\" could relate to \"BH\" (rank 26) and \"opal\" (rank 14)\n- \"BH\" + \"opal\" → **Bhopal** (capital of Madhya Pradesh, India - \"MP\" tokens support this)\n- \" Pradesh\" (rank 2) + \"MP\" (rank 41) = Madhya Pradesh\n- \" Rajasthan\" is also present, but the MP/BH combination strongly suggests Bhopal\n\n**Bhopal** is the capital of Madhya Pradesh (MP), India. The tokens \"BH\", \"opal\", \"MP\", \"Madhya Pradesh\" all align perfectly.\n\n{\"answer\": \"Bhopal\", \"confidence\": 0.82, \"backups\": [\"Jaipur\", \"Hyderabad\", \"New Delhi\", \"Chennai\", \"Kolkata\", \"Lucknow\"]}"
+  },
+  {
+    "idx": 267,
+    "intermediate": "Mumbai",
+    "answer": "i",
+    "pred": "Mumbai",
+    "backups": [
+      "Pune",
+      "Kolkata",
+      "Delhi",
+      "Nagpur"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly indicate Mumbai (with \"Mumbai\", \"umbai\", \"Maharashtra\", \"Bombay\" all appearing prominently).\n\n{\"answer\": \"Mumbai\", \"confidence\": 0.97, \"backups\": [\"Pune\", \"Kolkata\", \"Delhi\", \"Nagpur\"]}"
+  },
+  {
+    "idx": 268,
+    "intermediate": "Imphal",
+    "answer": "l",
+    "pred": "Imphal",
+    "backups": [
+      "Kolkata",
+      "Chennai",
+      "Mumbai",
+      "Jaipur"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens \" Manip\" and \"ipur\" combine to form \"Manipur,\" which is a state in India. The question is about its capital city.\n\nThe capital of Manipur is **Imphal** (note token \" Im\" at rank 6 and \"Im\" at rank 10).\n\n{\"answer\": \"Imphal\", \"confidence\": 0.92, \"backups\": [\"Kolkata\", \"Chennai\", \"Mumbai\", \"Jaipur\"]}"
+  },
+  {
+    "idx": 271,
+    "intermediate": "Kohima",
+    "answer": "a",
+    "pred": "Nagpur",
+    "backups": [
+      "Kohima",
+      "Kolkata",
+      "Nagaland"
+    ],
+    "got": false,
+    "top_k": {
+      "1": false,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens are ' Nag' and 'Nag', which strongly suggest \"Nagpur\". The token 'ipur' at rank 25 confirms this. Additionally, ' Maharashtra' and ' India' are consistent with Nagpur being a city in Maharashtra, India. ' Koh' could relate to Kohima but the dominant signal is Nagpur.\n\n{\"answer\": \"Nagpur\", \"confidence\": 0.92, \"backups\": [\"Kohima\", \"Kolkata\", \"Nagaland\"]}"
+  },
+  {
+    "idx": 274,
+    "intermediate": "Jaipur",
+    "answer": "r",
+    "pred": "Jaipur",
+    "backups": [
+      "Kolkata",
+      "Jodhpur",
+      "Udaipur",
+      "Tegucigalpa"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly point to Jaipur:\n- \"Rajasthan\" (rank 1, very high score) — Jaipur is the capital of Rajasthan\n- \"ipur\" (rank 2) — the ending of \"Jaipur\"\n- \"Ja\" (rank 4) and \"Ja\" (rank 7) — the beginning of \"Jaipur\"\n- \"capital\" tokens — Jaipur is the capital of Rajasthan\n- \"Indian\" — India context\n\n{\"answer\": \"Jaipur\", \"confidence\": 0.97, \"backups\": [\"Kolkata\", \"Jodhpur\", \"Udaipur\", \"Tegucigalpa\"]}"
+  },
+  {
+    "idx": 276,
+    "intermediate": "Chennai",
+    "answer": "i",
+    "pred": "Chennai",
+    "backups": [
+      "Tamil Nadu",
+      "Tegucigalpa",
+      "Lagos",
+      "Mexico City"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top token is overwhelmingly ' Chennai' with a score of 195.579, and supporting tokens include ' Tamil', ' Nadu', ' Indian', ' India', '印度的', '印度' — all pointing to Chennai, Tamil Nadu, India.\n\n{\"answer\": \"Chennai\", \"confidence\": 0.98, \"backups\": [\"Tamil Nadu\", \"Tegucigalpa\", \"Lagos\", \"Mexico City\"]}"
+  },
+  {
+    "idx": 277,
+    "intermediate": "Hyderabad",
+    "answer": "d",
+    "pred": "Hyderabad",
+    "backups": [
+      "Chennai",
+      "Andhra Pradesh",
+      "Tel Aviv"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top token is overwhelmingly ' Hyderabad' with a score of 187.887, and supporting tokens include 'derabad', 'abad', '印度的' (India's), ' India', ' Indian', ' Andhra' (Pradesh), and ' Chennai' — all pointing to the Indian city of Hyderabad.\n\n{\"answer\": \"Hyderabad\", \"confidence\": 0.97, \"backups\": [\"Chennai\", \"Andhra Pradesh\", \"Tel Aviv\"]}"
+  },
+  {
+    "idx": 281,
+    "intermediate": "Kolkata",
+    "answer": "a",
+    "pred": "Kolkata",
+    "backups": [
+      "Calcutta",
+      "Delhi"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly indicate Kolkata (formerly Calcutta), with \"Kolkata\" scoring overwhelmingly highest, followed by \"Calcutta,\" \"Bengal,\" \"Bengali,\" and \"India\" as supporting context.\n\n{\"answer\": \"Kolkata\", \"confidence\": 0.99, \"backups\": [\"Calcutta\", \"Delhi\"]}"
+  },
+  {
+    "idx": 282,
+    "intermediate": "Stuttgart",
+    "answer": "t",
+    "pred": "Stuttgart",
+    "backups": [
+      "Baden-Baden",
+      "Karlsruhe",
+      "Heidelberg"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top token is overwhelmingly ' Stuttgart', with related tokens like 'uttgart', 'gart', ' Baden' (as in Baden-Württemberg), and ' German'/' Germany' all supporting this.\n\n{\"answer\": \"Stuttgart\", \"confidence\": 0.98, \"backups\": [\"Baden-Baden\", \"Karlsruhe\", \"Heidelberg\"]}"
+  },
+  {
+    "idx": 283,
+    "intermediate": "Munich",
+    "answer": "h",
+    "pred": "Munich",
+    "backups": [
+      "Stuttgart",
+      "Mexico City",
+      "Tegucigalpa"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly indicate Munich (with \"Munich\", \"München\", \"Bavaria\", \"Germany\", \"Mun\", \"burg\" all pointing to it). The model was thinking about Munich as the capital of Bavaria, Germany.\n\n{\"answer\": \"Munich\", \"confidence\": 0.97, \"backups\": [\"Stuttgart\", \"Mexico City\", \"Tegucigalpa\"]}"
+  },
+  {
+    "idx": 290,
+    "intermediate": "Saarbrücken",
+    "answer": "n",
+    "pred": "Saarbrücken",
+    "backups": [
+      "Stuttgart",
+      "Luxembourg",
+      "Saarlouis"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly suggest the model is thinking about **Saarbrücken** — note tokens 1-2 ('Sa', ' Sa'), token 10 ('ücken'), token 14 ('burg'), and token 47 ('萨尔' = \"Saar\" in Chinese). Tokens 5-6 indicate German context ('德国的' = \"Germany's\", '德语' = \"German language\"), and token 22 (' Germany') confirms this. The combination of 'Sa' + 'ücken' fragments strongly points to Saarbrücken, the capital of the Saarland region in Germany.\n\n{\"answer\": \"Saarbrücken\", \"confidence\": 0.88, \"backups\": [\"Stuttgart\", \"Luxembourg\", \"Saarlouis\"]}"
+  },
+  {
+    "idx": 291,
+    "intermediate": "Dresden",
+    "answer": "n",
+    "pred": "Dresden",
+    "backups": [
+      "Leipzig",
+      "Saxony"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top token is clearly ' Dresden' with a very high score, followed by ' Leipzig'. Both are cities in Saxony, Germany (note ' Sax' at rank 7). Dresden is the capital of Saxony, which aligns with the \"capital\" tokens at ranks 3-4. The model was likely computing whether Dresden is a capital city.\n\n{\"answer\": \"Dresden\", \"confidence\": 0.92, \"backups\": [\"Leipzig\", \"Saxony\"]}"
+  },
+  {
+    "idx": 293,
+    "intermediate": "Kiel",
+    "answer": "l",
+    "pred": "Kiel",
+    "backups": [
+      "Hamburg",
+      "Stuttgart",
+      "Lübeck"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly point to **Kiel**, with \"Schles\" (as in Schleswig-Holstein) and \"Hamburg\" as supporting context. Kiel is the capital of Schleswig-Holstein, Germany.\n\n{\"answer\": \"Kiel\", \"confidence\": 0.95, \"backups\": [\"Hamburg\", \"Stuttgart\", \"Lübeck\"]}"
+  },
+  {
+    "idx": 294,
+    "intermediate": "Erfurt",
+    "answer": "t",
+    "pred": "Weimar",
+    "backups": [
+      "Erfurt",
+      "Leipzig",
+      "Frankfurt",
+      "Düsseldorf"
+    ],
+    "got": false,
+    "top_k": {
+      "1": false,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top token is clearly 'Weimar' with a very high score, followed by 'Leipzig' and 'furt' (likely part of 'Erfurt'). The context involves German cities, capitals, and German language tokens. Weimar is strongly dominant, and there are hints about capitals - Erfurt is actually the capital of Thuringia (where Weimar is located), but Weimar itself is the most prominent token.\n\n{\"answer\": \"Weimar\", \"confidence\": 0.72, \"backups\": [\"Erfurt\", \"Leipzig\", \"Frankfurt\", \"Düsseldorf\"]}"
+  },
+  {
+    "idx": 295,
+    "intermediate": "Edmonton",
+    "answer": "n",
+    "pred": "Edmonton",
+    "backups": [
+      "Calgary",
+      "Alberta (province, not city)"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "Edmonton is overwhelmingly the top token, with Alberta and Canadian as supporting tokens.\n\n{\"answer\": \"Edmonton\", \"confidence\": 0.98, \"backups\": [\"Calgary\", \"Alberta (province, not city)\"]}"
+  },
+  {
+    "idx": 296,
+    "intermediate": "Victoria",
+    "answer": "a",
+    "pred": "Vancouver",
+    "backups": [
+      "Victoria",
+      "Tegucigalpa"
+    ],
+    "got": false,
+    "top_k": {
+      "1": false,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top token is clearly 'Vancouver', with 'Victoria' as second. The context mentions British Columbia, Canadian, province, and capital. The task likely involves identifying the capital of British Columbia — which is Victoria, not Vancouver (Vancouver is the largest city but Victoria is the capital). However, the strongest signal by far is 'Vancouver'.\n\nGiven the model is thinking about a capital (tokens: 'capital', 'capitals', '省会'), and the context is British Columbia, the model may be computing whether Vancouver or Victoria is the capital. The correct answer is Victoria, but the model's internal state is dominated by 'Vancouver' — possibly because it's the more prominent city being considered.\n\nThe question asks which city the model was thinking about — the dominant token is Vancouver.\n\n{\"answer\": \"Vancouver\", \"confidence\": 0.6, \"backups\": [\"Victoria\", \"Tegucigalpa\"]}"
+  },
+  {
+    "idx": 298,
+    "intermediate": "Fredericton",
+    "answer": "n",
+    "pred": "Fredericton",
+    "backups": [
+      "Halifax",
+      "Ottawa",
+      "Moncton"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top token is ' Freder' (overwhelmingly dominant), followed by ' Brunswick' and Canadian/Canada-related tokens. \"Freder\" + \"Brunswick\" = **Fredericton**, which is the capital of New Brunswick, Canada. This aligns with tokens like ' capital', ' province', ' Ottawa', ' Halifax', ' Canadian', '加拿大' (Canada in Chinese).\n\n{\"answer\": \"Fredericton\", \"confidence\": 0.97, \"backups\": [\"Halifax\", \"Ottawa\", \"Moncton\"]}"
+  },
+  {
+    "idx": 299,
+    "intermediate": "St. John's",
+    "answer": "s",
+    "pred": "St. John's",
+    "backups": [
+      "Halifax",
+      "Fredericton",
+      "Charlottetown"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly point to Newfoundland and Labrador as the province, with \"john\" (rank 3), \"Saint\" (rank 8), \" Saint\" (rank 17), \" john\" (rank 29), \" St\" (rank 31), and \"约翰\" (rank 38, Chinese for \"John\") all pointing to St. John's as the capital city being computed.\n\n{\"answer\": \"St. John's\", \"confidence\": 0.95, \"backups\": [\"Halifax\", \"Fredericton\", \"Charlottetown\"]}"
+  },
+  {
+    "idx": 300,
+    "intermediate": "Halifax",
+    "answer": "x",
+    "pred": "Halifax",
+    "backups": [
+      "Nova Scotia",
+      "Ottawa",
+      "Toronto"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly point to Halifax, with Nova Scotia also appearing (rank 5), confirming this is about Halifax, the capital of Nova Scotia, Canada.\n\n{\"answer\": \"Halifax\", \"confidence\": 0.98, \"backups\": [\"Nova Scotia\", \"Ottawa\", \"Toronto\"]}"
+  },
+  {
+    "idx": 301,
+    "intermediate": "Toronto",
+    "answer": "o",
+    "pred": "Toronto",
+    "backups": [
+      "Ottawa",
+      "Vancouver",
+      "Montreal"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly indicate \"Toronto\" with overwhelming dominance (score 152.486), supported by related tokens like \"Canadian,\" \"Ontario,\" and \"Canada.\"\n\n{\"answer\": \"Toronto\", \"confidence\": 0.97, \"backups\": [\"Ottawa\", \"Vancouver\", \"Montreal\"]}"
+  },
+  {
+    "idx": 305,
+    "intermediate": "Iqaluit",
+    "answer": "t",
+    "pred": "Iqaluit",
+    "backups": [
+      "Ottawa",
+      "Winnipeg",
+      "Nunavut"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly suggest \"Iqaluit\" — tokens like ' Inuit', ' Nun' (Nunavut), ' Iq', 'vik', 'jek', 'ukt' all point to Iqaluit, the capital of Nunavut, Canada. The tokens ' Canadian', ' capital', ' Ottawa', ' Winnipeg' also support a Canadian city context, with Iqaluit being the most specific match.\n\n{\"answer\": \"Iqaluit\", \"confidence\": 0.92, \"backups\": [\"Ottawa\", \"Winnipeg\", \"Nunavut\"]}"
+  },
+  {
+    "idx": 306,
+    "intermediate": "Whitehorse",
+    "answer": "e",
+    "pred": "Whitehorse",
+    "backups": [
+      "Yellowknife",
+      "Dawson City",
+      "Ottawa"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens \"Yuk\" + \"horse\" = \"Yukon\" + \"White\" = \"Whitehorse\", which is the capital of Yukon, Canada.\n\n{\"answer\": \"Whitehorse\", \"confidence\": 0.97, \"backups\": [\"Yellowknife\", \"Dawson City\", \"Ottawa\"]}"
+  },
+  {
+    "idx": 313,
+    "intermediate": "Guadalajara",
+    "answer": "a",
+    "pred": "Guadalajara",
+    "backups": [
+      "Mexico City",
+      "Zapopan",
+      "Ciudad de México"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly suggest \"Guadalajara\" — note tokens like 'Gu', 'adal', 'Guad', ' Jal' (Jalisco, the state), combined with 'Mexico' and 'Mexican'. The fragments spell out \"Guadalajara,\" which is the capital of Jalisco, Mexico.\n\n{\"answer\": \"Guadalajara\", \"confidence\": 0.93, \"backups\": [\"Mexico City\", \"Zapopan\", \"Ciudad de México\"]}"
+  },
+  {
+    "idx": 315,
+    "intermediate": "Morelia",
+    "answer": "a",
+    "pred": "Morelia",
+    "backups": [
+      "Mexico City",
+      "León",
+      "Ciudad de México",
+      "Monterrey",
+      "Guadalajara"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top token is ' Mich' with a very high score, which strongly suggests \"Michoacán\" or a city starting with \"Mich\" in Mexico. Combined with Mexico/Mexican tokens, León, Ciudad, and Spanish-language tokens, this points to **Morelia** (the capital of Michoacán, Mexico). The \"More\" tokens (rank 2-3) also support \"Morelia.\"\n\n{\"answer\": \"Morelia\", \"confidence\": 0.72, \"backups\": [\"Mexico City\", \"León\", \"Ciudad de México\", \"Monterrey\", \"Guadalajara\"]}"
+  },
+  {
+    "idx": 316,
+    "intermediate": "Cuernavaca",
+    "answer": "a",
+    "pred": "Mexico City",
+    "backups": [
+      "Culiacán",
+      "Cuernavaca",
+      "Guerrero",
+      "Tegucigalpa"
+    ],
+    "got": false,
+    "top_k": {
+      "1": false,
+      "2": false,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly point to Mexico City. The top tokens include 'Mexico', ' Mexico', '墨西哥' (Chinese for Mexico), ' Ciudad' (as in Ciudad de México), ' capital', and ' Mexican'. The \"Cu\" tokens might relate to \"Cuauhtémoc\" or similar. This is clearly Mexico City.\n\n{\"answer\": \"Mexico City\", \"confidence\": 0.92, \"backups\": [\"Culiacán\", \"Cuernavaca\", \"Guerrero\", \"Tegucigalpa\"]}"
+  },
+  {
+    "idx": 322,
+    "intermediate": "Villahermosa",
+    "answer": "a",
+    "pred": "Mexico City",
+    "backups": [
+      "Mexico",
+      "Ciudad de México",
+      "Tabasco",
+      "Villahermosa"
+    ],
+    "got": false,
+    "top_k": {
+      "1": false,
+      "2": false,
+      "3": false,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly suggest \"Mexico\" with references to its capital. The top tokens include 'Mexico', 'capital', 'capitals', '墨西哥' (Chinese for Mexico), and 'Ciudad' (as in Ciudad de México). The model was thinking about Mexico City.\n\n{\"answer\": \"Mexico City\", \"confidence\": 0.93, \"backups\": [\"Mexico\", \"Ciudad de México\", \"Tabasco\", \"Villahermosa\"]}"
+  },
+  {
+    "idx": 323,
+    "intermediate": "Xalapa",
+    "answer": "a",
+    "pred": "Mexico City",
+    "backups": [
+      "Veracruz",
+      "Xalapa",
+      "Guadalajara",
+      "Monterrey"
+    ],
+    "got": false,
+    "top_k": {
+      "1": false,
+      "2": false,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly suggest Mexico, with \"Ver\" and \"ruz\" combining to suggest \"Veracruz,\" and \"Jal\" suggesting \"Jalisco.\" The question seems to be about a Mexican state capital. \"Ver\" + \"ruz\" = Veracruz, and the capital of Veracruz state is Xalapa (Jalapa). But \"Jal\" could also point to Jalisco, whose capital is Guadalajara.\n\nHowever, the most prominent tokens are \"Ver\" and \"ruz\" (Veracruz), and the capital of the state of Veracruz is **Xalapa**. But wait - the city of Veracruz itself is often thought of as the capital, though Xalapa is the actual capital.\n\nGiven \"Ver\" + \"ruz\" appearing together with high scores, the model is likely thinking about the city of **Veracruz** (or Mexico City as the national capital). The token \"capitals\" is also high, suggesting this is about a capital city question.\n\nMexico City is the capital of Mexico, and it's also known as \"Ciudad de México.\" The token \" Ciudad\" appears, supporting this.\n\nBalancing all signals: Mexico City seems most likely as the answer to \"capital of Mexico,\" but the Veracruz tokens are very specific.\n\n{\"answer\": \"Mexico City\", \"confidence\": 0.45, \"backups\": [\"Veracruz\", \"Xalapa\", \"Guadalajara\", \"Monterrey\"]}"
+  },
+  {
+    "idx": 324,
+    "intermediate": "Mérida",
+    "answer": "a",
+    "pred": "Mexico City",
+    "backups": [
+      "Mérida",
+      "Mexicali",
+      "Monterrey"
+    ],
+    "got": false,
+    "top_k": {
+      "1": false,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly point to Mexico City: \"México\", \"Mexico\", \"墨西哥\" (Chinese for Mexico), \"Ciudad\" (as in Ciudad de México), \"Mexican\", and the Russian \"Мекси\" all point to the same place.\n\n{\"answer\": \"Mexico City\", \"confidence\": 0.95, \"backups\": [\"Mérida\", \"Mexicali\", \"Monterrey\"]}"
+  },
+  {
+    "idx": 325,
+    "intermediate": "Rio Branco",
+    "answer": "o",
+    "pred": "Rio Branco",
+    "backups": [
+      "Acre",
+      "Rio de Janeiro",
+      "Brasília",
+      "São Paulo"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top token is ' Acre' with a very high score, and there are strong Brazilian signals (Brazilian, Brazil, Rio, 巴西). Acre is a state in Brazil, and its capital is **Rio Branco** (note tokens 'Rio', ' Bran', ' Rio' supporting this). The model seems to be thinking about the capital of Acre, Brazil.\n\n{\"answer\": \"Rio Branco\", \"confidence\": 0.82, \"backups\": [\"Acre\", \"Rio de Janeiro\", \"Brasília\", \"São Paulo\"]}"
+  },
+  {
+    "idx": 330,
+    "intermediate": "Fortaleza",
+    "answer": "a",
+    "pred": "Fortaleza",
+    "backups": [
+      "São Paulo",
+      "Brisbane",
+      "Brasília"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens show \"aleza\", \"Fort\", \"Brazilian\", \"巴西\" (Brazil), \"São\", and \"cidade\" (Portuguese for \"city\"). \"Fort\" + \"aleza\" = \"Fortaleza\", which is a major Brazilian city.\n\n{\"answer\": \"Fortaleza\", \"confidence\": 0.92, \"backups\": [\"São Paulo\", \"Brisbane\", \"Brasília\"]}"
+  },
+  {
+    "idx": 331,
+    "intermediate": "Vitória",
+    "answer": "a",
+    "pred": "Vitória",
+    "backups": [
+      "Vila Velha",
+      "São Paulo",
+      "Rio de Janeiro",
+      "Fortaleza",
+      "Campo Grande"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly suggest \"Espírito Santo\" state in Brazil, with fragments like ' Espí', ' Vit' (Vitória), 'ória', ' Vila', and Brazil/Brazilian tokens. The capital of Espírito Santo is **Vitória**.\n\n{\"answer\": \"Vitória\", \"confidence\": 0.82, \"backups\": [\"Vila Velha\", \"São Paulo\", \"Rio de Janeiro\", \"Fortaleza\", \"Campo Grande\"]}"
+  },
+  {
+    "idx": 332,
+    "intermediate": "Goiânia",
+    "answer": "a",
+    "pred": "Brasília",
+    "backups": [
+      "São Paulo",
+      "Rio de Janeiro",
+      "Bogotá",
+      "Buenos Aires",
+      "Tegucigalpa",
+      "Mexico City"
+    ],
+    "got": false,
+    "top_k": {
+      "1": false,
+      "2": false,
+      "3": false,
+      "5": false,
+      "10": false
+    },
+    "raw": "The tokens strongly suggest Brazil ('Brazilian', 'Brazil', '巴西', ' São', 'ília', 'ônia'). The fragments 'ília' and 'ônia' point directly to **Brasília** (the capital of Brazil), and ' capital' reinforces this is about a capital city.\n\n{\"answer\": \"Brasília\", \"confidence\": 0.95, \"backups\": [\"São Paulo\", \"Rio de Janeiro\", \"Bogotá\", \"Buenos Aires\", \"Tegucigalpa\", \"Mexico City\"]}"
+  },
+  {
+    "idx": 338,
+    "intermediate": "João Pessoa",
+    "answer": "a",
+    "pred": "João Pessoa",
+    "backups": [
+      "Campina Grande",
+      "Brasília",
+      "Recife",
+      "Fortaleza",
+      "Natal"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly point to \"João\" (rank 1, highest score), combined with \"PB\" (the abbreviation for Paraíba state in Brazil), \"巴西\" (Brazil in Chinese), and \"Brazilian/Brazil\" tokens. This points to **João Pessoa**, the capital city of Paraíba state in Brazil.\n\n{\"answer\": \"João Pessoa\", \"confidence\": 0.92, \"backups\": [\"Campina Grande\", \"Brasília\", \"Recife\", \"Fortaleza\", \"Natal\"]}"
+  },
+  {
+    "idx": 339,
+    "intermediate": "Curitiba",
+    "answer": "a",
+    "pred": "Curitiba",
+    "backups": [
+      "São Paulo",
+      "Paraná",
+      "Brasília",
+      "Rio de Janeiro",
+      "Curitiba"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly suggest \"Paraná\" (a Brazilian state) and \"Curitiba\" (its capital). The tokens ' Paran' (rank 1, very high score), ' Cur' (rank 2), 'á' (rank 5), 'Cur' (rank 10), '-cur' (rank 13), 'iba' (rank 31), combined with ' Brazilian', ' Brazil', '巴西' all point to Curitiba, the capital of Paraná state in Brazil.\n\n{\"answer\": \"Curitiba\", \"confidence\": 0.92, \"backups\": [\"São Paulo\", \"Paraná\", \"Brasília\", \"Rio de Janeiro\", \"Curitiba\"]}"
+  },
+  {
+    "idx": 340,
+    "intermediate": "Recife",
+    "answer": "e",
+    "pred": "Recife",
+    "backups": [
+      "Fortaleza",
+      "Pernambuco",
+      "Salvador",
+      "Brasília",
+      "São Paulo"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly suggest a Brazilian city. Key hints:\n\n- ' Rec' (rank 1) and 'Pern' (rank 2) → **Recife**, capital of Pernambuco (PE)\n- ' Brazilian', '巴西' (Brazil in Chinese), ' Brazil'\n- 'fe' and 'ife' → completing \"Rec**ife**\"\n- 'PE' → state abbreviation for Pernambuco\n- 'aleza' → could be Fortaleza, but Recife is much stronger\n- ' capital' → Recife is the state capital\n\n{\"answer\": \"Recife\", \"confidence\": 0.92, \"backups\": [\"Fortaleza\", \"Pernambuco\", \"Salvador\", \"Brasília\", \"São Paulo\"]}"
+  },
+  {
+    "idx": 341,
+    "intermediate": "Teresina",
+    "answer": "a",
+    "pred": "Teresina",
+    "backups": [
+      "São Luís",
+      "Brasília",
+      "São Paulo",
+      "Fortaleza",
+      "Tegucigalpa",
+      "Montevideo"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The tokens strongly suggest Brazil (\"Brazilian\", \"Brazil\", \"Portuguese\", \"巴西\", \"São\", \"cidade\"). The token \"Ter\" + \"aleza\" suggests \"Teresina\" (capital of Piauí, Brazil), and \"PI\" confirms Piauí. \"São\" could relate to São Luís or other cities, but the combination of \"Ter\", \"aleza\", \"PI\" points clearly to Teresina.\n\n{\"answer\": \"Teresina\", \"confidence\": 0.72, \"backups\": [\"São Luís\", \"Brasília\", \"São Paulo\", \"Fortaleza\", \"Tegucigalpa\", \"Montevideo\"]}"
+  },
+  {
+    "idx": 345,
+    "intermediate": "Boa Vista",
+    "answer": "a",
+    "pred": "Boa Vista",
+    "backups": [
+      "Georgetown",
+      "Brasília",
+      "Tegucigalpa",
+      "Buenos Aires"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "Looking at the tokens, I can see strong signals:\n\n- ' Guyana' (top token, very high score)\n- ' capital' (second token)\n- ' Bo' (rank 5) + 'boa' (rank 12) + 'ônia' (rank 26) → \"Boa Vista\"\n- ' Vista' (rank 48)\n- ' Brazilian' (rank 9), '巴西' (rank 11, meaning \"Brazil\"), ' Brazil' (rank 20)\n- ' RR' (rank 8) → Roraima state abbreviation\n- ' state' (rank 50)\n\n\"Boa Vista\" is the capital of Roraima state in Brazil, located near Guyana. The tokens \"Bo\" + \"boa\" + \"ônia\" + \"Vista\" all point to Boa Vista. The \" Guyana\" token likely appears because Boa Vista is near the Guyana border.\n\n{\"answer\": \"Boa Vista\", \"confidence\": 0.82, \"backups\": [\"Georgetown\", \"Brasília\", \"Tegucigalpa\", \"Buenos Aires\"]}"
+  },
+  {
+    "idx": 351,
+    "intermediate": "Brisbane",
+    "answer": "e",
+    "pred": "Brisbane",
+    "backups": [
+      "Canberra",
+      "Adelaide",
+      "Sydney",
+      "Melbourne"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly indicate Brisbane (rank 1 with overwhelming score), with Queensland (rank 2) as the state, and Australian context tokens throughout.\n\n{\"answer\": \"Brisbane\", \"confidence\": 0.97, \"backups\": [\"Canberra\", \"Adelaide\", \"Sydney\", \"Melbourne\"]}"
+  },
+  {
+    "idx": 353,
+    "intermediate": "Adelaide",
+    "answer": "e",
+    "pred": "Adelaide",
+    "backups": [
+      "Canberra",
+      "Sydney",
+      "Melbourne",
+      "Brisbane",
+      "Perth"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly indicate \"Adelaide\" (rank 1 with overwhelming score), with Australian context tokens supporting this.\n\n{\"answer\": \"Adelaide\", \"confidence\": 0.97, \"backups\": [\"Canberra\", \"Sydney\", \"Melbourne\", \"Brisbane\", \"Perth\"]}"
+  },
+  {
+    "idx": 355,
+    "intermediate": "Canberra",
+    "answer": "a",
+    "pred": "Canberra",
+    "backups": [
+      "Sydney"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "{\"answer\": \"Canberra\", \"confidence\": 0.99, \"backups\": [\"Sydney\"]}"
+  },
+  {
+    "idx": 356,
+    "intermediate": "Darwin",
+    "answer": "n",
+    "pred": "Darwin",
+    "backups": [
+      "Canberra",
+      "Adelaide",
+      "Sydney"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "Darwin is the top token by a huge margin, with strong supporting tokens like \"Northern Territory,\" \"capital,\" and Australian-related terms. Darwin is the capital of Australia's Northern Territory.\n\n{\"answer\": \"Darwin\", \"confidence\": 0.95, \"backups\": [\"Canberra\", \"Adelaide\", \"Sydney\"]}"
+  },
+  {
+    "idx": 357,
+    "intermediate": "Edinburgh",
+    "answer": "h",
+    "pred": "Edinburgh",
+    "backups": [
+      "Glasgow",
+      "Prague"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly indicate Edinburgh (score 215, with \"burgh\", \"inburgh\" as fragments, plus \"苏格兰\" meaning \"Scotland\" in Chinese, and \"Scotland\"/\"Scottish\" tokens).\n\n{\"answer\": \"Edinburgh\", \"confidence\": 0.99, \"backups\": [\"Glasgow\", \"Prague\"]}"
+  },
+  {
+    "idx": 358,
+    "intermediate": "Cardiff",
+    "answer": "f",
+    "pred": "Cardiff",
+    "backups": [
+      "Swansea",
+      "Newport"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly indicate Cardiff (score 182), with Wales and Welsh as supporting context, plus \"capital\" appearing multiple times — Cardiff is the capital of Wales.\n\n{\"answer\": \"Cardiff\", \"confidence\": 0.99, \"backups\": [\"Swansea\", \"Newport\"]}"
+  },
+  {
+    "idx": 359,
+    "intermediate": "Belfast",
+    "answer": "t",
+    "pred": "Belfast",
+    "backups": [
+      "Dublin",
+      "Derry"
+    ],
+    "got": true,
+    "top_k": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "5": true,
+      "10": true
+    },
+    "raw": "The top tokens strongly point to Belfast: \"Belfast\" dominates with a score of 261.548, followed by \"Ireland,\" \"Northern,\" \"Ulster,\" and \"fast\" (the end of \"Belfast\"). The context of Northern Ireland's capital is clear.\n\n{\"answer\": \"Belfast\", \"confidence\": 0.99, \"backups\": [\"Dublin\", \"Derry\"]}"
+  }
+]

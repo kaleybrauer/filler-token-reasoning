@@ -9,7 +9,11 @@ Produces four tables in release/tables/:
 
 Each row: one (model, condition[, domain]) combination.
 Each cell: top-K hit fraction at K = 1, 2, 3, 5, 10.
-Includes a "supervised" column (substring/exact match in raw top tokens, no judge).
+Includes a rule-based ("direct match") column that scores top tokens against
+ground truth without an LLM judge: numeric-token equality for addition tasks,
+EN/ZH alias substring match for letter-position. Both this and the LLM-judge
+columns use ground truth, so neither is more "supervised" than the other —
+they differ only in matching method.
 
 Run from repo root:
     python scripts/release/generate_appendix_tables.py
@@ -143,7 +147,7 @@ def build_table(rows, caption, label):
         r"\label{tab:" + label + r"}" + "\n"
         r"\begin{tabular}{l r " + " ".join(["r"] * (3 * len(K))) + r"}" + "\n"
         r"\toprule" + "\n"
-        r"& & \multicolumn{" + str(len(K)) + r"}{c}{Supervised top-$K$ (\%)}"
+        r"& & \multicolumn{" + str(len(K)) + r"}{c}{Direct match top-$K$ (\%)}"
         r" & \multicolumn{" + str(len(K)) + r"}{c}{Haiku judge top-$K$ (\%)}"
         r" & \multicolumn{" + str(len(K)) + r"}{c}{Sonnet judge top-$K$ (\%)} \\" + "\n"
         r"\cmidrule(lr){3-" + str(2 + len(K)) + r"}"
@@ -345,7 +349,7 @@ def render_table(rows, caption, label):
     lines.append(r"\begin{tabular}{l r " + " ".join(["r"] * n_metric_cols) + r"}")
     lines.append(r"\toprule")
     lines.append(
-        r"& & \multicolumn{" + str(len(K)) + r"}{c}{Supervised top-$K$ (\%)}"
+        r"& & \multicolumn{" + str(len(K)) + r"}{c}{Direct match top-$K$ (\%)}"
         r" & \multicolumn{" + str(len(K)) + r"}{c}{Haiku judge top-$K$ (\%)}"
         r" & \multicolumn{" + str(len(K)) + r"}{c}{Sonnet judge top-$K$ (\%)} \\"
     )
@@ -388,7 +392,7 @@ def main():
         rows,
         caption=("Decoding accuracy on 1-fact addition (DeepSeek V3, neutral judge "
                  "prompt). Each cell is the top-$K$ hit rate as a percentage of $n$. "
-                 "Supervised: target value $A$ in top-$K$ numeric tokens of the "
+                 "Direct match: target value $A$ in top-$K$ numeric tokens of the "
                  "aggregated residuals. Haiku/Sonnet: judge's primary guess plus "
                  "first $K{-}1$ backups contains the target."),
         label="decode_1fact"))
@@ -397,7 +401,7 @@ def main():
     (OUT / "table_2fact.tex").write_text(render_table(
         rows,
         caption=("Decoding accuracy on 2-fact addition (neutral judge prompt). "
-                 "Supervised: BOTH addends $A_1$ and $A_2$ in top-$K$ numeric "
+                 "Direct match: BOTH addends $A_1$ and $A_2$ in top-$K$ numeric "
                  "tokens. Haiku/Sonnet: $\\{n_1, n_2, \\textrm{backups}\\}$ "
                  "contains both $A_1$ and $A_2$ within top-$K$."),
         label="decode_2fact"))
@@ -408,7 +412,7 @@ def main():
         caption=("Decoding accuracy on letter-position task with the "
                  "\\emph{neutral} (task-agnostic) judge prompt. Elements: "
                  "atomic-number-to-element entity. Capitals: country/state-to-"
-                 "capital entity. Supervised: substring of the entity name "
+                 "capital entity. Direct match: substring of the entity name "
                  "(EN or ZH alias, or chemical symbol for elements) appears in "
                  "any top-$K$ token."),
         label="decode_letterpos_neutral"))
@@ -418,7 +422,7 @@ def main():
         rows,
         caption=("Decoding accuracy on letter-position task with the leading "
                  "judge prompts (\\emph{chemistry} for elements, "
-                 "\\emph{geography} for capitals). Supervised column is "
+                 "\\emph{geography} for capitals). Direct-match column is "
                  "identical to Table~\\ref{tab:decode_letterpos_neutral} "
                  "since the residual tokens are the same; only the judge "
                  "framing differs."),

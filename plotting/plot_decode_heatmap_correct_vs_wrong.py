@@ -93,25 +93,38 @@ def main():
     boundaries = correct.get("_boundaries", {}) or {}
     filler_end = boundaries.get("filler_end_offset")
 
+    # Horizontal layout: rows = Correct / Wrong; columns = A1 / A2 / A1+A2
     fig, axes = plt.subplots(
-        3, 2, figsize=(13, 13),
+        2, 3, figsize=(19, 9),
         sharex=True, sharey=True,
         gridspec_kw={"hspace": 0.10, "wspace": 0.06},
     )
 
+    row_specs = [(correct, "Correct", n_correct), (wrong, "Wrong", n_wrong)]
+
     last_im = None
-    for row, (metric, var_label) in enumerate(VARIABLES):
-        for col, (data, _label) in enumerate([(correct, "Correct"), (wrong, "Wrong")]):
+    for row, (data, _label, _n) in enumerate(row_specs):
+        for col, (metric, var_label) in enumerate(VARIABLES):
             ax = axes[row, col]
             M, layers, positions = matrix_for(data, metric, min_layer=args.min_layer)
             im = ax.imshow(M, aspect="auto", cmap="RdYlGn",
                            vmin=0, vmax=100, interpolation="nearest")
             last_im = im
 
-            # x ticks at every even-offset position
+            # x ticks: adaptive step so we get ~6-10 labeled positions per panel.
+            # Without this, dots_50 / counting_25 / counting_50 panels have so many
+            # ticks that the labels overlap into illegibility.
             n_pos = len(positions)
+            if n_pos <= 20:
+                pos_step = 2
+            elif n_pos <= 35:
+                pos_step = 5
+            elif n_pos <= 70:
+                pos_step = 10
+            else:
+                pos_step = 20
             tick_idxs = [i for i, p in enumerate(positions)
-                         if int(pos_label(p)) % 2 == 0]
+                         if int(pos_label(p)) % pos_step == 0]
             ax.set_xticks(tick_idxs)
             ax.set_xticklabels([pos_label(positions[i]) for i in tick_idxs])
 
@@ -134,26 +147,33 @@ def main():
             # axes labels: only outer
             if col == 0:
                 ax.set_ylabel("Layer")
-            if row == len(VARIABLES) - 1:
+            if row == len(row_specs) - 1:
                 ax.set_xlabel("Token offset")
 
-    # Row labels (left side) — variable name
-    for row, (_metric, label) in enumerate(VARIABLES):
-        # Place to the LEFT of the axis using axes coordinates of leftmost subplot
-        axes[row, 0].text(-0.27, 0.5, label, transform=axes[row, 0].transAxes,
-                          fontsize=args.font_size + 6, fontweight="bold",
+    # Row labels (left side) — Correct / Wrong with n=...
+    # Sit further left than the "Layer" ylabel + tick labels so they don't collide.
+    # Two separate text() calls so we can style the count line differently.
+    for row, (_data, label, n) in enumerate(row_specs):
+        axes[row, 0].text(-0.45, 0.55, label,
+                          transform=axes[row, 0].transAxes,
+                          fontsize=args.font_size + 4, fontweight="bold",
+                          ha="center", va="center", rotation=0)
+        axes[row, 0].text(-0.45, 0.40, f"n = {n}",
+                          transform=axes[row, 0].transAxes,
+                          fontsize=args.font_size - 2, fontweight="normal",
+                          fontstyle="italic",
                           ha="center", va="center", rotation=0)
 
-    # Column labels — Correct / Wrong, with n=...
-    for col, (label, n) in enumerate([("Correct", n_correct), ("Wrong", n_wrong)]):
-        axes[0, col].text(0.5, 1.04, f"{label}  (n={n})",
+    # Column labels (top) — variable name (A1, A2, A1+A2)
+    for col, (_metric, label) in enumerate(VARIABLES):
+        axes[0, col].text(0.5, 1.04, label,
                           transform=axes[0, col].transAxes,
-                          fontsize=args.font_size + 4, fontweight="bold",
+                          fontsize=args.font_size + 6, fontweight="bold",
                           ha="center", va="bottom")
 
-    # Layout — leave space on right for shared colorbar
-    fig.subplots_adjust(left=0.13, right=0.90, top=0.94, bottom=0.08)
-    cbar_ax = fig.add_axes([0.92, 0.10, 0.018, 0.82])
+    # Layout — leave more space on left for "Layer" + row labels, right for cbar
+    fig.subplots_adjust(left=0.16, right=0.92, top=0.92, bottom=0.10)
+    cbar_ax = fig.add_axes([0.94, 0.12, 0.014, 0.78])
     cbar = fig.colorbar(last_im, cax=cbar_ax)
     cbar.set_label(cbar_label, fontsize=args.font_size)
     cbar.ax.tick_params(labelsize=args.font_size - 4)

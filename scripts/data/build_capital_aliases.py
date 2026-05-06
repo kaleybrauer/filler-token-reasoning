@@ -30,7 +30,7 @@ from pathlib import Path
 
 import requests
 
-HEADERS = {"User-Agent": "filler-probing-research/1.0 (kaleybrauer@gmail.com)"}
+HEADERS = {"User-Agent": "filler-probing-research/1.0 (email-here)"}
 LANGS = ["en", "zh", "zh-hans", "zh-hant"]
 
 CITY_KEYWORDS = re.compile(

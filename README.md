@@ -143,6 +143,25 @@ python scripts/extract/extract_answer_attention.py \
 
 The "filler region" is the filler header tokens plus the filler tokens themselves, treated as one segment.
 
+## Released artifacts
+
+The pre-computed pipeline outputs that the paper depends on are committed under [`release/`](release/), so reviewers can verify or extend results without re-running ~10⁴ judge API calls or the GPU extraction. ~200 JSON files, ~125 MB total.
+
+| dir | files | what |
+|---|---|---|
+| `release/top_tokens/` | 45 | per-example aggregated top-50 residual tokens (input to the LLM judge), one file per (model × task × condition) |
+| `release/judge_outputs/` | 138 | per-example Claude Haiku 4.5 / Sonnet 4.6 judge responses, one file per (model × task × condition × judge × prompt) |
+| `release/accuracy_tables/` | 11 | aggregated judge top-K hit counts per (condition, judge), one file per (model, task, prompt) |
+| `release/logit_lens_heatmaps/` | 8 | per-(layer, position) decode-match fractions for the 2-fact heatmaps |
+
+Filename convention: `<model>_<task>_<condition>[_<judge>][_<prompt>][_incorrect].json`. The schema for each subdirectory and the gotchas (e.g., the `prob` field is a residual sum, not a probability; 2-fact `top_k` values are dicts) are documented in [`release/README.md`](release/README.md).
+
+The release tree can be regenerated deterministically from the working `outputs/` and `results/` directories with:
+
+```bash
+python scripts/release/stage_release.py
+```
+
 ## Repository structure
 
 ```

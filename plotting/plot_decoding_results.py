@@ -42,7 +42,7 @@ GROUPS = [
         "n": 1460,
         "supervised": 35.2, "supervised_min": 29.0, "supervised_max": 45.0,
         "haiku":      51.1, "haiku_min":      43.4, "haiku_max":      56.1,
-        "sonnet":     82.2, "sonnet_min":     78.3, "sonnet_max":     86.6,
+        "sonnet":     82.3, "sonnet_min":     78.3, "sonnet_max":     86.6,
         "supervised_note": None,
     },
     {
@@ -61,8 +61,8 @@ GROUPS = [
         "model": "DeepSeek V3",
         "n": 2702,
         "supervised": 66.9, "supervised_min": 53.2, "supervised_max": 81.1,
-        "haiku":      85.9, "haiku_min":      84.8, "haiku_max":      87.4,
-        "sonnet":     92.1, "sonnet_min":     90.8, "sonnet_max":     94.3,
+        "haiku":      85.9, "haiku_min":      77.8, "haiku_max":      91.3,
+        "sonnet":     92.7, "sonnet_min":     86.1, "sonnet_max":     98.3,
         "supervised_note": "substring",  # marks † on the bar
     },
     {
@@ -71,8 +71,8 @@ GROUPS = [
         "model": "Kimi K2",
         "n": 2997,
         "supervised": 62.4, "supervised_min": 54.7, "supervised_max": 72.1,
-        "haiku":      83.6, "haiku_min":      80.7, "haiku_max":      85.4,
-        "sonnet":     90.0, "sonnet_min":     86.6, "sonnet_max":     92.3,
+        "haiku":      83.9, "haiku_min":      74.3, "haiku_max":      91.9,
+        "sonnet":     90.2, "sonnet_min":     78.9, "sonnet_max":     97.1,
         "supervised_note": "substring",
     },
 ]

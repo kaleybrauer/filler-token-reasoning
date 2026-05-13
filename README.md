@@ -3,8 +3,11 @@
 Investigates whether filler tokens (e.g., `. . . . .` or `1 2 3 4 5`) inserted between a question and an answer give large language models additional computation depth and what the model is actually computing during that span. This repo contains scripts for experiments on instruction-tuned MoE models: hidden-state decoding via logit lens (with an LLM judge over residual top tokens), KV-cache transplant interventions, and attention-pattern analysis.
 
 Work done by:
+
 Kaley Brauer, Harvard
+
 Claudio Mayrink Verdun, MIT
+
 Samuel Marks, Anthropic
 
 ## Tasks

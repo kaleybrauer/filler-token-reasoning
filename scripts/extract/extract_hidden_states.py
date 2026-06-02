@@ -37,7 +37,7 @@ if not hasattr(_act, "PytorchGELUTanh"):
     _act.PytorchGELUTanh = _act.GELUTanh
 
 def problem_metadata(problem, dataset_type="1hop"):
-    """Extract metadata fields from a problem dict, handling 1-hop, 2-hop, and letterpos."""
+    """Extract metadata fields from a problem dict, handling 1-hop, 2-hop, letterpos, and varbind."""
     meta = {"answer": problem["answer"]}
     if dataset_type == "2fact":
         meta["fact_value_1"] = problem["fact_value_1"]
@@ -53,6 +53,18 @@ def problem_metadata(problem, dataset_type="1hop"):
             if key in ("answer", "question", "type"):
                 continue
             meta[key] = value
+    elif dataset_type == "varbind":
+        # queried_value is the hidden intermediate (never stated in the prompt) —
+        # the transient-computation analog of fact_value. The "intermediate" alias
+        # lets verify_extraction print it without a varbind-specific branch.
+        meta["queried_value"] = problem["queried_value"]
+        meta["intermediate"] = problem["queried_value"]
+        meta["queried_term"] = problem["queried_term"]
+        meta["coefficient"] = problem["coefficient"]
+        meta["operation"] = problem["operation"]
+        meta["constant"] = problem["constant"]
+        meta["chain_len"] = problem["chain_len"]
+        meta["num_terms"] = problem["num_terms"]
     else:
         meta["fact_value"] = problem["fact_value"]
         meta["x"] = problem["x"]
@@ -73,6 +85,10 @@ from data.generate_2fact_dataset import (
 from data.generate_letterpos_dataset import (
     build_system_message_letterpos,
     build_user_turn_letterpos,
+)
+from data.generate_varbind_dataset import (
+    build_system_message_varbind,
+    build_user_turn_varbind,
 )
 
 
@@ -112,6 +128,21 @@ def build_messages_for_condition(few_shot_items, target, filler_type, k, rng=Non
 
         user_content = build_user_turn_letterpos(
             target["question"], filler_type, k, rng=rng
+        )
+        messages.append({"role": "user", "content": user_content})
+    elif dataset_type == "varbind":
+        system_msg = build_system_message_varbind(filler_type, k)
+        messages = [{"role": "system", "content": system_msg}]
+
+        for fs in few_shot_items:
+            user_content = build_user_turn_varbind(
+                fs["definitions"], fs["question"], filler_type, k, rng=rng
+            )
+            messages.append({"role": "user", "content": user_content})
+            messages.append({"role": "assistant", "content": str(fs["answer"])})
+
+        user_content = build_user_turn_varbind(
+            target["definitions"], target["question"], filler_type, k, rng=rng
         )
         messages.append({"role": "user", "content": user_content})
     else:
@@ -768,6 +799,12 @@ def run_extraction(
         elif dataset_type == "letterpos":
             # problem_metadata already included element, atomic_number, position, question
             pass
+        elif dataset_type == "varbind":
+            # problem_metadata already included queried_value/intermediate, etc.;
+            # carry the full problem for offline reference (join-by-idx with dataset).
+            entry["queried_term"] = p["queried_term"]
+            entry["definitions"] = p["definitions"]
+            entry["question"] = p["question"]
         else:
             entry["fact_phrase"] = p["fact_phrase"]
             entry["kind"] = p["kind"]
@@ -1037,9 +1074,10 @@ def main():
     parser.add_argument("--batch-size", type=int, default=1,
                         help="Batch size for extraction (>1 for better GPU utilization)")
     parser.add_argument("--dataset-type", type=str, default="1hop",
-                        choices=["1hop", "2fact", "letterpos"],
+                        choices=["1hop", "2fact", "letterpos", "varbind"],
                         help="Dataset type: 1hop (fact+x), 2fact (fact1+fact2), "
-                             "or letterpos (atomic# → element → Nth letter)")
+                             "letterpos (atomic# → element → Nth letter), "
+                             "or varbind (chained variable binding)")
     parser.add_argument("--all-positions", action="store_true",
                         help="Extract every token from question_end through answer_prompt. "
                              "Overrides --filler-positions and fraction-based positions.")

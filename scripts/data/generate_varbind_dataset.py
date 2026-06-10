@@ -38,6 +38,7 @@ import argparse
 import json
 import os
 import random
+import re
 import sys
 from pathlib import Path
 from typing import Dict, List
@@ -286,6 +287,103 @@ def build_prompt_messages_varbind(
     )
     messages.append({"role": "user", "content": user_content})
 
+    return messages
+
+
+# ---------------------------------------------------------------------------
+# Chain-of-thought conditions (think out loud before answering)
+# ---------------------------------------------------------------------------
+# These set up the two CoT conditions used to test whether the internal depth
+# ladder seen in the filler/baseline conditions (x@L33 -> c1*x@L38 -> y@L44 ->
+# c2*y@L51 -> answer@L60, all in one forward pass) survives when the model
+# VERBALISES the chain across token positions:
+#   - teacher-forced: the canonical reasoning is supplied as the assistant turn
+#     (build_cot_reasoning_varbind) and extracted over -> known positions for every
+#     intermediate, clean layer-structure comparison.
+#   - free-generated: the model generates its own reasoning (few-shot demo + an
+#     optional "Thinking:" primer); intermediate positions are recovered by parsing
+#     the generated text.
+# The reasoning is written so all five values (x, c1*x, y, c2*y, answer) appear as
+# locatable number tokens.
+
+_COEF_TO_NUM = {w: n for n, w in COEF_WORDS.items()}
+_CHAIN_EXPR_RE = re.compile(
+    r"^(twice|three times|four times|five times|six times) "
+    r"the number for (\w+) (plus|minus) (\d+)$")
+
+
+def _resolve_chain_varbind(item: dict):
+    """Recover (base_name, x, c1, op1, k1) for the queried term (chain_len=1)."""
+    defs = {name: val for name, val in item["definitions"]}
+    m = _CHAIN_EXPR_RE.match(defs[item["queried_term"]])
+    if not m:
+        raise ValueError(f"queried term is not a depth-1 derived term: "
+                         f"{defs[item['queried_term']]!r}")
+    return m.group(2), defs[m.group(2)], _COEF_TO_NUM[m.group(1)], m.group(3), int(m.group(4))
+
+
+def build_cot_reasoning_varbind(item: dict) -> str:
+    """Canonical step-by-step reasoning, written so every intermediate
+    (x, c1*x, y, c2*y, answer) appears as a number token. Used as the
+    teacher-forced target and the few-shot demonstration."""
+    base_name, x, c1, op1, k1 = _resolve_chain_varbind(item)
+    qname = item["queried_term"]
+    y = item["queried_value"]
+    c2, op2, k2 = item["coefficient"], item["operation"], item["constant"]
+    answer = item["answer"]
+    s1 = "+" if op1 == "plus" else "-"
+    s2 = "+" if op2 == "plus" else "-"
+    return (f"{base_name} = {x}, so {qname} = {c1} * {x} {s1} {k1} "
+            f"= {c1 * x} {s1} {k1} = {y}. "
+            f"The question asks {c2} * {y} {s2} {k2} "
+            f"= {c2 * y} {s2} {k2} = {answer}.")
+
+
+def build_system_message_varbind_cot() -> str:
+    """System message for the CoT conditions — asks the model to reason out loud."""
+    return (
+        "You will be given a list of variable definitions followed by a question. "
+        "Each variable equals either a number or an expression that refers to an "
+        "earlier variable (for example 'twice the number for X plus 3'). Resolve the "
+        "references step by step, showing each calculation, and then give the final "
+        "number."
+    )
+
+
+def build_cot_user_turn_varbind(item: dict) -> str:
+    """User turn for CoT: the variable block + question, no Filler/Answer scaffold
+    (the assistant produces 'Thinking: ...\\nAnswer: ...')."""
+    return f"{render_definitions(item['definitions'])}\nQuestion: {item['question']}"
+
+
+def build_cot_assistant_turn_varbind(item: dict) -> str:
+    """Full assistant turn: the reasoning then the answer."""
+    return f"Thinking: {build_cot_reasoning_varbind(item)}\nAnswer: {item['answer']}"
+
+
+def build_cot_messages_varbind(
+    few_shot_items: list[dict],
+    target_item: dict,
+    teacher_forced: bool = True,
+) -> list[dict]:
+    """Full chat prompt for a varbind CoT condition.
+
+    Few-shot examples are shown WITH their canonical reasoning so the model adopts
+    the 'Thinking: ...\\nAnswer: N' format. If teacher_forced, the target's assistant
+    turn (reasoning + answer) is appended for a single forward-pass extraction. If
+    not (free-generated), the messages stop at the target user turn; the caller
+    applies the chat template with add_generation_prompt=True (optionally priming the
+    assistant with 'Thinking:') and generates.
+    """
+    messages = [{"role": "system", "content": build_system_message_varbind_cot()}]
+    for fs in few_shot_items:
+        messages.append({"role": "user", "content": build_cot_user_turn_varbind(fs)})
+        messages.append({"role": "assistant",
+                         "content": build_cot_assistant_turn_varbind(fs)})
+    messages.append({"role": "user", "content": build_cot_user_turn_varbind(target_item)})
+    if teacher_forced:
+        messages.append({"role": "assistant",
+                         "content": build_cot_assistant_turn_varbind(target_item)})
     return messages
 
 

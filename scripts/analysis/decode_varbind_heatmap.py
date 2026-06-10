@@ -136,9 +136,9 @@ def parse_base_value(example):
     return parse_queried_chain(example)[0]
 
 
-def load_pkls(files, incorrect_only):
+def load_pkls(files, subset):
     """Load pkls (threaded — I/O bound on the network mount) and filter by
-    model_correct."""
+    model_correct. subset in {'correct', 'incorrect', 'all'}."""
     def _read(f):
         with open(f, "rb") as fp:
             return pickle.load(fp)
@@ -149,21 +149,19 @@ def load_pkls(files, incorrect_only):
         for d in tqdm(ex.map(_read, files), total=len(files), desc="Loading"):
             n_total += 1
             correct = d.get("model_correct", False)
-            if incorrect_only:
-                if not correct:
-                    all_data.append(d)
-            elif correct:
+            if subset == "all" or (subset == "incorrect" and not correct) \
+                    or (subset == "correct" and correct):
                 all_data.append(d)
     return all_data, n_total
 
 
-def plot_condition(results, cond, suffix_cond, output_dir, incorrect_only):
+def plot_condition(results, cond, suffix_cond, output_dir, subset):
     """Print the per-target summary and render the 5-panel heatmaps from a results
     dict (freshly computed, or loaded from a decode_varbind_<cond>.json for replot).
 
-    Targets, in computation order: B = base value (visible), c₁·B = chain multiply
-    sub-product (hidden), V = queried term's value (hidden), c·V = question multiply
-    sub-product (hidden), answer (final). Labels are generic — the per-example
+    Targets, in computation order (paper notation x/y): x = base value (visible),
+    c₁·x = chain multiply sub-product (hidden), y = queried term's value (hidden),
+    c₂·y = question multiply sub-product (hidden), answer (final). The per-example
     variable names are random CVC strings, so no single name applies.
     """
     positions = results["_positions"]
@@ -173,10 +171,10 @@ def plot_condition(results, cond, suffix_cond, output_dir, incorrect_only):
     # Text summary (exact-match): best (layer, pos) per target, and best in filler.
     fe = boundaries.get("filler_end_offset") if boundaries else None
     fs = boundaries.get("filler_start_offset") if boundaries else None
-    for tgt, name in [("frac_B_exact", "B base (visible)"),
-                      ("frac_C1B_exact", "c1·B chain product (HIDDEN)"),
-                      ("frac_QV_exact", "V queried value (HIDDEN)"),
-                      ("frac_QC_exact", "c·V coef×queried (HIDDEN)"),
+    for tgt, name in [("frac_B_exact", "x base (visible)"),
+                      ("frac_C1B_exact", "c₁·x chain product (HIDDEN)"),
+                      ("frac_QV_exact", "y queried value (HIDDEN)"),
+                      ("frac_QC_exact", "c₂·y question product (HIDDEN)"),
                       ("frac_ANS_exact", "answer (final)")]:
         best = (-1.0, None, None)
         best_filler = (-1.0, None, None)
@@ -200,10 +198,10 @@ def plot_condition(results, cond, suffix_cond, output_dir, incorrect_only):
 
     # Exact-match heatmaps only (no ±5).
     for metric_set, suffix, cbar_label in [
-        ([("frac_B_exact", "B: base value (visible, exact)"),
-          ("frac_C1B_exact", "c₁·B: chain product (hidden, exact)"),
-          ("frac_QV_exact", "V: queried value (hidden, exact)"),
-          ("frac_QC_exact", "c·V: coef × queried (hidden, exact)"),
+        ([("frac_B_exact", "x: base value (visible, exact)"),
+          ("frac_C1B_exact", "c₁·x: chain product (hidden, exact)"),
+          ("frac_QV_exact", "y: queried value (hidden, exact)"),
+          ("frac_QC_exact", "c₂·y: question product (hidden, exact)"),
           ("frac_ANS_exact", "answer (final, exact)")],
          "exact", "% exact match"),
     ]:
@@ -250,7 +248,8 @@ def plot_condition(results, cond, suffix_cond, output_dir, incorrect_only):
             if ax == axes[0]:
                 ax.set_ylabel("Layer")
 
-        title_suffix = " — model INCORRECT" if incorrect_only else ""
+        title_suffix = {"incorrect": " — model INCORRECT",
+                        "all": " — ALL examples"}.get(subset, "")
         fig.suptitle(f"varbind {cond}{title_suffix}: what is encoded at each (layer, position)?",
                      fontsize=22)
         fig.subplots_adjust(right=0.88, wspace=0.15, top=0.93)
@@ -285,17 +284,23 @@ def main():
     parser.add_argument("--incorrect-only", action="store_true",
                         help="Filter to examples where the model got the final answer WRONG. "
                              "Default: filter to correct examples.")
+    parser.add_argument("--all-examples", action="store_true",
+                        help="Include ALL examples (correct + incorrect) — the unbiased "
+                             "population. Default (correct-only) cherry-picks examples the "
+                             "model already solved, which inflates baseline decode.")
     parser.add_argument("--replot", action="store_true",
                         help="Skip extraction/decoding; redraw heatmaps from the existing "
                              "decode_varbind_<cond>.json files in --output-dir (cosmetic-only, "
                              "no model weights loaded).")
     args = parser.parse_args()
 
+    subset = "all" if args.all_examples else ("incorrect" if args.incorrect_only else "correct")
+    sfx = "" if subset == "correct" else f"_{subset}"
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
     if args.replot:
         for cond in args.condition:
-            suffix_cond = f"{cond}_incorrect" if args.incorrect_only else cond
+            suffix_cond = f"{cond}{sfx}"
             jpath = args.output_dir / f"decode_varbind_{suffix_cond}.json"
             if not jpath.exists():
                 print(f"=== {cond} ===  no JSON at {jpath}, skipping")
@@ -303,7 +308,7 @@ def main():
             with open(jpath) as f:
                 results = json.load(f)
             print(f"\n=== {cond} (replot from {jpath.name}, n={results.get('_n')}) ===")
-            plot_condition(results, cond, suffix_cond, args.output_dir, args.incorrect_only)
+            plot_condition(results, cond, suffix_cond, args.output_dir, subset)
         print("\nDone.")
         return
 
@@ -337,9 +342,8 @@ def main():
     for cond in args.condition:
         print(f"\n=== {cond} ===")
         files = sorted((args.extraction_dir / cond).glob("prob_*.pkl"))
-        all_data, n_total = load_pkls(files, args.incorrect_only)
-        label = "incorrect" if args.incorrect_only else "correct"
-        print(f"  {len(all_data)}/{n_total} {label} examples")
+        all_data, n_total = load_pkls(files, subset)
+        print(f"  {len(all_data)}/{n_total} {subset} examples")
         if not all_data:
             print("  no examples to decode, skipping")
             continue
@@ -354,11 +358,12 @@ def main():
         layers = sorted(d0["states"][positions[0]].keys())
         boundaries = d0.get("boundaries")
 
-        # Ground truth. The full serial chain has THREE never-written values:
-        #   C1B = chain_coef * B   (chain multiply sub-product — first hidden value)
-        #   QV  = queried_value    (= C1B +/- chain_const)
-        #   QC  = q_coef * QV      (question multiply sub-product, = c*V)
-        # plus the visible base B and the output answer. B/C1B come from the dataset
+        # Ground truth. The full serial chain has THREE never-written values
+        # (paper notation x/y; internal array names kept for the data fields):
+        #   C1B = chain_coef * x   (c₁·x — chain multiply sub-product, first hidden)
+        #   QV  = queried_value y  (= c₁·x +/- chain_const)
+        #   QC  = q_coef * y       (c₂·y — question multiply sub-product)
+        # plus the visible base x and the output answer. x/C1B come from the dataset
         # join and are NaN for examples that didn't parse (e.g. chain_len>1).
         QV = np.array([d["queried_value"] for d in all_data])
         QC = np.array([d["coefficient"] * d["queried_value"] for d in all_data])
@@ -371,10 +376,10 @@ def main():
 
         results = {"_positions": positions, "_layers": layers, "_condition": cond,
                    "_n": len(all_data), "_n_base": int(b_mask.sum()),
-                   "_target_legend": {"B": "base literal (visible operand)",
-                                      "C1B": "chain_coef * base (hidden, chain sub-product)",
-                                      "QV": "queried_value (hidden intermediate)",
-                                      "QC": "q_coef * queried_value (hidden, pre-constant product)",
+                   "_target_legend": {"B": "x = base literal (visible operand)",
+                                      "C1B": "c₁·x = chain_coef * base (hidden sub-product)",
+                                      "QV": "y = queried_value (hidden intermediate)",
+                                      "QC": "c₂·y = q_coef * queried_value (hidden sub-product)",
                                       "ANS": "answer (final)"}}
         if boundaries:
             results["_boundaries"] = boundaries
@@ -435,13 +440,13 @@ def main():
                     )),
                 }
 
-        suffix_cond = f"{cond}_incorrect" if args.incorrect_only else cond
+        suffix_cond = f"{cond}{sfx}"
         outfile = args.output_dir / f"decode_varbind_{suffix_cond}.json"
         with open(outfile, "w") as f:
             json.dump(results, f, indent=2)
         print(f"  Saved {outfile}")
 
-        plot_condition(results, cond, suffix_cond, args.output_dir, args.incorrect_only)
+        plot_condition(results, cond, suffix_cond, args.output_dir, subset)
 
     print("\nDone.")
 

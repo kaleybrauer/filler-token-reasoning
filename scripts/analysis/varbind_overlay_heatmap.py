@@ -32,10 +32,10 @@ import numpy as np
 
 # (json key, legend label, RGB) — ordered along the computation, cool -> warm.
 TARGETS = [
-    ("frac_B_exact",   "B  (base, visible)",       (0.12, 0.47, 0.71)),  # blue
-    ("frac_C1B_exact", "c1·B  (chain product)",    (0.17, 0.63, 0.17)),  # green
-    ("frac_QV_exact",  "V  (queried value)",       (0.85, 0.69, 0.00)),  # gold
-    ("frac_QC_exact",  "c·V  (question product)",  (1.00, 0.50, 0.00)),  # orange
+    ("frac_B_exact",   "x  (base, visible)",       (0.12, 0.47, 0.71)),  # blue
+    ("frac_C1B_exact", "c₁·x  (chain product)",    (0.17, 0.63, 0.17)),  # green
+    ("frac_QV_exact",  "y  (queried value)",       (0.85, 0.69, 0.00)),  # gold
+    ("frac_QC_exact",  "c₂·y  (question product)", (1.00, 0.50, 0.00)),  # orange
     ("frac_ANS_exact", "answer  (output)",         (0.84, 0.15, 0.16)),  # red
 ]
 
@@ -62,6 +62,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--condition", default="dots_10")
     ap.add_argument("--incorrect", action="store_true")
+    ap.add_argument("--all", dest="all_examples", action="store_true",
+                    help="Read the all-examples decode JSON (correct + incorrect).")
     ap.add_argument("--decode-dir", type=Path, default=Path("results/varbind_decode_heatmap"))
     ap.add_argument("--output-dir", type=Path, default=Path("results/varbind_decode_heatmap"))
     ap.add_argument("--min-layer", type=int, default=30,
@@ -79,7 +81,8 @@ def main():
                          "saturation; lower values fade toward white.")
     args = ap.parse_args()
 
-    suffix = f"{args.condition}_incorrect" if args.incorrect else args.condition
+    suffix = args.condition + ("_all" if args.all_examples else
+                               ("_incorrect" if args.incorrect else ""))
     r = json.load(open(args.decode_dir / f"decode_varbind_{suffix}.json"))
     positions = sorted(r["_positions"], key=pos_sort_key)
     layers = [l for l in r["_layers"] if l >= args.min_layer]
@@ -147,7 +150,8 @@ def main():
               loc="upper left", bbox_to_anchor=(1.01, 1.0), fontsize=11,
               title=("dominant value" if args.mode == "dominant" else "decoded value"),
               frameon=False)
-    tag = " — model INCORRECT" if args.incorrect else ""
+    tag = (" — ALL examples" if args.all_examples else
+           (" — model INCORRECT" if args.incorrect else ""))
     if args.mode == "proportional":
         sub = "white = non-target / none · colour = proportional blend of which values decode here"
     elif args.mode == "brightness":

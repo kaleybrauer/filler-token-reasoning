@@ -1,21 +1,24 @@
 """Per-example conditional failure analysis for the varbind decode.
 
-The aggregate heatmaps show that on model-WRONG examples the base B and queried
-value V still decode well while c·V and the answer collapse — suggesting failures
+Paper notation x/y (internal dict keys stay B/V/cV — see STAGE_NAME): x=base value,
+y=queried value, c₂·y=question product.
+
+The aggregate heatmaps show that on model-WRONG examples the base x and queried
+value y still decode well while c₂·y and the answer collapse — suggesting failures
 are downstream of the binding. But that's an aggregate: it can't tell whether a
-given wrong answer happened *because the bound value V was wrong* or *because the
-arithmetic on a correct V diverged*. This script conditions per example.
+given wrong answer happened *because the bound value y was wrong* or *because the
+arithmetic on a correct y diverged*. This script conditions per example.
 
 For each example we ask, for each stage, "did the TRUE value form?" — operationalized
 as: the logit-lens argmax (RMSNorm -> lm_head, over single-token integers) equals
 the true value at that stage's canonical layer (taken from the correct-example
 aggregate peak), at ANY token position from question_end..answer_prompt. Then:
 
-  - first-divergence stage: the earliest stage in [B, V, c·V, answer] whose true
+  - first-divergence stage: the earliest stage in [x, y, c₂·y, answer] whose true
     value did NOT form. "all-formed" = every stage incl. the answer formed (the
     true answer was represented internally yet the model emitted something else).
-  - conditional chain: P(V|B), P(c·V|V), P(answer|c·V).
-  - the headline: P(V formed AND answer did NOT) — "binding succeeded, arithmetic
+  - conditional chain: P(y|x), P(c₂·y|y), P(answer|c₂·y).
+  - the headline: P(y formed AND answer did NOT) — "binding succeeded, arithmetic
     failed" — vs the binding-failure mass.
 
 Run on correct examples too (as a reference: every stage should form).
@@ -39,9 +42,9 @@ from decode_varbind_heatmap import (  # noqa: E402
     load_tokenizer_lite, rms_norm, pos_sort_key, parse_base_value, load_pkls,
 )
 
-STAGES = ["B", "V", "cV", "ans"]          # in computation order
-STAGE_NAME = {"B": "base (visible)", "V": "queried value",
-              "cV": "coef·queried", "ans": "answer"}
+STAGES = ["B", "V", "cV", "ans"]          # internal keys (code); display names below use
+STAGE_NAME = {"B": "x (base, visible)", "V": "y (queried value)",
+              "cV": "c₂·y (question product)", "ans": "answer"}
 
 
 def peak_layers_from_correct(output_dir, suffix_cond):

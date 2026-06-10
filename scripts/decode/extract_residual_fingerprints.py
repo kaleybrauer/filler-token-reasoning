@@ -34,7 +34,28 @@ from tqdm import tqdm
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
-from extract.extract_hidden_states import load_tokenizer  # noqa: E402
+try:
+    from extract.extract_hidden_states import load_tokenizer  # noqa: E402
+except ImportError:
+    # torch not installed (lite CPU env). The tokenizer is only used to decode
+    # token ids -> strings; DeepSeek's is a plain fast tokenizer that needs no
+    # torch, so load it directly. Falls back to AutoTokenizer for other models.
+    def load_tokenizer(model_path):
+        md = Path(model_path)
+        tok_file = md / "tokenizer.json"
+        cfg_file = md / "tokenizer_config.json"
+        if tok_file.exists() and cfg_file.exists():
+            from transformers import PreTrainedTokenizerFast
+            with open(cfg_file) as _f:
+                cfg = json.load(_f)
+            return PreTrainedTokenizerFast(
+                tokenizer_file=str(tok_file),
+                chat_template=cfg.get("chat_template"),
+                bos_token=cfg.get("bos_token"),
+                eos_token=cfg.get("eos_token"),
+            )
+        from transformers import AutoTokenizer
+        return AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
 
 
 def rms_norm(x, w, eps=1e-6):
@@ -62,7 +83,10 @@ def main():
                          "probability instead of residual (P_e - P_mean). For ablating "
                          "the residual step.")
     ap.add_argument("--max-examples", type=int, default=None,
-                    help="Cap number of correct examples (for fast iteration)")
+                    help="Cap number of examples (for fast iteration)")
+    ap.add_argument("--incorrect-only", action="store_true",
+                    help="Filter to examples where the model got the final "
+                         "answer WRONG (model_correct=False) instead of correct.")
     ap.add_argument("--output", type=Path, required=True)
     ap.add_argument("--preview", type=int, default=0,
                     help="Decode and print top-K of a few settings/examples")
@@ -75,17 +99,19 @@ def main():
 
     files = sorted(args.extraction_dir.glob("prob_*.pkl"))
     all_data = []
+    target_correct = not args.incorrect_only
     for f in tqdm(files, desc="Loading"):
         with open(f, "rb") as fp:
             d = pickle.load(fp)
-        if d.get("model_correct", False):
+        if d.get("model_correct", False) == target_correct:
             all_data.append(d)
         if args.max_examples and len(all_data) >= args.max_examples:
             break
     n = len(all_data)
-    print(f"{n} correct examples")
+    label = "incorrect" if args.incorrect_only else "correct"
+    print(f"{n} {label} examples")
     if n == 0:
-        print("No correct examples — exiting")
+        print(f"No {label} examples — exiting")
         return
 
     # Determine positions & layers from first example.
@@ -137,6 +163,9 @@ def main():
         "element":      _get("element"),
         "atomic_number": _get("atomic_number", -1),
         "intermediate": _get("intermediate"),
+        # varbind: queried_value (=intermediate) and its question coefficient let
+        # downstream score the second hidden value c·V = coefficient × queried_value.
+        "coefficient":  _get("coefficient", -1),
     }
 
     for s_idx, (pos, layer) in enumerate(tqdm(settings, desc="Extracting fingerprints")):
@@ -196,6 +225,7 @@ def main():
         truth_element=truth["element"],
         truth_atomic_number=truth["atomic_number"],
         truth_intermediate=truth["intermediate"],
+        truth_coefficient=truth["coefficient"],
         config=np.array([{"min_layer": args.min_layer,
                           "include_question_end": args.include_question_end,
                           "include_post_filler": args.include_post_filler,

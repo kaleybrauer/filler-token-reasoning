@@ -29,7 +29,27 @@ from tqdm import tqdm
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
-from extract.extract_hidden_states import load_tokenizer  # noqa: E402
+try:
+    from extract.extract_hidden_states import load_tokenizer  # noqa: E402
+except ImportError:
+    # torch not installed (lite CPU env). Tokenizer only decodes ids -> strings;
+    # DeepSeek's fast tokenizer needs no torch. AutoTokenizer for other models.
+    def load_tokenizer(model_path):
+        md = Path(model_path)
+        tok_file = md / "tokenizer.json"
+        cfg_file = md / "tokenizer_config.json"
+        if tok_file.exists() and cfg_file.exists():
+            from transformers import PreTrainedTokenizerFast
+            with open(cfg_file) as _f:
+                cfg = json.load(_f)
+            return PreTrainedTokenizerFast(
+                tokenizer_file=str(tok_file),
+                chat_template=cfg.get("chat_template"),
+                bos_token=cfg.get("bos_token"),
+                eos_token=cfg.get("eos_token"),
+            )
+        from transformers import AutoTokenizer
+        return AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
 
 
 def main():
@@ -86,7 +106,7 @@ def main():
         # Propagate ground-truth fields so llm_decode_pool.py can score
         for field in ["truth_fact_value_1", "truth_fact_value_2", "truth_fact_value",
                       "truth_answer", "truth_element", "truth_atomic_number",
-                      "truth_intermediate"]:
+                      "truth_intermediate", "truth_coefficient"]:
             if field in data.files:
                 arr = data[field]
                 val = arr[e]
@@ -108,6 +128,7 @@ def main():
                 elif key == "element": record["element"] = val
                 elif key == "atomic_number": record["atomic_number"] = val
                 elif key == "intermediate": record["intermediate"] = val
+                elif key == "coefficient": record["coefficient"] = val
         out.append(record)
 
     args.output.parent.mkdir(parents=True, exist_ok=True)

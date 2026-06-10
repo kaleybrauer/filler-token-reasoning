@@ -236,8 +236,12 @@ def build_system_message_varbind(filler_type: str, k: int) -> str:
     )
     if k > 0:
         desc = filler_description(filler_type)
+        # Deliberately do NOT state an exact count: the actual token count is not
+        # k for every filler type (counting_K is 2K-1 tokens — number + separating
+        # space each — while dots_K is K), so naming a number would be false for
+        # counting and injects an unrelated integer into the context.
         base += (
-            f" After the question, there will be {k} filler tokens "
+            f" After the question, there will be some filler tokens "
             f"(a sequence of {desc}) to give you extra space to process "
             f"the problem before answering."
         )

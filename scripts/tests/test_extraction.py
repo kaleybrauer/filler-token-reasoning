@@ -138,12 +138,12 @@ class TestBuildSystemMessage:
 
     def test_dots_mentions_dots(self):
         msg = build_system_message("dots", 250)
-        assert "250 filler tokens" in msg
+        assert "some filler tokens" in msg  # count is deliberately not stated
         assert "dots" in msg
 
     def test_counting_mentions_sequential(self):
         msg = build_system_message("counting", 150)
-        assert "150 filler tokens" in msg
+        assert "some filler tokens" in msg  # count is deliberately not stated
         assert "sequential integers" in msg
 
     def test_scrambled_mentions_shuffled(self):
@@ -186,7 +186,7 @@ class TestBuildMessagesForCondition:
     def test_system_message_is_first(self, few_shot, target):
         msgs = build_messages_for_condition(few_shot, target, "dots", 250)
         assert msgs[0]["role"] == "system"
-        assert "250 filler tokens" in msgs[0]["content"]
+        assert "some filler tokens" in msgs[0]["content"]
 
     def test_assistant_turns_have_answer_prefix(self, few_shot, target):
         msgs = build_messages_for_condition(few_shot, target, "counting", 150)

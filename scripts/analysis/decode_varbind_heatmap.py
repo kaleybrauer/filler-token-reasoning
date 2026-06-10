@@ -103,21 +103,37 @@ def load_tokenizer_lite(model_path: str):
     return AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
 
 
-def parse_base_value(example):
-    """Recover the base literal the queried term is derived from (chain_len=1).
+COEF_TO_NUM = {"twice": 2, "three times": 3, "four times": 4,
+               "five times": 5, "six times": 6}
+_CHAIN_RE = re.compile(
+    r"^(twice|three times|four times|five times|six times) "
+    r"the number for (\w+) (plus|minus) (\d+)")
 
-    Returns the literal int, or None if the queried term's referent is itself an
-    expression (chain_len>1) or the expression can't be parsed.
+
+def parse_queried_chain(example):
+    """Recover (B, c1*B) for the queried term's chain (chain_len=1).
+
+    B is the base literal the queried term references; c1*B is the chain multiply
+    sub-product (chain_coef * B) — the FIRST never-written intermediate, formed
+    before the chain constant is applied to produce V. Returns (None, None) if the
+    queried term's referent is itself an expression (chain_len>1) or it won't parse.
     """
     defs = {name: val for name, val in example["definitions"]}
     expr = defs.get(example["queried_term"])
     if not isinstance(expr, str):
-        return None
-    m = re.search(r"the number for (\w+)", expr)
+        return None, None
+    m = _CHAIN_RE.match(expr)
     if not m:
-        return None
-    ref_val = defs.get(m.group(1))
-    return ref_val if isinstance(ref_val, int) else None
+        return None, None
+    ref_val = defs.get(m.group(2))
+    if not isinstance(ref_val, int):
+        return None, None
+    return ref_val, COEF_TO_NUM[m.group(1)] * ref_val
+
+
+def parse_base_value(example):
+    """Base literal B the queried term references (back-compat scalar wrapper)."""
+    return parse_queried_chain(example)[0]
 
 
 def load_pkls(files, incorrect_only):
@@ -142,12 +158,13 @@ def load_pkls(files, incorrect_only):
 
 
 def plot_condition(results, cond, suffix_cond, output_dir, incorrect_only):
-    """Print the per-target summary and render the 4-panel heatmaps from a results
+    """Print the per-target summary and render the 5-panel heatmaps from a results
     dict (freshly computed, or loaded from a decode_varbind_<cond>.json for replot).
 
-    Targets: B = base value (visible), V = queried term's value (hidden), c·V =
-    question-coefficient times V (hidden), answer (final). Labels are generic — the
-    per-example variable names are random CVC strings, so no single name applies.
+    Targets, in computation order: B = base value (visible), c₁·B = chain multiply
+    sub-product (hidden), V = queried term's value (hidden), c·V = question multiply
+    sub-product (hidden), answer (final). Labels are generic — the per-example
+    variable names are random CVC strings, so no single name applies.
     """
     positions = results["_positions"]
     layers = results["_layers"]
@@ -157,6 +174,7 @@ def plot_condition(results, cond, suffix_cond, output_dir, incorrect_only):
     fe = boundaries.get("filler_end_offset") if boundaries else None
     fs = boundaries.get("filler_start_offset") if boundaries else None
     for tgt, name in [("frac_B_exact", "B base (visible)"),
+                      ("frac_C1B_exact", "c1·B chain product (HIDDEN)"),
                       ("frac_QV_exact", "V queried value (HIDDEN)"),
                       ("frac_QC_exact", "c·V coef×queried (HIDDEN)"),
                       ("frac_ANS_exact", "answer (final)")]:
@@ -183,6 +201,7 @@ def plot_condition(results, cond, suffix_cond, output_dir, incorrect_only):
     # Exact-match heatmaps only (no ±5).
     for metric_set, suffix, cbar_label in [
         ([("frac_B_exact", "B: base value (visible, exact)"),
+          ("frac_C1B_exact", "c₁·B: chain product (hidden, exact)"),
           ("frac_QV_exact", "V: queried value (hidden, exact)"),
           ("frac_QC_exact", "c·V: coef × queried (hidden, exact)"),
           ("frac_ANS_exact", "answer (final, exact)")],
@@ -308,12 +327,12 @@ def main():
     lm_head_num = lm_head[num_ids]
     print(f"lm_head: {lm_head.shape} -> number rows {lm_head_num.shape}")
 
-    # problem_idx -> base value B (visible operand). Join to the source dataset.
+    # problem_idx -> (base value B, chain product c1*B). Join to the source dataset.
     dataset = json.load(open(args.dataset))
-    base_by_idx = {e["idx"]: parse_base_value(e) for e in dataset["examples"]}
-    n_base = sum(v is not None for v in base_by_idx.values())
-    print(f"Base value B parsed for {n_base}/{len(base_by_idx)} dataset examples "
-          f"(chain_len={dataset.get('chain_len')})")
+    chain_by_idx = {e["idx"]: parse_queried_chain(e) for e in dataset["examples"]}
+    n_base = sum(v[0] is not None for v in chain_by_idx.values())
+    print(f"Base B + chain product c1*B parsed for {n_base}/{len(chain_by_idx)} "
+          f"dataset examples (chain_len={dataset.get('chain_len')})")
 
     for cond in args.condition:
         print(f"\n=== {cond} ===")
@@ -335,21 +354,25 @@ def main():
         layers = sorted(d0["states"][positions[0]].keys())
         boundaries = d0.get("boundaries")
 
-        # Ground truth. B may be NaN for examples whose base didn't parse.
-        # The question (q_coef * queried_value +/- q_const) passes through TWO
-        # never-written values: the queried term's value itself (V) and the scaled
-        # product q_coef*V (cV) computed before the final constant is applied.
-        # Decoding both traces whether the model stages the arithmetic.
+        # Ground truth. The full serial chain has THREE never-written values:
+        #   C1B = chain_coef * B   (chain multiply sub-product — first hidden value)
+        #   QV  = queried_value    (= C1B +/- chain_const)
+        #   QC  = q_coef * QV      (question multiply sub-product, = c*V)
+        # plus the visible base B and the output answer. B/C1B come from the dataset
+        # join and are NaN for examples that didn't parse (e.g. chain_len>1).
         QV = np.array([d["queried_value"] for d in all_data])
         QC = np.array([d["coefficient"] * d["queried_value"] for d in all_data])
         ANS = np.array([d["answer"] for d in all_data])
-        B = np.array([base_by_idx.get(d["problem_idx"]) if base_by_idx.get(d["problem_idx"]) is not None
-                      else np.nan for d in all_data], dtype=float)
+        bc = [chain_by_idx.get(d["problem_idx"]) or (None, None) for d in all_data]
+        B = np.array([x[0] if x[0] is not None else np.nan for x in bc], dtype=float)
+        C1B = np.array([x[1] if x[1] is not None else np.nan for x in bc], dtype=float)
         b_mask = ~np.isnan(B)
+        c1b_mask = ~np.isnan(C1B)
 
         results = {"_positions": positions, "_layers": layers, "_condition": cond,
                    "_n": len(all_data), "_n_base": int(b_mask.sum()),
                    "_target_legend": {"B": "base literal (visible operand)",
+                                      "C1B": "chain_coef * base (hidden, chain sub-product)",
                                       "QV": "queried_value (hidden intermediate)",
                                       "QC": "q_coef * queried_value (hidden, pre-constant product)",
                                       "ANS": "answer (final)"}}
@@ -391,13 +414,16 @@ def main():
                                        axis=1)].reshape(n, L)
 
             qv_v, qc_v, ans_v, b_v, bm_v = QV[vi], QC[vi], ANS[vi], B[vi], b_mask[vi]
+            c1b_v, c1bm_v = C1B[vi], c1b_mask[vi]
             results[pos] = {}
             for li, lstr in enumerate(layer_strs):
                 p = preds[:, li]
-                mQV, mQC, mANS, mB = (metrics(p, qv_v), metrics(p, qc_v),
-                                      metrics(p, ans_v), metrics(p, b_v, bm_v))
+                mQV, mQC, mANS, mB, mC1B = (
+                    metrics(p, qv_v), metrics(p, qc_v), metrics(p, ans_v),
+                    metrics(p, b_v, bm_v), metrics(p, c1b_v, c1bm_v))
                 results[pos][lstr] = {
                     "frac_B_exact": mB["exact"], "frac_B_within5": mB["within5"],
+                    "frac_C1B_exact": mC1B["exact"], "frac_C1B_within5": mC1B["within5"],
                     "frac_QV_exact": mQV["exact"], "frac_QV_within5": mQV["within5"],
                     "frac_QC_exact": mQC["exact"], "frac_QC_within5": mQC["within5"],
                     "frac_ANS_exact": mANS["exact"], "frac_ANS_within5": mANS["within5"],
@@ -405,6 +431,7 @@ def main():
                         (np.abs(p - qv_v) <= 5) | (np.abs(p - qc_v) <= 5)
                         | (np.abs(p - ans_v) <= 5)
                         | ((np.abs(p - b_v) <= 5) & bm_v)
+                        | ((np.abs(p - c1b_v) <= 5) & c1bm_v)
                     )),
                 }
 

@@ -213,6 +213,119 @@ def _rank(logits_arr, tok_id):
     return int((logits_arr > logit).sum()) + 1
 
 
+# ---------------------------------------------------------------------------
+# Batched config decode (within-pair). All sweep configs share the SAME receiver
+# prompt, so they have identical cache length -> we stack the B config-variants in
+# the batch dimension and decode them in ONE pass instead of B sequential decodes.
+# No padding needed (common prefix). Numerically independent per row (attention is
+# row-local, MoE routing per token), so results match the sequential path up to
+# kernel float noise -- gated by --verify-batched before trusting.
+# ---------------------------------------------------------------------------
+
+def apply_transplant_batched(target_cache, donor_cache, idx_pairs_list, layers_list,
+                             truncate_last=True):
+    """Build one KV cache with batch dim B=len(idx_pairs_list); row r = receiver cache
+    with donor positions swapped per config r. layers_list[r]: None (all layers) or a
+    list of layer indices to restrict row r's swap to. Returns a fresh DynamicCache."""
+    import torch  # noqa: F401
+    from transformers.cache_utils import DynamicCache
+    B = len(idx_pairs_list)
+    n_layers = len(target_cache)
+    swap_sets = [set(range(n_layers)) if L is None else set(L) for L in layers_list]
+    cache = DynamicCache()
+    for layer_idx in range(n_layers):
+        tk, tv = target_cache[layer_idx]            # (1, H, S, D)
+        dk, dv = donor_cache[layer_idx]
+        nk = tk.repeat(B, 1, 1, 1)                  # repeat allocates fresh, writable
+        nv = tv.repeat(B, 1, 1, 1)
+        for r in range(B):
+            if layer_idx in swap_sets[r]:
+                for d_idx, t_idx in idx_pairs_list[r]:
+                    nk[r, :, t_idx, :] = dk[0, :, d_idx, :]
+                    nv[r, :, t_idx, :] = dv[0, :, d_idx, :]
+        if truncate_last:
+            nk, nv = nk[:, :, :-1, :], nv[:, :, :-1, :]
+        cache.update(nk, nv, layer_idx=layer_idx)
+    return cache
+
+
+def generate_from_cache_batched(model, tokenizer, last_token_id, past_key_values,
+                                max_new_tokens=6):
+    """Batched analogue of filler_kv_transplant.generate_from_cache. All B rows share
+    one last token and a common cache length. Returns raws[B], answers[B],
+    first_logits (B, vocab) numpy."""
+    import torch
+    from prompt_utils import extract_answer
+    device = next(model.parameters()).device
+    B = past_key_values[0][0].shape[0]
+    cache_len = past_key_values[0][0].shape[2]
+    input_ids = torch.full((B, 1), last_token_id, dtype=torch.long, device=device)
+    attn_mask = torch.ones(B, cache_len + 1, dtype=torch.long, device=device)
+    with torch.no_grad():
+        outputs = model(input_ids=input_ids, attention_mask=attn_mask,
+                        past_key_values=past_key_values, use_cache=True)
+    first_logits = outputs.logits[:, -1, :].float().cpu().numpy()   # (B, vocab)
+    logits = outputs.logits[:, -1, :]
+    past = outputs.past_key_values
+    generated = [[] for _ in range(B)]
+    finished = [False] * B
+    eos = tokenizer.eos_token_id
+    for _ in range(max_new_tokens):
+        next_tokens = logits.argmax(dim=-1)                         # (B,)
+        for b in range(B):
+            if not finished[b]:
+                tid = next_tokens[b].item()
+                if tid == eos:
+                    finished[b] = True
+                else:
+                    generated[b].append(tid)
+        if all(finished):
+            break
+        cur_len = past[0][0].shape[2] + 1
+        step_mask = torch.ones(B, cur_len, dtype=torch.long, device=device)
+        with torch.no_grad():
+            outputs = model(input_ids=next_tokens.unsqueeze(1), attention_mask=step_mask,
+                            past_key_values=past, use_cache=True)
+        logits = outputs.logits[:, -1, :]
+        past = outputs.past_key_values
+    raws = [tokenizer.decode(g, skip_special_tokens=True).strip() for g in generated]
+    answers = [extract_answer(r) for r in raws]
+    return raws, answers, first_logits
+
+
+def _per_config_sequential(model, tokenizer, last_R, cache_R, cache_D, sweep,
+                           idx_list, layer_list, cands, cand_tok, max_new_tokens):
+    from intervention.filler_kv_transplant import generate_from_cache
+    per_config = {}
+    for bi, (label, n, mode, lr) in enumerate(sweep):
+        cache_t = apply_transplant(cache_R, cache_D, idx_list[bi], layers=layer_list[bi])
+        raw, ans, logits_t = generate_from_cache(
+            model, tokenizer, last_R, cache_t, max_new_tokens)
+        per_config[label] = {
+            "n_swapped": len(idx_list[bi]), "answer": ans, "raw": raw,
+            "outcome": classify(ans, cands),
+            "rank_transplant": {k: _rank(logits_t, cand_tok[k]) for k in CANDS},
+        }
+        del cache_t
+    return per_config
+
+
+def _per_config_batched(model, tokenizer, last_R, cache_R, cache_D, sweep,
+                        idx_list, layer_list, cands, cand_tok, max_new_tokens):
+    batched_cache = apply_transplant_batched(cache_R, cache_D, idx_list, layer_list)
+    raws, anss, logits_b = generate_from_cache_batched(
+        model, tokenizer, last_R, batched_cache, max_new_tokens)
+    per_config = {}
+    for bi, (label, n, mode, lr) in enumerate(sweep):
+        per_config[label] = {
+            "n_swapped": len(idx_list[bi]), "answer": anss[bi], "raw": raws[bi],
+            "outcome": classify(anss[bi], cands),
+            "rank_transplant": {k: _rank(logits_b[bi], cand_tok[k]) for k in CANDS},
+        }
+    del batched_cache
+    return per_config
+
+
 def run(args):
     import torch
     import numpy as np
@@ -269,6 +382,12 @@ def run(args):
         ids = tokenizer.encode(str(v), add_special_tokens=False)
         return ids[0] if len(ids) == 1 else None
 
+    _vb_stats = {"total": 0, "answer_match": 0, "rank_match": 0, "mismatch": []}
+    if args.verify_batched:
+        pairs = pairs[:args.verify_batched]
+        print(f"VERIFY mode: running {len(pairs)} pairs in BOTH sequential and batched, "
+              f"comparing per-config answers/ranks (no full run).")
+
     results = []
     for pi, (i, j) in enumerate(tqdm(pairs, desc="transplant")):
         R, D = examples[i], examples[j]
@@ -301,21 +420,38 @@ def run(args):
         cand_tok = {k: tok_id(v) for k, v in cands.items()}
         rank_norm = {k: _rank(logits_norm, cand_tok[k]) for k in CANDS}
 
-        per_config = {}
+        # Build swap indices ONCE (consumes rng in sweep order — identical to the
+        # original sequential consumption, so seq and batched see the same swaps).
+        idx_list, layer_list = [], []
         for label, n, mode, lr in sweep:
-            idx_pairs = select_swap_indices(fs_R, fe_R, fs_D, fe_D, n=n, mode=mode, rng=rng)
-            layers = None if lr is None else range(lr[0], lr[1] + 1)
-            cache_t = apply_transplant(cache_R, cache_D, idx_pairs, layers=layers)
-            raw, ans, logits_t = generate_from_cache(
-                model, tokenizer, last_R, cache_t, args.max_new_tokens)
-            per_config[label] = {
-                "n_swapped": len(idx_pairs),
-                "answer": ans,
-                "raw": raw,
-                "outcome": classify(ans, cands),
-                "rank_transplant": {k: _rank(logits_t, cand_tok[k]) for k in CANDS},
-            }
-            del cache_t
+            idx_list.append(select_swap_indices(fs_R, fe_R, fs_D, fe_D, n=n, mode=mode, rng=rng))
+            layer_list.append(None if lr is None else list(range(lr[0], lr[1] + 1)))
+
+        if args.verify_batched and pi < args.verify_batched:
+            pc_seq = _per_config_sequential(model, tokenizer, last_R, cache_R, cache_D,
+                                            sweep, idx_list, layer_list, cands, cand_tok,
+                                            args.max_new_tokens)
+            pc_bat = _per_config_batched(model, tokenizer, last_R, cache_R, cache_D,
+                                         sweep, idx_list, layer_list, cands, cand_tok,
+                                         args.max_new_tokens)
+            for label, _, _, _ in sweep:
+                _vb_stats["total"] += 1
+                if pc_seq[label]["answer"] == pc_bat[label]["answer"]:
+                    _vb_stats["answer_match"] += 1
+                else:
+                    _vb_stats["mismatch"].append(
+                        (pi, label, pc_seq[label]["answer"], pc_bat[label]["answer"]))
+                if pc_seq[label]["rank_transplant"] == pc_bat[label]["rank_transplant"]:
+                    _vb_stats["rank_match"] += 1
+            per_config = pc_seq                      # record the trusted sequential result
+        elif args.batched:
+            per_config = _per_config_batched(model, tokenizer, last_R, cache_R, cache_D,
+                                             sweep, idx_list, layer_list, cands, cand_tok,
+                                             args.max_new_tokens)
+        else:
+            per_config = _per_config_sequential(model, tokenizer, last_R, cache_R, cache_D,
+                                                sweep, idx_list, layer_list, cands, cand_tok,
+                                                args.max_new_tokens)
         torch.cuda.empty_cache()
 
         results.append({
@@ -330,6 +466,21 @@ def run(args):
 
         if (pi + 1) % 10 == 0 or pi == len(pairs) - 1:
             json.dump(results, open(args.output_dir / "varbind_transplant_results.json", "w"), indent=2)
+
+    if args.verify_batched:
+        t = _vb_stats["total"]
+        am, rm = _vb_stats["answer_match"], _vb_stats["rank_match"]
+        print(f"\n{'='*64}\nBATCHED-vs-SEQUENTIAL EQUIVALENCE  ({len(results)} pairs x "
+              f"{len(sweep)} configs = {t} comparisons)\n{'='*64}")
+        print(f"  answer (argmax) match: {am}/{t} = {am/t:.1%}" if t else "  (no comparisons)")
+        print(f"  full rank-dict match : {rm}/{t} = {rm/t:.1%}" if t else "")
+        if _vb_stats["mismatch"]:
+            print(f"  answer mismatches ({len(_vb_stats['mismatch'])}):")
+            for pi_, label, a_seq, a_bat in _vb_stats["mismatch"][:40]:
+                print(f"    pair{pi_} [{label}] seq={a_seq} batched={a_bat}")
+        verdict = "PASS — batched == sequential" if am == t else "MISMATCH — do NOT use batched"
+        print(f"\n  VERDICT: {verdict}")
+        return
 
     # ---- summary ----
     both = [r for r in results if r["R_correct"] and r["D_correct"]]
@@ -366,6 +517,12 @@ def main():
     ap.add_argument("--self-check", type=int, default=5,
                     help="Self-transplant sanity gate: swap N receivers' filler with their OWN "
                          "(must be a no-op). Must pass N/N before trusting results. 0 disables.")
+    ap.add_argument("--batched", action="store_true",
+                    help="Decode the sweep configs in ONE batched pass per pair (within-pair "
+                         "batching; ~2-3x faster). Verify with --verify-batched first.")
+    ap.add_argument("--verify-batched", type=int, default=0,
+                    help="Run N pairs in BOTH sequential and batched modes and report "
+                         "per-config answer/rank equivalence, then exit (no full run).")
     ap.add_argument("--allow-same-c2", action="store_true",
                     help="Drop the c₂_R≠c₂_D requirement (weaker through_y/carry_answer separation).")
     ap.add_argument("--correct-idx-json", default=None,

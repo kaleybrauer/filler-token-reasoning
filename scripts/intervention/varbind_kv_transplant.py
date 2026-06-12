@@ -19,6 +19,16 @@ it can only mean the model read the donor's never-written y out of the filler an
 ran the receiver's never-written question op on it: causal + constructed +
 computed-through-the-intermediate, in one number.
 
+Two pair modes (--pair-mode):
+  op_varied (default): the dissociation above — R and D have DIFFERENT question ops,
+      so through_y is a distinct candidate.
+  op_fixed: R and D share the question op and differ only in y, so the donor's answer
+      is ON-MANIFOLD for the receiver. This is the direct structural analog of the
+      1-fact transplant (vary the looked-up/intermediate value, hold the downstream op),
+      so it isolates retrieval-vs-construction / recomputability as the sole axis vs
+      1-fact. through_y collapses into carry_answer (identical value) and is dropped;
+      the clean binary is keep vs carry_answer.
+
 Headline metric = median rank-improvement of the `through_y` token under
 transplant (graded; robust even at modest argmax adoption — cf. the addition task:
 13% adoption but +72 rank shift), plus the argmax outcome distribution.
@@ -81,13 +91,22 @@ def apply_op(coef, op, const, y):
     return v + const if op == "plus" else v - const
 
 
-def compute_candidates(R, D):
-    """The candidate answer values for a receiver R / donor D pair."""
+def compute_candidates(R, D, pair_mode="op_varied"):
+    """The candidate answer values for a receiver R / donor D pair.
+
+    op_varied: through_y (= R's op on D's y) is distinct from carry_answer (= D's answer).
+    op_fixed: R and D share the question op, so R's-op-on-yD == D's answer; through_y is
+        set to None (dropped) to avoid mislabeling donor-answer matches. Clean binary =
+        keep vs carry_answer (the 1-fact-matched control).
+    """
     yD = D["queried_value"]
+    through_y = apply_op(R["coefficient"], R["operation"], R["constant"], yD)   # c₂_R·y_D ± k₂_R
+    if pair_mode == "op_fixed":
+        through_y = None
     return {
-        "keep": R["answer"],                                                   # = c₂_R·y_R ± k₂_R
-        "through_y": apply_op(R["coefficient"], R["operation"], R["constant"], yD),  # c₂_R·y_D ± k₂_R
-        "carry_answer": D["answer"],                                           # = c₂_D·y_D ± k₂_D
+        "keep": R["answer"],            # = c₂_R·y_R ± k₂_R
+        "through_y": through_y,
+        "carry_answer": D["answer"],    # = c₂_D·y_D ± k₂_D
         "raw_yD": yD,
     }
 
@@ -103,12 +122,20 @@ def classify(answer, cands):
 
 
 def find_varbind_pairs(examples, n_pairs, seed=42, require_c2_differ=True,
-                       max_token=1000, correct_idx=None):
-    """Sample dissociation pairs (i=receiver, j=donor): different y, different
-    question op (and c₂ if require_c2_differ for max through_y/carry_answer
-    separation), the three answer candidates all distinct, through_y a
-    single-token integer (<max_token). correct_idx: optional set of example
-    `idx` to restrict both R and D to (model-correct examples)."""
+                       max_token=1000, correct_idx=None, pair_mode="op_varied"):
+    """Sample transplant pairs (i=receiver, j=donor).
+
+    op_varied (default): DIFFERENT y AND different question op (and c₂ if
+        require_c2_differ for max through_y/carry_answer separation), with
+        keep/through_y/carry_answer all distinct and through_y a single-token int
+        (<max_token) — the dissociation design.
+    op_fixed: SAME question op (c₂,op,k₂), different y -> the donor's answer is
+        on-manifold for the receiver (1-fact-matched control). through_y collapses
+        into carry_answer and is dropped; require keep != carry_answer and
+        carry_answer a single-token int (<max_token).
+
+    correct_idx: optional set of example `idx` to restrict both R and D to.
+    """
     rng = random.Random(seed)
     n = len(examples)
     pairs, seen, attempts = [], set(), 0
@@ -123,16 +150,25 @@ def find_varbind_pairs(examples, n_pairs, seed=42, require_c2_differ=True,
             continue
         if D["queried_value"] == R["queried_value"]:
             continue
-        if (R["coefficient"], R["operation"], R["constant"]) == \
-           (D["coefficient"], D["operation"], D["constant"]):
-            continue
-        if require_c2_differ and R["coefficient"] == D["coefficient"]:
-            continue
-        c = compute_candidates(R, D)
-        if not (0 <= c["through_y"] < max_token):
-            continue
-        if len({c["keep"], c["through_y"], c["carry_answer"]}) != 3:
-            continue
+        op_R = (R["coefficient"], R["operation"], R["constant"])
+        op_D = (D["coefficient"], D["operation"], D["constant"])
+        if pair_mode == "op_fixed":
+            if op_R != op_D:                  # SAME question op -> donor answer on-manifold
+                continue
+        else:
+            if op_R == op_D:                  # DIFFERENT question op (the dissociation)
+                continue
+            if require_c2_differ and R["coefficient"] == D["coefficient"]:
+                continue
+        c = compute_candidates(R, D, pair_mode=pair_mode)
+        if pair_mode == "op_fixed":
+            if not (0 <= c["carry_answer"] < max_token) or c["keep"] == c["carry_answer"]:
+                continue
+        else:
+            if not (0 <= c["through_y"] < max_token):
+                continue
+            if len({c["keep"], c["through_y"], c["carry_answer"]}) != 3:
+                continue
         seen.add((i, j))
         pairs.append((i, j))
     return pairs
@@ -345,10 +381,13 @@ def run(args):
 
     pairs = find_varbind_pairs(examples, args.max_pairs, seed=args.seed,
                                require_c2_differ=not args.allow_same_c2,
-                               correct_idx=correct_idx)
-    print(f"{len(pairs)} dissociation pairs (filler_k={args.filler_k}, {args.filler_type})")
+                               correct_idx=correct_idx, pair_mode=args.pair_mode)
+    print(f"{len(pairs)} {args.pair_mode} pairs (filler_k={args.filler_k}, {args.filler_type})")
+    if len(pairs) < args.max_pairs:
+        print(f"  NOTE: requested {args.max_pairs} but only {len(pairs)} available "
+              f"(pool exhausted for pair_mode={args.pair_mode}).")
 
-    sweep = DEFAULT_SWEEP
+    sweep = [("full", None, "all", None)] if args.sweep == "full" else DEFAULT_SWEEP
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
     model, tokenizer = load_model(args.model_path)
@@ -365,6 +404,9 @@ def run(args):
             t = tokenizer.apply_chat_template(m, tokenize=False, add_generation_prompt=True)
             idz = tokenizer(t, return_tensors="pt")["input_ids"].to(device)
             _, fsz, fez = find_filler_boundaries(tokenizer, idz, args.filler_k)
+            if k == 0:
+                print(f"  [sanity] detected filler span = {fez - fsz + 1} positions "
+                      f"(expected {args.filler_k}; prompt len {idz.shape[1]} tokens)")
             cz, _ = prefill_and_cache(model, tokenizer, idz, torch.ones_like(idz))
             last = idz[0, -1].item()
             _, a_norm, _ = generate_from_cache(model, tokenizer, last, _truncate_cache(cz), args.max_new_tokens)
@@ -379,6 +421,8 @@ def run(args):
                   "malformed. Inspect before trusting results.")
 
     def tok_id(v):
+        if v is None:                       # op_fixed drops through_y -> no token / rank
+            return None
         ids = tokenizer.encode(str(v), add_special_tokens=False)
         return ids[0] if len(ids) == 1 else None
 
@@ -416,7 +460,7 @@ def run(args):
         _, ansD_norm, _ = generate_from_cache(
             model, tokenizer, last_D, _truncate_cache(cache_D), args.max_new_tokens)
 
-        cands = compute_candidates(R, D)
+        cands = compute_candidates(R, D, pair_mode=args.pair_mode)
         cand_tok = {k: tok_id(v) for k, v in cands.items()}
         rank_norm = {k: _rank(logits_norm, cand_tok[k]) for k in CANDS}
 
@@ -512,6 +556,9 @@ def main():
     ap.add_argument("--filler-k", type=int, default=25)
     ap.add_argument("--filler-type", default="dots", choices=["dots", "counting"])
     ap.add_argument("--max-pairs", type=int, default=300)
+    ap.add_argument("--sweep", choices=["default", "full"], default="default",
+                    help="'default' = the 8-config exploratory sweep; 'full' = full-swap only "
+                         "(well-powered headline top-up; the supporting configs are already run).")
     ap.add_argument("--max-new-tokens", type=int, default=6)
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--self-check", type=int, default=5,
@@ -523,8 +570,12 @@ def main():
     ap.add_argument("--verify-batched", type=int, default=0,
                     help="Run N pairs in BOTH sequential and batched modes and report "
                          "per-config answer/rank equivalence, then exit (no full run).")
+    ap.add_argument("--pair-mode", choices=["op_varied", "op_fixed"], default="op_varied",
+                    help="op_varied = dissociation (different question op; tests through_y). "
+                         "op_fixed = 1-fact-matched control (same question op, vary y only; "
+                         "carry_answer on-manifold, through_y N/A).")
     ap.add_argument("--allow-same-c2", action="store_true",
-                    help="Drop the c₂_R≠c₂_D requirement (weaker through_y/carry_answer separation).")
+                    help="Drop the c₂_R≠c₂_D requirement (op_varied only; weaker separation).")
     ap.add_argument("--correct-idx-json", default=None,
                     help="JSON list of model-correct example idx to restrict pairs to.")
     args = ap.parse_args()

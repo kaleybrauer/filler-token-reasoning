@@ -1,6 +1,6 @@
 # Decoding Hidden Computation in Filler Tokens
 
-Investigates whether filler tokens (e.g., `. . . . .` or `1 2 3 4 5`) inserted between a question and an answer give large language models additional computation depth and what the model is actually computing during that span. This repo contains scripts for experiments on instruction-tuned MoE models: hidden-state decoding via logit lens (with an LLM judge over residual top tokens), KV-cache transplant interventions, and attention-pattern analysis.
+Investigates whether filler tokens (e.g., `. . . . .` or `1 2 3 4 5`) inserted between a question and an answer give large language models additional computation depth and what the model is actually computing during that span. The tasks span two kinds of hidden value: facts the model must *retrieve* (addition, letter-position) and a *system of equations* whose queried value must be *computed on the fly* and is never written in the prompt. This repo contains scripts for experiments on instruction-tuned MoE models: hidden-state decoding via logit lens (with an LLM judge over residual top tokens), KV-cache transplant interventions, and attention-pattern analysis.
 
 Work done by:
 
@@ -12,24 +12,28 @@ Samuel Marks, Anthropic
 
 ## Tasks
 
-Three tasks share the same prompt scaffold (5 few-shot examples held out of any target pool, then a target question, then `Filler:` filler tokens, then `Answer:`):
+Four tasks share the same trailing scaffold (5 few-shot examples held out of any target pool, then a target question, then `Filler:` filler tokens, then `Answer:`):
 
 | task | prompt template | what the model computes |
 |---|---|---|
 | 1-fact addition | "What is [fact phrase] plus [X]?" | look up A, return A + X |
 | 2-fact addition | "What is [fact phrase 1] plus [fact phrase 2]?" | look up A₁ and A₂, return A₁ + A₂ |
 | letter-position | "What is the [Nth] letter of the chemical element with atomic number [Z]?" or "...the capital of [region]?" | look up entity (element name from atomic number, or capital from a country, state, province, or territory), return its [Nth] letter |
+| system of equations | five variable definitions, each a literal (`zab = 45`) or an expression over an earlier one (`xoc = twice the number for zab plus 14`), then "What is [c₂] times the number for [term] [±] [k₂]?" | resolve the reference chain to a value y that is never written in the prompt, then return c₂·y ± k₂ |
+
+The first three tasks test **retrieval** of a stored fact. *System of equations* (a depth-1 chained variable-binding task, ported from the multi-hop repo) tests **transient computation**: the queried value y is defined only through a reference chain — `x → c₁·x → y` — and never appears in the prompt, so the model must construct it in the forward pass. It uses a task-specific system message and nonsense CVC terms instead of the addition/letter-position system prompt.
 
 Filler types: `dots` (`. . .`), `counting` (`1 2 3 ...`), `alphabet` (`a b c ...`); filler lengths from k=5 to k=100. Datasets and held-out few-shot pools live in `data/`.
 
 ## Datasets
 
-We include data files for 2-fact addition and the two letter-position domains. The 1-fact addition dataset must be regenerated locally because it draws facts from Ryan Greenblatt's [`compose_facts`](https://github.com/rgreenblatt/compose_facts) repo which are not to be pushed to github so they can continue to be used as test questions for future LLMs.
+We include data files for 2-fact addition, the two letter-position domains, and the system-of-equations task (its nonsense CVC terms carry no real-world facts, so it ships in full). The 1-fact addition dataset must be regenerated locally because it draws facts from Ryan Greenblatt's [`compose_facts`](https://github.com/rgreenblatt/compose_facts) repo which are not to be pushed to github so they can continue to be used as test questions for future LLMs.
 
 | dataset | file | provided? | source / regenerate with |
 |---|---|---|---|
 | 1-fact addition | `data/1hop_addition_dataset.json` | no | `scripts/data/generate_1hop_dataset.py` (needs a `known_facts.json` from a model-specific knowledge check) |
 | 2-fact addition | `data/2fact_addition_dataset.json` | yes | `scripts/data/generate_2fact_dataset.py` |
+| System of equations (variable binding) | `data/chained_var_binding_dataset.json` | yes | `scripts/data/generate_varbind_dataset.py` (500 examples, seed 42; `--chain-len 2` builds the depth-2 negative control) |
 | Letter-position (elements) | `data/element_letter_positions.json` | yes | `scripts/data/generate_letterpos_dataset.py` |
 | Letter-position (capitals) | `data/capital_letter_position.json` | yes | hand-curated; no generator |
 | Element multilingual aliases | `data/element_aliases.json` | yes | `scripts/data/build_element_aliases.py` (Wikidata) |
@@ -70,7 +74,7 @@ DeepSeek extraction uses the HF transformers + autoawq stack in `scripts/extract
 
 The three analyses share the model, dataset, prompt scaffold, and filler-boundary detection logic, but each runs its own forward passes — hidden-state decoding caches per-(layer, position) states to disk for offline decoding, while KV transplant and attention analysis capture the quantities they need in-memory during the run.
 
-### 1. Hidden-state decoding (all three tasks)
+### 1. Hidden-state decoding (all four tasks)
 
 Four stages, the first on GPU and the rest CPU-only:
 
@@ -103,6 +107,8 @@ python scripts/decode/llm_decode_batch.py \
 
 Convenience drivers for the two letter-position domains: `scripts/run_letterpos_fingerprints.sh` (elements) and `scripts/run_capitalpos_fingerprints.sh` (capitals). Multilingual coverage of the per-example top-K tokens (substring match against EN + ZH name tables) is `scripts/analysis/multilingual_coverage.py`, with reference tables in `data/element_aliases.json` and `data/capital_aliases.json`.
 
+**System of equations.** The same four stages run for the variable-binding task. Extract with `--dataset data/chained_var_binding_dataset.json --dataset-type varbind` over `--conditions dots_10 dots_25 dots_50 counting_5 counting_10 counting_25` (counting tops out lower than the addition tasks because `counting_K` is 2K−1 tokens), point the fingerprint/aggregate stages at the resulting `data/extracted_states_varbind_allpos`, then judge with `--task varbind --varbind-dataset data/chained_var_binding_dataset.json --prompt neutral`. The judge ranks every integer in the residual top tokens; scoring then checks each serial intermediate (x, c₁·x, y, c₂·y, answer) against that ranked list.
+
 **Logit-lens heatmaps (addition tasks).** A direct, supervised view of the same extraction cache: at every (layer, position) decode by RMSNorm + lm\_head + argmax over single-token integers 0–299, then compute the fraction of examples where the prediction matches each known target (`A₁`, `A₂`, `A₁+A₂` for 2-fact; `A`, `X`, `A+X` for 1-fact) exactly or within ±5. Produces the (layer, position) heatmaps used in the paper to localize the staged "look up, look up, sum" computation.
 
 ```bash
@@ -120,7 +126,9 @@ python plotting/plot_decode_heatmap_correct_vs_wrong.py \
     --outfile-stem plotting/plots/decode_2fact_dots_50_correct_vs_wrong_exact
 ```
 
-### 2. KV-cache transplant (1-fact addition)
+For the system-of-equations task, `scripts/analysis/decode_varbind_heatmap.py` produces the analogous (layer, position) map, decoding the full serial chain — x → c₁·x → y → c₂·y → answer — to show where each never-written intermediate first appears. The model also has two chain-of-thought conditions that verbalise the chain; `scripts/extract/extract_varbind_cot.py` extracts their hidden states and `scripts/analysis/varbind_cot_paper_figure.py` renders the filler-vs-chain-of-thought decode maps side by side.
+
+### 2. KV-cache transplant (1-fact addition and system of equations)
 
 Splices the donor's filler-region KV cache into the target's KV state at every layer and decodes the next token; reports the rank of the donor's answer (donor A + X) in the target's predictions before and after the swap.
 
@@ -131,6 +139,15 @@ python scripts/intervention/filler_kv_transplant.py \
     --conditions dots_10 dots_100 counting_25 \
     --n-pairs 500 \
     --output-dir results/kv_transplant_v4
+```
+
+The system-of-equations analog, `scripts/intervention/varbind_kv_transplant.py`, asks whether the filler positions causally carry the never-written intermediate y: it splices a donor problem's filler-region KV into the target and checks whether the answer shifts *through* y. `scripts/intervention/run_varbind_transplant_sweep.sh` drives the filler-k sweep (with a batched-vs-sequential equivalence gate), and `scripts/analysis/varbind_transplant_analyze.py` merges the runs, filters to both-correct pairs, and reports rank shifts with bootstrap 95% CIs.
+
+```bash
+python scripts/intervention/varbind_kv_transplant.py \
+    --filler-k 25 --filler-type dots \
+    --max-pairs 300 --self-check 5 \
+    --output-dir results/varbind_kv_transplant_dots25
 ```
 
 ### 3. Attention analysis (1-fact addition)
@@ -175,18 +192,19 @@ python scripts/release/stage_release.py
 ```
 scripts/
   data/            # dataset generation + alias tables
-                   #   generate_{1hop,2fact,letterpos}_dataset.py
+                   #   generate_{1hop,2fact,letterpos,varbind}_dataset.py
                    #   build_{element,capital}_aliases.py (Wikidata SPARQL + cleanup)
   extract/         # hidden state and attention extraction (GPU; DeepSeek)
-                   #   extract_hidden_states.py
+                   #   extract_hidden_states.py  (--dataset-type {1hop,2fact,letterpos,varbind})
+                   #   extract_varbind_cot.py    (varbind chain-of-thought conditions)
                    #   extract_filler_attention.py / extract_answer_attention.py
                    #   extract_kv_latents.py
   decode/          # residual fingerprints + aggregation + LLM judge
                    #   extract_residual_fingerprints.py
                    #   aggregate_residuals_all_settings.py
-                   #   llm_decode_batch.py
+                   #   llm_decode_batch.py       (--task {2fact,1fact,letterpos,capitalpos,varbind})
   intervention/    # causal interventions
-                   #   filler_kv_transplant.py
+                   #   filler_kv_transplant.py / varbind_kv_transplant.py
                    #   attention_knockout.py
                    #   filler_patching.py / baseline_patching.py
   eval/            # vLLM-based accuracy evals
@@ -194,6 +212,9 @@ scripts/
                    #   evaluate_truncation.py, save_categories.py
   analysis/        # post-hoc analyses
                    #   decode_2fact_heatmap.py    (logit-lens decode for 2-fact)
+                   #   decode_varbind_heatmap.py  (logit-lens decode for system of equations)
+                   #   varbind_transplant_analyze.py (transplant merge + bootstrap CIs)
+                   #   varbind_cot_paper_figure.py   (filler vs CoT decode maps)
                    #   multilingual_coverage.py   (substring match for letterpos)
                    #   layer_attribution.py
   kimi_k2/         # Kimi K2-specific extraction (vLLM, TP=4)

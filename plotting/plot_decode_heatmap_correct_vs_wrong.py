@@ -64,12 +64,24 @@ def main():
                     help="Color heatmap by exact-match or within-±5 (default: exact)")
     ap.add_argument("--min-layer", type=int, default=0,
                     help="Drop layers below this index (default: 0, no filter)")
-    ap.add_argument("--font-size", type=int, default=22)
+    ap.add_argument("--font-size", type=int, default=None,
+                    help="Base font size (default: 22, or 40 with --poster). On a "
+                         "fixed canvas, larger = text bigger relative to the heatmap.")
+    ap.add_argument("--figsize", type=float, nargs=2, default=(23.0, 9.0),
+                    metavar=("W", "H"), help="Figure size in inches (default: 23 9)")
+    ap.add_argument("--poster", action="store_true",
+                    help="Poster preset: large default font (40) so the figure reads "
+                         "from a distance. Canvas stays fixed, so the fonts grow "
+                         "relative to the heatmap.")
     args = ap.parse_args()
+    if args.font_size is None:
+        args.font_size = 40 if args.poster else 22
     if args.outfile_stem is None:
         suffix = f"_{args.metric}"
         if args.min_layer > 0:
             suffix += f"_L{args.min_layer}+"
+        if args.poster:
+            suffix += "_poster"
         args.outfile_stem = Path(
             f"plotting/plots/decode_2fact_dots_10_correct_vs_wrong{suffix}"
         )
@@ -93,11 +105,16 @@ def main():
     boundaries = correct.get("_boundaries", {}) or {}
     filler_end = boundaries.get("filler_end_offset")
 
-    # Horizontal layout: rows = Correct / Wrong; columns = A1 / A2 / A1+A2
+    # Horizontal layout: rows = Correct / Wrong; columns = A1 / A2 / A1+A2.
+    # Canvas size is fixed (independent of font) so a larger --font-size grows the
+    # text *relative to* the heatmap — the point of the poster preset.
+    # Widen the inter-panel gap with the font so the rightmost x-tick of one panel
+    # doesn't run into the leftmost ("0") of the next (e.g. "16" + "0" -> "160").
+    f = args.font_size / 22.0
     fig, axes = plt.subplots(
-        2, 3, figsize=(19, 9),
+        2, 3, figsize=args.figsize,
         sharex=True, sharey=True,
-        gridspec_kw={"hspace": 0.10, "wspace": 0.06},
+        gridspec_kw={"hspace": 0.10, "wspace": 0.06 * f},
     )
 
     row_specs = [(correct, "Correct", n_correct), (wrong, "Wrong", n_wrong)]
@@ -123,6 +140,9 @@ def main():
                 pos_step = 10
             else:
                 pos_step = 20
+            # Bigger fonts take more room per label, so coarsen the step in step
+            # with the font (font 22 -> x1, font 40 -> x2) to keep labels legible.
+            pos_step *= max(1, round(args.font_size / 22.0))
             tick_idxs = [i for i, p in enumerate(positions)
                          if int(pos_label(p)) % pos_step == 0]
             ax.set_xticks(tick_idxs)
@@ -152,13 +172,15 @@ def main():
 
     # Row labels (left side) — Correct / Wrong with n=...
     # Sit further left than the "Layer" ylabel + tick labels so they don't collide.
-    # Two separate text() calls so we can style the count line differently.
+    # The gap to clear (ylabel + wider tick labels) grows with the font, so push
+    # the labels out proportionally. Two text() calls so the count line can differ.
+    row_label_x = -0.35 * f
     for row, (_data, label, n) in enumerate(row_specs):
-        axes[row, 0].text(-0.45, 0.55, label,
+        axes[row, 0].text(row_label_x, 0.55, label,
                           transform=axes[row, 0].transAxes,
-                          fontsize=args.font_size + 4, fontweight="bold",
+                          fontsize=args.font_size - 4, fontweight="normal",
                           ha="center", va="center", rotation=0)
-        axes[row, 0].text(-0.45, 0.40, f"n = {n}",
+        axes[row, 0].text(row_label_x, 0.40, f"n = {n}",
                           transform=axes[row, 0].transAxes,
                           fontsize=args.font_size - 2, fontweight="normal",
                           fontstyle="italic",
@@ -171,8 +193,10 @@ def main():
                           fontsize=args.font_size + 6, fontweight="bold",
                           ha="center", va="bottom")
 
-    # Layout — leave more space on left for "Layer" + row labels, right for cbar
-    fig.subplots_adjust(left=0.16, right=0.92, top=0.92, bottom=0.10)
+    # Layout — leave more space on left for "Layer" + row labels, right for cbar.
+    # Widen the left margin with the font so the pushed-out row labels stay on
+    # canvas (bbox_inches="tight" trims any excess at save time).
+    fig.subplots_adjust(left=min(0.16 * f, 0.32), right=0.92, top=0.92, bottom=0.10)
     cbar_ax = fig.add_axes([0.94, 0.12, 0.014, 0.78])
     cbar = fig.colorbar(last_im, cax=cbar_ax)
     cbar.set_label(cbar_label, fontsize=args.font_size)

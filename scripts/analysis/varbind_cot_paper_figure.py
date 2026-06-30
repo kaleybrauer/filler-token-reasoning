@@ -74,7 +74,7 @@ def off(p):
 
 
 def pos_label(p):
-    if p == "question_end": return "q_end"
+    if p == "question_end": return "0"
     if p == "pre_filler": return "f_label"
     if p == "answer_prompt": return "ans"
     if p.startswith(("pos_", "cot_", "gen_")): return p.split("_")[1].lstrip("0") or "0"
@@ -146,7 +146,7 @@ def main():
     # auto-scale per-position width so the whole figure lands near target-width
     per = (args.target_width - 0.6) / max(sum(widths), 1)
     has_caption = not args.no_example
-    fig = plt.figure(figsize=(sum(widths) * per + 0.6, 7.2 if has_caption else 6.4))
+    fig = plt.figure(figsize=(sum(widths) * per + 0.6, 5.6 if has_caption else 5.4))
     gs = fig.add_gridspec(1, len(data), width_ratios=widths, wspace=0.06)
 
     for k, (r, img, positions) in enumerate(data):
@@ -158,8 +158,12 @@ def main():
             idxs.append(len(positions) - 1)
         ax.set_xticks(idxs)
         ax.set_xticklabels([pos_label(positions[i]) for i in idxs], rotation=45,
-                           ha="right", fontsize=9)
-        ax.set_xlabel("token position", fontsize=12)
+                           ha="right", fontsize=12)
+        ax.set_xlabel("token position", fontsize=15)
+        # Pin the x-label to a fixed axes-fraction height so it lands at the same
+        # level in every panel (panels share height; auto-placement would let the
+        # narrow baseline panel's label ride higher than the dense ones).
+        ax.xaxis.set_label_coords(0.5, -0.18)
 
         # filler: mark the filler -> answer boundary; CoT: optional write markers
         b = r.get("_boundaries") or {}
@@ -175,27 +179,44 @@ def main():
                     if o in col:
                         ax.axvline(col[o], color="black", lw=0.6, ls=":", alpha=0.35)
 
-        ax.set_title(args.titles[k] if k < len(args.titles) else "", fontsize=14)
+        ax.set_title(args.titles[k] if k < len(args.titles) else "", fontsize=18)
         if k == 0:
             ax.set_yticks(range(len(layers)))
-            ax.set_yticklabels([str(l) if l % 5 == 0 else "" for l in layers], fontsize=10)
-            ax.set_ylabel("layer", fontsize=12)
+            ax.set_yticklabels([str(l) if l % 5 == 0 else "" for l in layers], fontsize=13)
+            ax.set_ylabel("layer", fontsize=15)
         else:
             ax.set_yticks([])
 
-    legend_y = 0.20 if has_caption else 0.12
-    fig.legend(handles=[Patch(facecolor=c, label=name) for name, c in TARGETS],
-               loc="upper center", bbox_to_anchor=(0.5, legend_y), ncol=len(TARGETS),
-               fontsize=args.legend_fontsize, frameon=False, handlelength=1.3,
-               columnspacing=1.7, handletextpad=0.5)
-    fig.subplots_adjust(top=0.93, bottom=0.30 if has_caption else 0.22,
+    fig.subplots_adjust(top=0.94, bottom=0.40 if has_caption else 0.33,
                         left=0.06, right=0.99)
+
+    # Hue legend (WHICH intermediate, left) and the opacity ramp (HOW strongly it
+    # decodes, right) share ONE row so the figure stays short; a full-width line
+    # beneath names both visual channels. Each cell is (1-Σf)·white + Σ f_i·colour_i,
+    # so whiteness falls as the exact-match decode fraction f rises (white = none).
+    row_y = 0.16 if has_caption else 0.12
+    fig.legend(handles=[Patch(facecolor=c, label=name) for name, c in TARGETS],
+               loc="center", bbox_to_anchor=(0.36, row_y), ncol=len(TARGETS),
+               fontsize=args.legend_fontsize, frameon=False, handlelength=1.3,
+               columnspacing=1.4, handletextpad=0.5)
+    cax = fig.add_axes([0.79, row_y - 0.015, 0.15, 0.030])
+    grad = np.linspace(0.0, 1.0, 256)[None, :, None]
+    cax.imshow(np.broadcast_to(1.0 - grad * 0.85, (1, 256, 3)),
+               aspect="auto", extent=[0, 1, 0, 1])
+    cax.set_yticks([])
+    cax.set_xticks([0.0, 0.5, 1.0])
+    cax.set_xticklabels(["0", "0.5", "1"], fontsize=13)
+    cax.tick_params(length=3, pad=2)
+    for s in cax.spines.values():
+        s.set_linewidth(0.7)
+    cax.text(-0.06, 0.5, "decode strength", transform=cax.transAxes,
+             ha="right", va="center", fontsize=14)
     if has_caption:
         children = [TextArea(t, textprops=dict(color=c, fontsize=args.legend_fontsize - 5))
                     for t, c in EXAMPLE_SEGMENTS]
         box = HPacker(children=children, align="baseline", pad=0, sep=0)
         fig.add_artist(AnchoredOffsetbox(loc="center", child=box, pad=0, borderpad=0,
-                                         frameon=False, bbox_to_anchor=(0.5, 0.085),
+                                         frameon=False, bbox_to_anchor=(0.5, 0.05),
                                          bbox_transform=fig.transFigure))
     for ext in ("png", "pdf"):
         fig.savefig(f"{args.output}.{ext}", dpi=200, bbox_inches="tight")

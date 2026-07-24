@@ -31,9 +31,12 @@ import numpy as np
 import torch
 from tqdm import tqdm
 
-# Patch: autoawq imports PytorchGELUTanh which was renamed in older transformers
+# Patch: autoawq imports PytorchGELUTanh which was renamed in older transformers.
+# Guard on GELUTanh too — the fp8 venv runs a much newer transformers where neither
+# name is guaranteed, and this is a module-level import: an AttributeError here kills
+# the script before argparse. autoawq isn't installed on the fp8 path anyway.
 import transformers.activations as _act
-if not hasattr(_act, "PytorchGELUTanh"):
+if not hasattr(_act, "PytorchGELUTanh") and hasattr(_act, "GELUTanh"):
     _act.PytorchGELUTanh = _act.GELUTanh
 
 def problem_metadata(problem, dataset_type="1hop"):
@@ -577,17 +580,34 @@ def load_tokenizer(model_path: str):
     return tokenizer
 
 
-def load_model(model_path: str):
+def load_model(model_path: str, precision: str = "awq", tokenizer_path: str = None):
     """
     Load the quantized model via transformers with device_map="auto".
 
-    Supports DeepSeek V3 AWQ (fp16 kernels via autoawq) and Kimi K2 AWQ / W4A16
-    (bf16 for Kimi).
+    precision="awq" (default): DeepSeek V3 AWQ (fp16 kernels via autoawq) and
+      Kimi K2 AWQ / W4A16 (bf16 for Kimi). Uses the vendored modeling_deepseek.py
+      via trust_remote_code.
+
+    precision="fp8": DeepSeek V3's *native* block-FP8 release
+      (deepseek-ai/DeepSeek-V3-0324, ~689 GB). config.json already carries
+      quantization_config {quant_method: fp8, weight_block_size: [128,128]}, so
+      transformers auto-selects its FineGrainedFP8 path — no explicit quant config
+      needed. Uses the NATIVE DeepseekV3ForCausalLM (trust_remote_code=False), which
+      requires a newer transformers than the autoawq pin; run it from its own venv.
+
+    tokenizer_path: load the tokenizer from a DIFFERENT directory than the weights.
+      Required for fp8: the AWQ repo's tokenizer.json prepends a BOS token
+      (post_processor=TemplateProcessing) while the official DeepSeek repo's does not
+      (post_processor=ByteLevel). Vocab and the 0-299 number-token map are identical;
+      the ONLY difference is that leading BOS. Left unfixed it shifts every position
+      index by one between conditions (pos_001, where A1 lives, becomes pos_000) and
+      silently destroys the AWQ-vs-FP8 comparison. Point both runs at one tokenizer.
     """
     from transformers import AutoModelForCausalLM
 
-    print(f"Loading tokenizer from {model_path}...")
-    tokenizer = load_tokenizer(model_path)
+    tok_src = tokenizer_path or model_path
+    print(f"Loading tokenizer from {tok_src}...")
+    tokenizer = load_tokenizer(tok_src)
 
     n_gpus = torch.cuda.device_count()
     print(f"Loading model on {n_gpus} GPUs...")
@@ -598,27 +618,43 @@ def load_model(model_path: str):
 
     # Reserve per-GPU fraction; autoawq rejects CPU in device map.
     # Kimi K2 AWQ (~540 GB) is larger than V3 (~330 GB) so needs a higher fraction.
-    gpu_frac = 0.85 if _is_kimi_family(model_path) else 0.80
+    # fp8: the native release is ~689 GB, which is 81% of 6xH200 (846 GB) and 60% of
+    # 4xB300 (1152 GB) — 0.80 would cap 6xH200 BELOW the weight size and spill to CPU.
+    if precision == "fp8":
+        gpu_frac = 0.90
+    else:
+        gpu_frac = 0.85 if _is_kimi_family(model_path) else 0.80
     max_memory = {
         i: f"{int(torch.cuda.get_device_properties(i).total_memory * gpu_frac / 1e9)}GiB"
         for i in range(n_gpus)
     }
-    print(f"  max_memory: {max_memory}")
-
-    # AWQ CUDA kernels (awq_ext.gemm_forward_cuda) require fp16; Kimi K2's config
-    # default is bf16 but passing "auto" triggers "expected Half but found BFloat16"
-    # in the kernel path. Force fp16 for any AWQ model.
-    dtype = torch.float16
+    print(f"  precision: {precision}   max_memory: {max_memory}")
 
     t0 = time.time()
-    model = AutoModelForCausalLM.from_pretrained(
-        model_path,
-        device_map="auto",
-        max_memory=max_memory,
-        torch_dtype=dtype,
-        trust_remote_code=True,
-        attn_implementation="eager",
-    )
+    if precision == "fp8":
+        # Native DeepseekV3ForCausalLM; block-FP8 weights are read straight from the
+        # checkpoint (quantization_config lives in its config.json). bf16 compute dtype
+        # matches the config's torch_dtype. sdpa avoids materialising 128-head attention.
+        model = AutoModelForCausalLM.from_pretrained(
+            model_path,
+            device_map="auto",
+            max_memory=max_memory,
+            dtype=torch.bfloat16,
+            trust_remote_code=False,
+            attn_implementation="sdpa",
+        )
+    else:
+        # AWQ CUDA kernels (awq_ext.gemm_forward_cuda) require fp16; Kimi K2's config
+        # default is bf16 but passing "auto" triggers "expected Half but found BFloat16"
+        # in the kernel path. Force fp16 for any AWQ model.
+        model = AutoModelForCausalLM.from_pretrained(
+            model_path,
+            device_map="auto",
+            max_memory=max_memory,
+            torch_dtype=torch.float16,
+            trust_remote_code=True,
+            attn_implementation="eager",
+        )
     model.eval()
     elapsed = time.time() - t0
     print(f"Model loaded in {elapsed:.0f}s")
@@ -1051,6 +1087,15 @@ def verify_extraction(output_dir: str, condition_name: str, n_check: int = 3):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--model-path", default="/workspace/models/deepseek-v3-awq")
+    parser.add_argument("--precision", choices=["awq", "fp8"], default="awq",
+                        help="awq (default; vendored modeling_deepseek.py) or fp8 "
+                             "(native DeepSeek-V3-0324 block-FP8 release, ~689 GB)")
+    parser.add_argument("--tokenizer-path", default=None,
+                        help="Load the tokenizer from a different dir than --model-path. "
+                             "REQUIRED with --precision fp8: point it at the AWQ dir so "
+                             "token ids (hence position indices) match the AWQ run. The "
+                             "official repo's tokenizer omits the leading BOS the AWQ "
+                             "repo's adds, which would shift every position by one.")
     parser.add_argument("--dataset", type=Path,
                         default=Path("data/1hop_addition_dataset.json"))
     parser.add_argument("--output-dir", type=Path, default=Path("data/extracted_states"))
@@ -1138,11 +1183,16 @@ def main():
     print(f"Estimated storage: {total_gb:.1f} GB")
 
     # Load model
-    model, tokenizer = load_model(args.model_path)
+    model, tokenizer = load_model(args.model_path, precision=args.precision,
+                                  tokenizer_path=args.tokenizer_path)
 
     # Save lm_head + final norm weights (needed by all downstream decode scripts).
     # Cheap, idempotent, preserved across restarts.
+    # fp8 gets its own subdir so the AWQ readout weights are never overwritten — the
+    # two are then directly comparable (preflight check 5).
     family_subdir = "kimi_k2" if _is_kimi_family(args.model_path) else "deepseek_v3"
+    if args.precision == "fp8":
+        family_subdir += "_fp8"
     weights_dir = Path("data/model_weights") / family_subdir
     lm_head_path = weights_dir / "lm_head_weight.npy"
     norm_path = weights_dir / "rms_norm_weight.npy"

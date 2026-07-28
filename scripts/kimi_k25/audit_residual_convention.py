@@ -9,8 +9,13 @@ the layer, so a forward hook's `output[0]` IS the residual stream. vLLM's
 `DeepseekV2DecoderLayer.forward` uses the split convention and returns
 `(hidden_states, residual)` where `hidden_states` is the MLP write and the residual
 stream after layer L is `output[0] + output[1]` (verified in vLLM v0.8.5 and main).
-`scripts/kimi_k2/` and `scripts/qwen3/` hook vLLM layers but take `output[0]`, copying
-the comment from the transformers path — so their states may be layer writes.
+`scripts/kimi_k2/extract_hidden_states_vllm.py` hooks vLLM layers but takes `output[0]`,
+copying the comment from the transformers path — so its states are layer writes.
+
+Result when this was run (2026-07-28): V3 varbind states (transformers path) show the
+answer emerging gradually — L52 50%, L56 92%, L60 83%. Kimi K2 2fact states (vLLM path)
+sit at 0% through L52, 8% at L56, then 100% at L60: a step, not an emergence. The norm
+profile is NOT a reliable cross-model discriminator; use the layer profile.
 
 Two independent diagnostics, both run per invocation:
 
@@ -177,6 +182,48 @@ def logit_lens(pkls: list[Path], position: str | None, lm_head: np.ndarray,
     return {"checked": checked, "hits": hits, "ranks": ranks, "examples": examples}
 
 
+def layer_profile(pkls: list[Path], position: str | None, lm_head: np.ndarray,
+                  norm_w: np.ndarray, eps: float, encode) -> dict:
+    """Per-layer logit-lens accuracy, for the states as saved and for their cumulative sum.
+
+    The decisive discriminator. If the saved states are the residual stream, accuracy
+    rises smoothly over the last layers and the cumulative sum (which double-counts) is
+    garbage. If they are per-layer writes, the raw states only decode at the very end
+    while the cumulative sum reconstructs the stream and decodes smoothly.
+    """
+    lm_head = lm_head.astype(np.float32).T
+    raw_hits: dict[int, int] = {}
+    cum_hits: dict[int, int] = {}
+    checked = 0
+    layers: list[int] = []
+
+    for path in pkls:
+        with path.open("rb") as f:
+            rec = pickle.load(f)
+        response = rec.get("model_response")
+        if not response:
+            continue
+        true_ids = encode(str(response).strip()) if encode else []
+        if not true_ids:
+            continue
+        true_id = true_ids[0]
+
+        states = rec["states"]
+        pos_name = position or sorted(states.keys())[-1]
+        layers = sorted(states[pos_name].keys())
+        checked += 1
+
+        running = np.zeros(len(norm_w), dtype=np.float32)
+        for li in layers:
+            vec = np.asarray(states[pos_name][li], dtype=np.float32)
+            running = running + vec
+            for tag, hits, x in (("raw", raw_hits, vec), ("cum", cum_hits, running)):
+                logits = rms_norm(x, norm_w, eps) @ lm_head
+                hits[li] = hits.get(li, 0) + int(int(np.argmax(logits)) == true_id)
+
+    return {"layers": layers, "raw": raw_hits, "cum": cum_hits, "checked": checked}
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -188,6 +235,8 @@ def main() -> None:
     ap.add_argument("--rms-norm", type=Path, default=None)
     ap.add_argument("--tokenizer-path", type=Path, default=None)
     ap.add_argument("--eps", type=float, default=1e-6, help="RMSNorm epsilon")
+    ap.add_argument("--layer-profile", action="store_true",
+                    help="per-layer logit-lens accuracy, raw vs cumulative (the decisive test)")
     args = ap.parse_args()
 
     pkls = sorted(args.states_dir.glob("prob_*.pkl"))[: args.n]
@@ -227,6 +276,20 @@ def main() -> None:
             for resp, pred, true_id in res["examples"]:
                 print(f"    response={resp!r:>8}  argmax_id={pred:>7}  true_id={true_id:>7}"
                       f"  {'MATCH' if pred == true_id else ''}")
+
+        if args.layer_profile:
+            print("\nper-layer logit-lens accuracy (raw states vs cumulative sum):")
+            prof = layer_profile(pkls, args.position, lm_head, norm_w, args.eps, encode)
+            n = max(prof["checked"], 1)
+            for li in prof["layers"]:
+                if li % 4 and li != prof["layers"][-1]:
+                    continue
+                raw = 100 * prof["raw"].get(li, 0) / n
+                cum = 100 * prof["cum"].get(li, 0) / n
+                bar = "#" * int(raw / 5)
+                print(f"  L{li:>2}  raw={raw:5.0f}%  cum={cum:5.0f}%  {bar}")
+            print("  smooth rise in `raw` => residual stream; "
+                  "`raw` flat until the last layer while `cum` rises => layer writes")
 
 
 if __name__ == "__main__":

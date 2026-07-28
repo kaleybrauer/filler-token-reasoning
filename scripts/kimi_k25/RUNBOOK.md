@@ -95,9 +95,19 @@ exist in vLLM ≥0.15**. Replacement:
 * Output pkl schema identical to `data/extracted_states_varbind_allpos/` (positions, states,
   boundaries, model_response, model_correct, `intermediate`), so every downstream script works.
 
-**A5. `scripts/kimi_k25/eval_varbind_vllm.py`** — batched accuracy sweep. No varbind vLLM
-evaluator exists yet; model it on `scripts/kimi_k2/eval_accuracy_vllm.py` (one big
-`llm.generate` call per condition, ~0.08 s/example).
+**A5. Behavioral numbers.** varbind accuracy is already produced by the extraction path:
+`scripts/extract/extract_hidden_states.py` generates per example and prints per-condition
+accuracy (line ~1028) — that is how the V3 varbind table (baseline 34.4%, dots_25 65.8%,
+n=500/condition) was produced, and the K2.5 extractor must keep that behaviour. A separate
+batched sweep (`scripts/kimi_k2/eval_accuracy_vllm.py` pattern, one `llm.generate` per
+condition, ~0.08 s/example vs ~2.5 s/example) is **optional** — worth it only for a fast
+high-k sweep before committing to a 4-hour extraction.
+
+**Base to port from:** `scripts/kimi_k2/extract_hidden_states_vllm.py` (Kimi prompt handling,
+2fact/1hop/letterpos) + the `varbind` branches already in
+`scripts/extract/extract_hidden_states.py` (`build_messages_for_condition`, `problem_metadata`,
+the `CONDITIONS` dict). varbind has **never** been run on Kimi K2 — this is the first time the
+two are combined, so `--dataset-type varbind` has to be added to the vLLM extractor.
 
 **A6. Residual-convention audit (CPU, free, uses data already on this volume).** Take an
 existing Kimi K2 pkl + `data/model_weights/kimi_k2/{lm_head,rms_norm}_weight.npy`, apply

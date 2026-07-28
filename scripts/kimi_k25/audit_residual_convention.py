@@ -146,6 +146,7 @@ def logit_lens(pkls: list[Path], position: str | None, lm_head: np.ndarray,
     ranks: list[int] = []
     checked = 0
     examples: list[tuple[str, int, int]] = []
+    lm_head = lm_head.astype(np.float32).T  # cast once; this array is multiple GB
 
     for path in pkls:
         with path.open("rb") as f:
@@ -158,7 +159,7 @@ def logit_lens(pkls: list[Path], position: str | None, lm_head: np.ndarray,
         last_layer = max(states[pos_name].keys())
         vec = np.asarray(states[pos_name][last_layer])
 
-        logits = rms_norm(vec, norm_w, eps) @ lm_head.astype(np.float32).T
+        logits = rms_norm(vec, norm_w, eps) @ lm_head
         pred = int(np.argmax(logits))
 
         true_ids = encode(str(response).strip()) if encode else []

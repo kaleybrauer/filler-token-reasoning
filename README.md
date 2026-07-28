@@ -86,11 +86,14 @@ python scripts/extract/extract_hidden_states.py \
     --conditions dots_10 dots_25 dots_50 counting_10 counting_25 counting_50 \
     --output-dir data/extracted_states_2fact_allpos
 
-# (b) Per-(layer, position) residual fingerprints (P_e − mean_e P_e, top-50 token IDs)
+# (b) Per-(layer, position) residual fingerprints (P_e − mean_e P_e, top-30 tokens per setting)
+# --extraction-dir points at the per-condition subdir (prob_*.pkl); --lm-head/--rms-norm
+# are the saved readout weights for the model that produced the states.
 python scripts/decode/extract_residual_fingerprints.py \
-    --extraction-dir data/extracted_states_2fact_allpos \
-    --condition dots_10 \
+    --extraction-dir data/extracted_states_2fact_allpos/dots_10 \
     --model-path /workspace/models/deepseek-v3-awq \
+    --lm-head data/model_weights/deepseek_v3/lm_head_weight.npy \
+    --rms-norm data/model_weights/deepseek_v3/rms_norm_weight.npy \
     --output outputs/deepseek_aggregated/fingerprints_dots_10.npz
 
 # (c) Aggregate residuals across (layer, position) into per-example top-50
@@ -100,8 +103,10 @@ python scripts/decode/aggregate_residuals_all_settings.py \
     --output outputs/deepseek_aggregated/aggregated_dots_10.json
 
 # (d) LLM-as-judge over the aggregated top-50 tokens (Claude Haiku 4.5 + Sonnet 4.6)
+# --aggregated-dir holds aggregated_<cond>.json; pass matching --conditions.
 python scripts/decode/llm_decode_batch.py \
-    --aggregated outputs/deepseek_aggregated/aggregated_dots_10.json \
+    --aggregated-dir outputs/deepseek_aggregated \
+    --conditions dots_10 \
     --task 2fact --prompt neutral
 ```
 

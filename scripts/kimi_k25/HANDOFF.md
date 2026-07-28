@@ -7,12 +7,17 @@ reasoning behind every choice below. This file is the operating brief.
 ## Mission
 
 Run the **system-of-equations (varbind) task** on **Kimi K2.5** with reasoning suppressed:
-download the checkpoint, verify the prompts contain no open thinking block, measure the
-filler-token accuracy uplift, and extract all-position hidden states for 8 conditions × 500
-examples. Then ship the artifacts off the pod and terminate it.
+download the checkpoint, verify the prompts contain no open thinking block, and extract
+all-position hidden states for 8 conditions × 500 examples of
+**`data/chained_var_binding_easy_dataset.json`** (the easy variant: coefficients fixed at 2,
+constants 1–30, every intermediate a single token). Then ship the artifacts off the pod and
+terminate it.
 
-Reference result to replicate the *shape* of (DeepSeek-V3 AWQ, same dataset): baseline 34.4%,
-dots_25 65.8% — a +24 to +31 pt filler uplift, dots ≈ counting, saturating by k≈10–25.
+Kaley has already measured K2.5's behavioural uplift, so the standalone accuracy sweep is
+optional — extraction generates per example and prints per-condition accuracy anyway, which is
+the number to report. For orientation, DeepSeek-V3 AWQ on the *original* (harder) dataset ran
+baseline 34.4% → dots_25 65.8%: a +24 to +31 pt uplift, dots ≈ counting, saturating by k≈10–25.
+The easy variant will sit higher; watch for ceiling effects rather than matching those numbers.
 
 ## Hard constraints
 
@@ -58,7 +63,7 @@ uv pip install --python /root/.venvs/k25/bin/python vllm==0.25.1 tiktoken blobfi
 | 3 | Tiny-model smoke: `tiny-random/kimi-k2.5` (9.5 MB, same architecture) with `--tokenizer` pointing at the real tokenizer files | 20 min | hooks fire, captured layer count == n_layers, pkl schema matches the reference |
 | 4 | Load the real model (RUNBOOK §3 flags) | 10–20 min | loads without OOM; ~74 GB/GPU |
 | 5 | Preflight gates | 10 min | **all five** — see below |
-| 6 | Behavioral sweep, 8 conditions × 500, batched | ~10 min | per-condition accuracy printed and saved |
+| 6 | Behavioral sweep (OPTIONAL — accuracy also comes free from step 7) | ~10 min | per-condition accuracy printed and saved |
 | 7 | Extraction, 8 conditions × 500, all positions | 3.5–5 h | first-example shapes + no NaN; progress logged per condition |
 | 8 | Ship artifacts out, verify, terminate | 30–60 min | checksums verified on the receiving side |
 

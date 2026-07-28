@@ -83,8 +83,8 @@ exist in vLLM ≥0.15**. Replacement:
   returns `(hidden_states, residual)` in the *split* convention — `output[0]` is the MLP write,
   the residual stream after layer L is the sum (verified in vLLM `v0.8.5` and `main`). The HF
   `modeling_deepseek.py` path used for V3 adds the residual inside the layer, which is why
-  `output[0]` was right there and is wrong here. See §5 for the audit of the existing Kimi/Qwen3
-  extractions, which use `output[0]`.
+  `output[0]` was right there and is wrong here. The A6 audit confirms the existing Kimi K2
+  states are layer writes.
 * `enable_prefix_caching=False` **and** `enable_chunked_prefill=False`. Both default on in V1;
   either one silently truncates or skips the prefill we are trying to capture.
 * Keep the "first forward per layer after `clear()`" guard (decode steps overwrite otherwise).
@@ -109,16 +109,31 @@ high-k sweep before committing to a 4-hour extraction.
 the `CONDITIONS` dict). varbind has **never** been run on Kimi K2 — this is the first time the
 two are combined, so `--dataset-type varbind` has to be added to the vLLM extractor.
 
-**A6. Residual-convention audit (CPU, free, uses data already on this volume).** Take an
-existing Kimi K2 pkl + `data/model_weights/kimi_k2/{lm_head,rms_norm}_weight.npy`, apply
-RMSNorm→lm_head to the **last layer** at `answer_prompt`, and check the argmax equals the token
-the model actually generated. True residual stream ⇒ near-100% match; MLP-delta-only ⇒ it fails.
-This is the same gate we then run live on K2.5 (C3.4), and it tells us whether the published
-Kimi K2 / Qwen3-32B numbers were computed on the residual stream or on layer writes.
+**A6. Residual-convention audit — DONE 2026-07-28.**
+`scripts/kimi_k25/audit_residual_convention.py --layer-profile`, run on saved pkls only.
+Per-layer logit-lens accuracy at `answer_prompt`:
 
-**A7. Push the branch** (Kaley — no commits or pushes from the agent) so the GPU pod can clone.
-`data/chained_var_binding_dataset.json` is force-tracked in git (md5
-`b3d33393b8973667d3043a4dc2c7d0b8`) → the pod gets the exact dataset from the clone.
+| states | L52 | L56 | L60 | shape |
+|---|---|---|---|---|
+| V3 varbind dots_10 (transformers path) | 50% | 92% | 83% | gradual emergence = residual stream |
+| Kimi K2 2fact dots_10 (vLLM path) | 0% | 8% | 100% | step at the last layer = layer writes |
+
+So the existing Kimi K2 extractions (2fact, letterpos, capitalpos) hold per-layer MLP writes,
+not the residual stream. Fixing them needs re-extraction on a GPU — Kaley's call, tracked
+separately; it does not block K2.5. Note the norm profile is **not** a reliable discriminator
+across models (it looks stream-like under either convention); the layer profile is.
+The live version of this test is preflight gate 4 (C3.4).
+
+**A7. Push the branch** (Kaley — no pushes from the agent) so the GPU pod can clone. Both
+datasets are force-tracked in git, so the clone carries them exactly:
+
+| dataset | md5 | c₁, c₂ | k₁, k₂ | answer range |
+|---|---|---|---|---|
+| **`data/chained_var_binding_easy_dataset.json`** ← **the K2.5 run** | `ea35ef74e42491cf6e171af97675c8ce` | {2} | 1–30 | 8–460, all single-token |
+| `data/chained_var_binding_dataset.json` (V3 original) | `b3d33393b8973667d3043a4dc2c7d0b8` | {2,3} | 1–50 | 0–1013, 2 multi-token |
+
+Both are 500 examples + 8 few-shot (first 5 used), seed 42, `chain_len=1`, `num_terms=5`,
+literals 10–99. They are independently sampled, not matched pairs.
 
 ## 2. Phase B — tiny-model smoke (1 cheap GPU, ~20 min, ~$1)
 
@@ -162,8 +177,9 @@ counting_10 ~14.5 · counting_25 ~28 ⇒ ~112 GB, call it 120 GB with pickle ove
    to `data/model_weights/kimi_k25/{lm_head_weight,rms_norm_weight}.npy` (2.4 GB) — needed by
    every decode script, and small enough to ship out first.
 
-**Conditions:** `baseline`, `dots_{5,10,25,50}`, `counting_{5,10,25}` × 500 examples,
-matching `data/extracted_states_varbind_allpos/`. `CONDITIONS` in
+**Conditions:** `baseline`, `dots_{5,10,25,50}`, `counting_{5,10,25}` × 500 examples of
+`data/chained_var_binding_easy_dataset.json`, mirroring the condition set of
+`data/extracted_states_varbind_allpos/`. `CONDITIONS` in
 `scripts/extract/extract_hidden_states.py` already has these entries.
 
 **Ship-out priority:** ① accuracy grid JSON + logs (KB) ② lm_head/norm npy (2.4 GB)

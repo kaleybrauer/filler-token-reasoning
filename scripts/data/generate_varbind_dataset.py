@@ -74,14 +74,26 @@ COEF_WORDS = {2: "twice", 3: "three times", 4: "four times", 5: "five times", 6:
 # Fake-term + chain construction (ported from multi_hop)
 # ---------------------------------------------------------------------------
 
-def load_real_words() -> set:
-    """Load a dictionary word list so generated CVC terms are guaranteed non-words."""
+# words_alpha.txt (370k words) is the strictest of these and the one the easy variant
+# used: https://raw.githubusercontent.com/dwyl/english-words/master/words_alpha.txt
+WORDLIST_PATHS = ("data/wordlists/words_alpha.txt", "/usr/share/dict/words", "/usr/share/dict/web2")
+
+
+def load_real_words(explicit: Path | None = None) -> set:
+    """Load a dictionary word list so generated CVC terms are guaranteed non-words.
+
+    Returning an empty set used to be silent, and a box without /usr/share/dict
+    then produced a dataset whose "nonsense" terms were 43% real English words
+    (bad, bag, ban, bar, bed ...). main() now refuses to generate on an empty
+    list unless --allow-unfiltered is passed.
+    """
     words: set = set()
-    for path in ("/usr/share/dict/words", "/usr/share/dict/web2"):
-        if os.path.exists(path):
+    for path in ([explicit] if explicit else []) + [Path(p) for p in WORDLIST_PATHS]:
+        if path and Path(path).exists():
             with open(path, encoding="utf-8", errors="ignore") as f:
                 for line in f:
                     words.add(line.strip().lower())
+            print(f"  word list: {path} ({len(words)} words)")
             break
     return words
 
@@ -412,6 +424,10 @@ def main() -> None:
     parser.add_argument("--const-max", type=int, default=CONST_MAX)
     parser.add_argument("--max-coef", type=int, default=MAX_COEF,
                         help=f"Max coefficient (must be a key in {sorted(COEF_WORDS)})")
+    parser.add_argument("--words-file", type=Path, default=None,
+                        help=f"Dictionary word list. Default search order: {WORDLIST_PATHS}")
+    parser.add_argument("--allow-unfiltered", action="store_true",
+                        help="Generate even with no word list (terms may be real words)")
     parser.add_argument("--preview", action="store_true",
                         help="Print 3 example prompts (baseline, dots_5, counting_5) "
                              "to verify format, then exit.")
@@ -420,8 +436,15 @@ def main() -> None:
     assert args.num_terms >= args.chain_len + 1, "num_terms must be >= chain_len + 1"
     assert args.max_coef in COEF_WORDS, f"max_coef must be one of {sorted(COEF_WORDS)}"
 
-    real_words = load_real_words()
+    real_words = load_real_words(args.words_file)
     print(f"Loaded {len(real_words)} real words for filtering.")
+    if not real_words and not args.allow_unfiltered:
+        raise SystemExit(
+            "No word list found, so generated CVC terms would NOT be checked against real\n"
+            "words (a previous unfiltered run produced 43% real words: bad, bag, ban, bar...).\n"
+            f"Provide --words-file PATH, put a list at one of {WORDLIST_PATHS},\n"
+            "or pass --allow-unfiltered if you genuinely want unfiltered terms."
+        )
     print(f"num_terms={args.num_terms}, chain_len={args.chain_len}, max_coef={args.max_coef}")
 
     # Generate few-shot pool + examples as one de-duped stream, then split. Each
@@ -445,6 +468,17 @@ def main() -> None:
         "task": "chained_var_binding",
         "chain_len": args.chain_len,
         "num_terms": args.num_terms,
+        # Self-describing generation params: with more than one difficulty variant in
+        # play, a dataset file (and anything extracted from it) has to say which
+        # ranges produced it. Purely additive - does not touch the RNG stream.
+        "params": {
+            "seed": args.seed,
+            "val_min": args.val_min,
+            "val_max": args.val_max,
+            "const_min": args.const_min,
+            "const_max": args.const_max,
+            "max_coef": args.max_coef,
+        },
         "few_shot_examples": few_shot_items,
         "examples": examples,
     }

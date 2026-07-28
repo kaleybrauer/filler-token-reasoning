@@ -13,11 +13,15 @@ all-position hidden states for 8 conditions × 500 examples of
 constants 1–30, every intermediate a single token). Then ship the artifacts off the pod and
 terminate it.
 
-Kaley has already measured K2.5's behavioural uplift, so the standalone accuracy sweep is
-optional — extraction generates per example and prints per-condition accuracy anyway, which is
-the number to report. For orientation, DeepSeek-V3 AWQ on the *original* (harder) dataset ran
-baseline 34.4% → dots_25 65.8%: a +24 to +31 pt uplift, dots ≈ counting, saturating by k≈10–25.
-The easy variant will sit higher; watch for ceiling effects rather than matching those numbers.
+**Numbers to reproduce.** Kaley has already measured K2.5 on this easy dataset:
+**baseline 30.3% → dots_25 55.7% (+25.4 pt)**. The accuracy your extraction prints must land
+near these — a large discrepancy means the prompt or the thinking suppression is wrong, not
+that you discovered something. The standalone accuracy sweep is therefore optional: extraction
+generates per example and prints per-condition accuracy anyway.
+
+For context, DeepSeek-V3 AWQ on the *original* (harder) dataset ran baseline 34.4% → dots_25
+65.8%, a +24 to +31 pt uplift with dots ≈ counting, saturating by k≈10–25. K2.5's +25.4 pt on
+the easy set sits squarely in that range.
 
 ## Hard constraints
 

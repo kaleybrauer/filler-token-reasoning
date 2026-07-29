@@ -200,6 +200,51 @@ the headline ladder survives even if ③ never lands.
    natively-reasoning model with reasoning suppressed, and does the never-written `y` / `c₂·y`
    still decode at 90–99% top-10?
 
+## 4b. Post-run record (2026-07-29, states received)
+
+**What landed.** `data/extracted_states_{varbind,2fact,1hop}_allpos_kimi_k25/`, 181 GB total.
+varbind got the full ladder (baseline + dots 5/10/25/50 + counting 5/10/25, 500 ex each);
+**2fact and 1hop got only baseline + dots_10 + dots_25** (1000 / 500 ex). So there is no
+dots-vs-counting contrast on K2.5 addition, unlike V3 and K2 which both have counting_10/25/50
++ dots_10/25/50 on 2fact. Closing that gap needs GPU time.
+
+**The decode weights were NOT shipped.** `data/model_weights/kimi_k25/` arrived empty, which
+blocks every logit-lens script. Recovering them does not need the 595 GB checkpoint — both
+tensors live in one shard:
+
+```bash
+hf download moonshotai/Kimi-K2.5 --include "model-00062-of-000064.safetensors" \
+    --local-dir /workspace/models/kimi-k2.5-shard62      # 4,697,635,160 bytes
+# then language_model.lm_head.weight -> lm_head_weight.npy   (163840, 7168) fp16
+#      language_model.model.norm.weight -> rms_norm_weight.npy (7168,)      fp32
+```
+
+The shard holds exactly 3 tensors, both of ours BF16. Note the filename is
+`model-00062-of-000064` (three zeros in the second field), not `-of-00064`.
+
+The tokenizer also needs `tool_declaration_ts.py` alongside `tokenization_kimi.py`, or
+`AutoTokenizer(trust_remote_code=True)` dies on a missing-file copy. All 1000 integers 0–999
+are single tokens, as on K2.
+
+**Capture-convention gate: PASSED on both tasks** (`audit_residual_convention.py --layer-profile
+--eps 1e-5`, n=30 at `answer_prompt`). Final-layer logit lens 30/30 on varbind and on 2fact;
+per-layer `raw` 0% → 30%/33% @L56 → 100% @L60 while `cum` only reaches 60%/17%. `raw` decoding
+and `cum` not is the residual-stream signature — the pod captured `output[0] + output[1]`, so
+these states are the same object as the V3 ones, unlike the K2 extractions in A6.
+
+**Correction to the gate-3 expectation:** counting spans are **2k** tokens, not 2k−1. Dot spans
+are exactly k. Both verified across every condition; the 2k−1 figure in HANDOFF.md was wrong.
+
+**RMSNorm epsilon is 1e-5** for K2.5 (`text_config.rms_norm_eps`), vs 1e-6 for K2 and V3. Pass
+`--eps 1e-5`. The effect on decoding is negligible (mean-square is O(1)–O(100)) but the audit
+and `pool_decode_topk.py` take the flag.
+
+**Behavioral note.** Extraction-time accuracy reproduces the measured baseline (varbind easy
+31.6% vs 30.3% measured) but *not* the filler conditions (dots_25 44.0% vs 55.7% measured). The
+control landing while the treatment does not points at the filler-condition prompt rendering
+during extraction. Unresolved — compare the pod's rendered dots_25 prompt against the
+behavioral run's before using either uplift number.
+
 ## 5. Risks & open items
 
 | Risk | Mitigation |

@@ -76,7 +76,11 @@ def main():
 
     lm_head = np.load(args.lm_head).astype(np.float32)
     norm_weight = np.load(args.rms_norm).astype(np.float32)
-    print(f"lm_head: {lm_head.shape}")
+    # Restrict lm_head to the number-token rows once — argmax only ever happens
+    # over these columns, so this is identical to (H @ lm_head.T)[:, num_ids] but
+    # hundreds of times cheaper (300 rows vs ~129-164k vocab).
+    lm_head_num = lm_head[num_ids]
+    print(f"lm_head: {lm_head.shape} -> number rows {lm_head_num.shape}")
 
     for cond in args.condition:
         print(f"\n=== {cond} ===")
@@ -137,8 +141,7 @@ def main():
 
                 H = np.stack(vecs)
                 H = rms_norm(H, norm_weight)
-                logits = H @ lm_head.T
-                num_logits = logits[:, num_ids]
+                num_logits = H @ lm_head_num.T
                 preds = num_vals[np.argmax(num_logits, axis=1)]
 
                 a1 = A1[valid_idx]

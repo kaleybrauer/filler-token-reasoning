@@ -94,6 +94,9 @@ class LayerCapture:
         # last forward pass. We clear() before each request.
         self.captured: dict[int, torch.Tensor] = {}
         self.handles = []
+        # Which capture convention the hooks actually took, recorded per run and
+        # written into every pkl so this is auditable after the fact.
+        self.convention: str | None = None
         layers = model.model.layers
         for i, layer in enumerate(layers):
             self.handles.append(
@@ -107,12 +110,31 @@ class LayerCapture:
             # whose output is shape (1, hidden) and would overwrite prefill.
             if idx in self.captured:
                 return
-            # vLLM decoder layer returns a tuple (hidden_states, residual) in
-            # some versions, or a single tensor. Handle both.
-            if isinstance(output, tuple):
+            # vLLM's DeepseekV2DecoderLayer uses the SPLIT-residual convention and
+            # returns `(mlp_write, stream_after_attention)` — the final add happens
+            # outside the layer, in DeepseekV2Model.forward's `self.norm(h, residual)`.
+            # So the residual stream after layer L is output[0] + output[1].
+            #
+            # Taking output[0] alone yields per-layer MLP WRITES. That was the bug in
+            # the original 2fact/letterpos/capitalpos extractions: this hook was ported
+            # from the transformers path (HF DeepseekV3DecoderLayer adds the residual
+            # INSIDE the layer and returns a 1-tuple, so there output[0] IS the stream).
+            # Same local variable name, opposite meaning. Do not "simplify" this back.
+            if (isinstance(output, tuple) and len(output) == 2
+                    and torch.is_tensor(output[0]) and torch.is_tensor(output[1])
+                    and output[0].shape == output[1].shape):
+                hidden = output[0] + output[1]
+                convention = "sum(output[0], output[1])  [residual stream]"
+            elif isinstance(output, tuple):
+                # HF/transformers path: output[0] is already the full stream.
                 hidden = output[0]
+                convention = "output[0]  [1-tuple: already residual stream]"
             else:
                 hidden = output
+                convention = "output  [bare tensor: already residual stream]"
+            if self.convention is None:
+                self.convention = convention
+                print(f"[LayerCapture] capture convention = {convention}", flush=True)
             self.captured[idx] = hidden.detach()
         return hook
 
@@ -432,6 +454,9 @@ def main() -> None:
                     "filler_start": filler_start,
                     "filler_end": filler_end,
                     "gen_prefix": None,
+                    # What `states` actually holds. Older extractions predate this
+                    # field and hold per-layer MLP writes — see REEXTRACT_RUNBOOK.md.
+                    "capture_convention": capture.convention,
                 }
                 if boundaries is not None:
                     result["boundaries"] = boundaries

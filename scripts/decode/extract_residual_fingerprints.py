@@ -72,6 +72,13 @@ def main():
     ap.add_argument("--lm-head", type=Path, required=True)
     ap.add_argument("--rms-norm", type=Path, required=True)
     ap.add_argument("--min-layer", type=int, default=30)
+    ap.add_argument("--device", choices=["auto", "cpu", "cuda"], default="auto",
+                    help="auto (default) uses the GPU if torch+CUDA are present, else numpy. "
+                         "Same math either way; the GPU just keeps lm_head resident.")
+    ap.add_argument("--layer-delta", action="store_true",
+                    help="Lens the layer-local write h_L - h_{L-1} (= attn+MLP write, "
+                         "direct logit attribution) instead of the accumulated residual "
+                         "stream h_L. Requires layer min_layer-1 to be present.")
     ap.add_argument("--include-question-end", action="store_true",
                     help="Also include the question_end position (last token of the question)")
     ap.add_argument("--include-post-filler", action="store_true",
@@ -95,6 +102,30 @@ def main():
     tokenizer = load_tokenizer(args.model_path)
     lm_head = np.load(args.lm_head).astype(np.float32)   # (vocab, d)
     norm_w = np.load(args.rms_norm).astype(np.float32)
+
+    # Optional GPU path. Same arithmetic in fp32 with TF32 disabled, so results match the
+    # numpy path to floating-point noise; the win is that lm_head stops being re-streamed
+    # from RAM for every setting. Falls back silently to numpy if torch/CUDA is absent.
+    gpu = None
+    if args.device != "cpu":
+        try:
+            import torch
+            if torch.cuda.is_available():
+                torch.backends.cuda.matmul.allow_tf32 = False
+                torch.backends.cudnn.allow_tf32 = False
+                dev = torch.device("cuda")
+                gpu = (torch,
+                       torch.from_numpy(lm_head).to(dev),
+                       torch.from_numpy(norm_w).to(dev))
+                print(f"Using GPU: {torch.cuda.get_device_name(0)} "
+                      f"(lm_head resident, {lm_head.nbytes / 1e9:.2f} GB fp32)")
+            elif args.device == "cuda":
+                raise RuntimeError("--device cuda requested but torch.cuda is unavailable")
+        except ImportError:
+            if args.device == "cuda":
+                raise
+    if gpu is None:
+        print("Using CPU (numpy)")
     vocab = lm_head.shape[0]
 
     files = sorted(args.extraction_dir.glob("prob_*.pkl"))
@@ -171,32 +202,59 @@ def main():
     for s_idx, (pos, layer) in enumerate(tqdm(settings, desc="Extracting fingerprints")):
         # Stack example vectors → (n, d)
         try:
-            vecs = np.stack([d["states"][pos][layer].astype(np.float32)
-                             for d in all_data])
+            if args.layer_delta:
+                # Layer-local write instead of the accumulated stream:
+                #   h_L - h_{L-1} = attn_write_L + mlp_write_L
+                # This is the direct-logit-attribution object (everything layer L
+                # added), NOT the MLP write alone — vLLM's split-residual hook gives
+                # MLP-only, this gives attention+MLP. Exactly recoverable offline
+                # because every layer's residual state was saved.
+                vecs = np.stack([(d["states"][pos][layer].astype(np.float32)
+                                  - d["states"][pos][layer - 1].astype(np.float32))
+                                 for d in all_data])
+            else:
+                vecs = np.stack([d["states"][pos][layer].astype(np.float32)
+                                 for d in all_data])
         except KeyError:
             # Some examples may be missing this (pos, layer); skip
             continue
 
-        H = rms_norm(vecs, norm_w)                    # (n, d)
-        logits = H @ lm_head.T                        # (n, vocab)
-        shifted = logits - logits.max(axis=1, keepdims=True)
-        probs = np.exp(shifted) / np.exp(shifted).sum(axis=1, keepdims=True)
-        # Cross-example mean (noise baseline) — also used for debug preview
-        mean_p = probs.mean(axis=0)                   # (vocab,)
-
-        if args.no_residual:
-            # Ablation: rank by raw prob per example (no mean subtraction)
-            score = probs
+        if gpu is not None:
+            # Identical math, but lm_head stays resident on the device. The CPU path is
+            # memory-bandwidth bound streaming the 3.7 GB lm_head once per setting; on GPU
+            # it is streamed once per RUN. torch.topk already returns sorted-descending.
+            torch, lm_head_t, norm_w_t = gpu
+            x = torch.from_numpy(vecs).to(lm_head_t.device, non_blocking=True)
+            rms = torch.sqrt(x.pow(2).mean(-1, keepdim=True) + 1e-6)
+            H_t = (x / rms) * norm_w_t
+            probs_t = torch.softmax(H_t @ lm_head_t.T, dim=1)
+            mean_t = probs_t.mean(dim=0)
+            score_t = probs_t if args.no_residual else probs_t - mean_t.unsqueeze(0)
+            vals_t, ids_t = torch.topk(score_t, args.top_k, dim=1, sorted=True)
+            topk_ids = ids_t.cpu().numpy().astype(np.int64)
+            topk_vals = vals_t.float().cpu().numpy()
+            mean_p = mean_t.float().cpu().numpy()
         else:
-            score = probs - mean_p[None, :]            # residual (n, vocab)
+            H = rms_norm(vecs, norm_w)                    # (n, d)
+            logits = H @ lm_head.T                        # (n, vocab)
+            shifted = logits - logits.max(axis=1, keepdims=True)
+            probs = np.exp(shifted) / np.exp(shifted).sum(axis=1, keepdims=True)
+            # Cross-example mean (noise baseline) — also used for debug preview
+            mean_p = probs.mean(axis=0)                   # (vocab,)
 
-        # Top-K by score per example
-        order = np.argpartition(-score, args.top_k - 1, axis=1)[:, :args.top_k]
-        # Sort those top-K descending by value
-        rows = np.arange(n)[:, None]
-        sort_in_topk = np.argsort(-score[rows, order], axis=1)
-        topk_ids = order[rows, sort_in_topk]
-        topk_vals = score[rows, topk_ids]
+            if args.no_residual:
+                # Ablation: rank by raw prob per example (no mean subtraction)
+                score = probs
+            else:
+                score = probs - mean_p[None, :]            # residual (n, vocab)
+
+            # Top-K by score per example
+            order = np.argpartition(-score, args.top_k - 1, axis=1)[:, :args.top_k]
+            # Sort those top-K descending by value
+            rows = np.arange(n)[:, None]
+            sort_in_topk = np.argsort(-score[rows, order], axis=1)
+            topk_ids = order[rows, sort_in_topk]
+            topk_vals = score[rows, topk_ids]
 
         fp_ids[s_idx] = topk_ids
         fp_vals[s_idx] = topk_vals

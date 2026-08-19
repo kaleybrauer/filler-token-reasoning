@@ -55,6 +55,11 @@ def main():
     parser.add_argument("--output-dir", type=Path, default=Path("results/unsupervised_decode_2fact"))
     parser.add_argument("--incorrect-only", action="store_true",
                         help="Filter to examples where model got the final answer WRONG")
+    parser.add_argument("--jlens", type=Path, default=None,
+                        help="Fitted Jacobian lens (.pt from scripts/jlens/fit_v3.py, a fit "
+                             "checkpoint, or .npz). Decodes h through J_L before the RMSNorm "
+                             "instead of the logit lens (= the J_L = I special case). Only "
+                             "fitted layers are decoded; outputs get a _jlens suffix.")
     args = parser.parse_args()
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
@@ -63,6 +68,13 @@ def main():
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     from extract.extract_hidden_states import load_tokenizer
     tokenizer = load_tokenizer(args.model_path)
+
+    jlens_J = None
+    if args.jlens is not None:
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "jlens"))
+        from apply_lens import describe, load_jlens
+        jlens_J = load_jlens(args.jlens)
+        print(f"{describe(jlens_J)}  <- {args.jlens}")
 
     # Build number token map
     number_tokens = {}
@@ -111,6 +123,13 @@ def main():
             key=pos_sort_key
         )
         layers = sorted(d0["states"][positions[0]].keys())
+        if jlens_J is not None:
+            dropped = sorted(set(layers) - set(jlens_J))
+            layers = sorted(set(layers) & set(jlens_J))
+            if not layers:
+                raise SystemExit("lens has no layer in common with the extraction")
+            print(f"  --jlens: decoding layers {layers[0]}..{layers[-1]}, "
+                  f"skipping {len(dropped)} unfitted")
 
         # Get boundary info for all-positions mode
         boundaries = d0.get("boundaries")
@@ -140,6 +159,9 @@ def main():
                     continue
 
                 H = np.stack(vecs)
+                if jlens_J is not None:
+                    # J-lens transport into the final-layer basis, before the norm.
+                    H = H @ jlens_J[int(layer)].T
                 H = rms_norm(H, norm_weight)
                 num_logits = H @ lm_head_num.T
                 preds = num_vals[np.argmax(num_logits, axis=1)]
@@ -163,6 +185,8 @@ def main():
 
         # Save JSON
         suffix_cond = f"{cond}_incorrect" if args.incorrect_only else cond
+        if jlens_J is not None:
+            suffix_cond = f"{suffix_cond}_jlens"
         outfile = args.output_dir / f"decode_2fact_{suffix_cond}.json"
         with open(outfile, "w") as f:
             json.dump(results, f, indent=2)

@@ -90,6 +90,12 @@ def main():
     ap.add_argument("--incorrect-only", action="store_true",
                     help="Filter to examples where the model got the final "
                          "answer WRONG (model_correct=False) instead of correct.")
+    ap.add_argument("--jlens", type=Path, default=None,
+                    help="Fitted Jacobian lens (.pt from scripts/jlens/fit_v3.py, a "
+                         "fit checkpoint, or .npz). Transports each residual into the "
+                         "final-layer basis (h <- J_L h) BEFORE the RMSNorm; the logit "
+                         "lens is the J_L = I special case. Settings whose layer was "
+                         "not fitted are skipped. Unset = byte-identical to before.")
     ap.add_argument("--output", type=Path, required=True)
     ap.add_argument("--preview", type=int, default=0,
                     help="Decode and print top-K of a few settings/examples")
@@ -98,6 +104,13 @@ def main():
     tokenizer = load_tokenizer(args.model_path)
     lm_head = np.load(args.lm_head).astype(np.float32)   # (vocab, d)
     norm_w = np.load(args.rms_norm).astype(np.float32)
+
+    jlens_J = None
+    if args.jlens is not None:
+        sys.path.insert(0, str(REPO_ROOT / "scripts" / "jlens"))
+        from apply_lens import describe, load_jlens  # noqa: E402
+        jlens_J = load_jlens(args.jlens)
+        print(f"{describe(jlens_J)}  <- {args.jlens}")
 
     # Optional GPU path. Same arithmetic in fp32 with TF32 disabled, so results match the
     # numpy path to floating-point noise; the win is that lm_head stops being re-streamed
@@ -166,6 +179,14 @@ def main():
           f"{'including' if args.include_post_filler else 'excluding'} post-filler)")
     layers = sorted(l for l in d0["states"][all_positions[0]].keys()
                     if l >= args.min_layer)
+    if jlens_J is not None:
+        fitted = sorted(set(layers) & set(jlens_J))
+        dropped = sorted(set(layers) - set(jlens_J))
+        if not fitted:
+            raise SystemExit(f"lens has no layer in {layers[0]}..{layers[-1]}")
+        if dropped:
+            print(f"  --jlens: skipping unfitted layers {dropped}")
+        layers = fitted
     settings = [(pos, l) for pos in all_positions for l in layers]
     print(f"{len(all_positions)} positions × {len(layers)} layers "
           f"= {len(settings)} candidate settings")
@@ -203,6 +224,10 @@ def main():
         except KeyError:
             # Some examples may be missing this (pos, layer); skip
             continue
+
+        if jlens_J is not None:
+            # J-lens transport into the final-layer basis, before the RMSNorm.
+            vecs = vecs @ jlens_J[int(layer)].T
 
         if gpu is not None:
             # Identical math, but lm_head stays resident on the device. The CPU path is
@@ -269,7 +294,8 @@ def main():
         truth_atomic_number=truth["atomic_number"],
         truth_intermediate=truth["intermediate"],
         truth_coefficient=truth["coefficient"],
-        config=np.array([{"min_layer": args.min_layer,
+        config=np.array([{"jlens": str(args.jlens) if args.jlens else None,
+                          "min_layer": args.min_layer,
                           "include_question_end": args.include_question_end,
                           "include_post_filler": args.include_post_filler,
                           "top_k": args.top_k,

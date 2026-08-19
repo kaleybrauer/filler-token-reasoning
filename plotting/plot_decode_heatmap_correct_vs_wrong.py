@@ -33,10 +33,18 @@ METRIC_SUFFIX = {
 POS_TICK_STEP = 2  # label every Nth position
 
 
+POS_LABEL_MAP = {
+    "question_end": "q_end",
+    "pre_filler": "f_label",
+    "answer_prompt": "ans",
+    "pre_answer": "ans",
+}
+
+
 def pos_label(p: str) -> str:
     if p.startswith("pos_"):
         return p.split("_")[1].lstrip("0") or "0"
-    return p
+    return POS_LABEL_MAP.get(p, p)
 
 
 def matrix_for(d: dict, metric: str, min_layer: int = 0) -> tuple[np.ndarray, list[int], list[str]]:
@@ -132,21 +140,28 @@ def main():
             # Without this, dots_50 / counting_25 / counting_50 panels have so many
             # ticks that the labels overlap into illegibility.
             n_pos = len(positions)
-            if n_pos <= 20:
-                pos_step = 2
-            elif n_pos <= 35:
-                pos_step = 5
-            elif n_pos <= 70:
-                pos_step = 10
+            labels = [pos_label(p) for p in positions]
+            # Integer-offset positions (pos_NNN) get an adaptive step so dense
+            # panels stay legible. NAMED positions (baseline's q_end / pre_answer)
+            # aren't offsets — just label them all.
+            if all(lbl.lstrip("-").isdigit() for lbl in labels):
+                if n_pos <= 20:
+                    pos_step = 2
+                elif n_pos <= 35:
+                    pos_step = 5
+                elif n_pos <= 70:
+                    pos_step = 10
+                else:
+                    pos_step = 20
+                # Bigger fonts take more room per label, so coarsen the step in step
+                # with the font (font 22 -> x1, font 40 -> x2) to keep labels legible.
+                pos_step *= max(1, round(args.font_size / 22.0))
+                tick_idxs = [i for i, lbl in enumerate(labels) if int(lbl) % pos_step == 0]
+                ax.set_xticks(tick_idxs)
+                ax.set_xticklabels([labels[i] for i in tick_idxs])
             else:
-                pos_step = 20
-            # Bigger fonts take more room per label, so coarsen the step in step
-            # with the font (font 22 -> x1, font 40 -> x2) to keep labels legible.
-            pos_step *= max(1, round(args.font_size / 22.0))
-            tick_idxs = [i for i, p in enumerate(positions)
-                         if int(pos_label(p)) % pos_step == 0]
-            ax.set_xticks(tick_idxs)
-            ax.set_xticklabels([pos_label(positions[i]) for i in tick_idxs])
+                ax.set_xticks(range(n_pos))
+                ax.set_xticklabels(labels, rotation=45, ha="right")
 
             # y ticks every 5 layers (every 10 if many layers)
             tick_step = 10 if len(layers) > 25 else 5
@@ -168,13 +183,17 @@ def main():
             if col == 0:
                 ax.set_ylabel("Layer")
             if row == len(row_specs) - 1:
-                ax.set_xlabel("Token offset")
+                is_offset = all(pos_label(p).lstrip("-").isdigit() for p in positions)
+                ax.set_xlabel("Token offset" if is_offset else "Position")
 
     # Row labels (left side) — Correct / Wrong with n=...
     # Sit further left than the "Layer" ylabel + tick labels so they don't collide.
     # The gap to clear (ylabel + wider tick labels) grows with the font, so push
     # the labels out proportionally. Two text() calls so the count line can differ.
-    row_label_x = -0.35 * f
+    # Narrow (few-column) figures like the baseline (q_end / pre_answer) make the
+    # ylabel + ticks eat more axes-fraction, so push the row labels further left.
+    few_pos = len(correct["_positions"]) <= 4
+    row_label_x = (-0.62 if few_pos else -0.35) * f
     for row, (_data, label, n) in enumerate(row_specs):
         axes[row, 0].text(row_label_x, 0.55, label,
                           transform=axes[row, 0].transAxes,
@@ -196,7 +215,8 @@ def main():
     # Layout — leave more space on left for "Layer" + row labels, right for cbar.
     # Widen the left margin with the font so the pushed-out row labels stay on
     # canvas (bbox_inches="tight" trims any excess at save time).
-    fig.subplots_adjust(left=min(0.16 * f, 0.32), right=0.92, top=0.92, bottom=0.10)
+    fig.subplots_adjust(left=min((0.22 if few_pos else 0.16) * f, 0.34),
+                        right=0.92, top=0.92, bottom=0.10)
     cbar_ax = fig.add_axes([0.94, 0.12, 0.014, 0.78])
     cbar = fig.colorbar(last_im, cax=cbar_ax)
     cbar.set_label(cbar_label, fontsize=args.font_size)

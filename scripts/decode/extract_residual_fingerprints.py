@@ -75,10 +75,6 @@ def main():
     ap.add_argument("--device", choices=["auto", "cpu", "cuda"], default="auto",
                     help="auto (default) uses the GPU if torch+CUDA are present, else numpy. "
                          "Same math either way; the GPU just keeps lm_head resident.")
-    ap.add_argument("--layer-delta", action="store_true",
-                    help="Lens the layer-local write h_L - h_{L-1} (= attn+MLP write, "
-                         "direct logit attribution) instead of the accumulated residual "
-                         "stream h_L. Requires layer min_layer-1 to be present.")
     ap.add_argument("--include-question-end", action="store_true",
                     help="Also include the question_end position (last token of the question)")
     ap.add_argument("--include-post-filler", action="store_true",
@@ -202,19 +198,8 @@ def main():
     for s_idx, (pos, layer) in enumerate(tqdm(settings, desc="Extracting fingerprints")):
         # Stack example vectors → (n, d)
         try:
-            if args.layer_delta:
-                # Layer-local write instead of the accumulated stream:
-                #   h_L - h_{L-1} = attn_write_L + mlp_write_L
-                # This is the direct-logit-attribution object (everything layer L
-                # added), NOT the MLP write alone — vLLM's split-residual hook gives
-                # MLP-only, this gives attention+MLP. Exactly recoverable offline
-                # because every layer's residual state was saved.
-                vecs = np.stack([(d["states"][pos][layer].astype(np.float32)
-                                  - d["states"][pos][layer - 1].astype(np.float32))
-                                 for d in all_data])
-            else:
-                vecs = np.stack([d["states"][pos][layer].astype(np.float32)
-                                 for d in all_data])
+            vecs = np.stack([d["states"][pos][layer].astype(np.float32)
+                             for d in all_data])
         except KeyError:
             # Some examples may be missing this (pos, layer); skip
             continue

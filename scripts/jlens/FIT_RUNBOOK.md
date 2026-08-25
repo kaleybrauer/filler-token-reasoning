@@ -345,3 +345,16 @@ Deviations, all forced by the model and none touching the estimator:
 Ours, not theirs, and not to be presented as the paper's: the metric we apply the lens *to*
 (the per-(layer, position) number-token argmax heatmap on 2-fact). `eval_lens_quality.py`
 exists so the lens is *also* scored by the paper's own metric on the paper's own sets.
+
+**Convergence is read from the reference's own two in-fit diagnostics**, which `jlens.fit`
+logs every prompt (`fitting.py:349`): `max||J||/sqrt(d)` flags heavy-tailed outlier prompts,
+and `max_d_mean` = max_l ||J_i - J_n|| / ((n+1)*||J_n||) is the relative step of the running
+mean, documented to fall ~1/n once settled. Read them together: a high `max_d_mean` sitting
+next to a high norm is one outlier prompt, not non-convergence. Lens *quality* is
+`eval_lens_quality.py`'s pass@k on the six shipped eval sets.
+
+Do **not** add a homemade stopping rule on top. One was written and removed (`convergence.py`,
+readout-argmax agreement between successive checkpoints): it measured the size of each step,
+which is set by which prompts happened to land rather than by how converged the lens is, and it
+was reported without an error bar — which would have shown it could not resolve the ~0.013
+per-step change it claimed to track against a ~0.042 noise floor.

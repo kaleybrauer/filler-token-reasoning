@@ -72,9 +72,28 @@ def main():
     jlens_J = None
     if args.jlens is not None:
         sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "jlens"))
-        from apply_lens import describe, load_jlens
-        jlens_J = load_jlens(args.jlens)
-        print(f"{describe(jlens_J)}  <- {args.jlens}")
+        # One layer in memory at a time: a full 60-layer lens is 12 GB in fp32,
+        # which together with the states does not fit a 16 GB box. LayerReader
+        # reads a layer as a raw zip entry from a JacobianLens.save() file or a
+        # fit checkpoint (running sum, divided by n_done).
+        from build_filtered_lens import LayerReader
+
+        class _LazyLens:
+            def __init__(self, path):
+                import zipfile, torch
+                keys = set(torch.load(path, map_location="cpu", weights_only=True, mmap=True))
+                self.is_ckpt = "jacobian_sum" in keys
+                self.r = LayerReader(path, "jacobian_sum" if self.is_ckpt else "J")
+                self.layers = self.r.layers
+            def __iter__(self): return iter(self.layers)
+            def __contains__(self, L): return L in self.layers
+            def __getitem__(self, L):
+                J = self.r.read(L).astype(np.float32)
+                return J / self.r.n_done if self.is_ckpt else J
+
+        jlens_J = _LazyLens(args.jlens)
+        print(f"J-lens: {len(jlens_J.layers)} layers [{jlens_J.layers[0]}..{jlens_J.layers[-1]}]"
+              f"{'  (fit checkpoint, sum/n_done)' if jlens_J.is_ckpt else ''}  <- {args.jlens}")
 
     # Build number token map
     number_tokens = {}
@@ -91,8 +110,9 @@ def main():
     # Restrict lm_head to the number-token rows once — argmax only ever happens
     # over these columns, so this is identical to (H @ lm_head.T)[:, num_ids] but
     # hundreds of times cheaper (300 rows vs ~129-164k vocab).
-    lm_head_num = lm_head[num_ids]
+    lm_head_num = lm_head[num_ids].copy()
     print(f"lm_head: {lm_head.shape} -> number rows {lm_head_num.shape}")
+    del lm_head
 
     for cond in args.condition:
         print(f"\n=== {cond} ===")
@@ -147,7 +167,9 @@ def main():
 
         for pos in positions:
             results[pos] = {}
-            for layer in tqdm(layers, desc=f"  {pos}", leave=False):
+        for layer in tqdm(layers, desc="  layers"):
+            J_layer = jlens_J[int(layer)] if jlens_J is not None else None
+            for pos in positions:
                 vecs = []
                 valid_idx = []
                 for i, d in enumerate(all_data):
@@ -159,9 +181,9 @@ def main():
                     continue
 
                 H = np.stack(vecs)
-                if jlens_J is not None:
+                if J_layer is not None:
                     # J-lens transport into the final-layer basis, before the norm.
-                    H = H @ jlens_J[int(layer)].T
+                    H = H @ J_layer.T
                 H = rms_norm(H, norm_weight)
                 num_logits = H @ lm_head_num.T
                 preds = num_vals[np.argmax(num_logits, axis=1)]
@@ -181,7 +203,7 @@ def main():
                         (np.abs(preds - a1) <= 5) | (np.abs(preds - a2) <= 5)
                     )),
                 }
-            print(f"  {pos} done")
+        print(f"  {len(layers)} layers x {len(positions)} positions done")
 
         # Save JSON
         suffix_cond = f"{cond}_incorrect" if args.incorrect_only else cond

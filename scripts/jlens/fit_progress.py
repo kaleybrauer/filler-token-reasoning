@@ -20,7 +20,14 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
-DEFAULT_LOGS = [REPO_ROOT / "logs/jlens_gates.log", REPO_ROOT / "logs/jlens_fit.log"]
+# jlens_validate_fit.log is where the current run writes (the fit is running inside
+# safe_fit.py --then-fit). jlens_fit.log is used when the watchdog relaunches
+# fit_v3.py directly. The DEAD run's log was archived to jlens_fit_POISONED_run.log
+# and is deliberately NOT read: its prompt numbers ran to 48, which made this
+# trigger fire constantly and forced a 11.5 GiB authoritative read every poll.
+DEFAULT_LOGS = [REPO_ROOT / "logs/jlens_gates.log",
+                REPO_ROOT / "logs/jlens_fit.log",
+                REPO_ROOT / "logs/jlens_validate_fit.log"]
 
 # "  prompt 7/1000  seq_len=128 n_valid=111  1183s  max||J||/sqrt(d)=..."
 PROMPT_RE = re.compile(r"prompt (\d+)/(\d+)\s+seq_len=")

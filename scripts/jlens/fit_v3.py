@@ -45,6 +45,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from safe_fit import safe_fit  # noqa: E402
 from v3_autograd import layer_devices, load_v3_awq, make_differentiable  # noqa: E402
 
 
@@ -82,6 +83,12 @@ def main():
     ap.add_argument("--checkpoint", type=Path, default=None,
                     help="Default: <out>.fitckpt")
     ap.add_argument("--no-resume", action="store_true")
+    ap.add_argument("--cotangent-scale", type=float, default=1.0,
+                    help="Scale the one-hot cotangent by this and divide the "
+                         "resulting J rows by it. Exact (the map is linear in the "
+                         "cotangent); it only moves fp16 intermediates away from "
+                         "the 65504 ceiling. 1.0 reproduces the reference exactly. "
+                         "Set from scripts/jlens/safe_fit.py --probe.")
     args = ap.parse_args()
 
     logging.basicConfig(
@@ -122,6 +129,7 @@ def main():
         dim_batch=args.dim_batch, max_seq_len=args.max_seq_len,
         checkpoint=checkpoint, checkpoint_every=args.checkpoint_every,
         resume=not args.no_resume, out=args.out, corpus=corpus,
+        cotangent_scale=args.cotangent_scale,
         prompt_slice=[args.prompt_start, args.prompt_start + args.n_prompts],
         model_path=args.model_path,
     )
@@ -129,7 +137,7 @@ def main():
 
 def fit_and_save(lens_model, model, prompts, source_layers, target, *, dim_batch,
                  max_seq_len, checkpoint, checkpoint_every, resume, out, corpus,
-                 prompt_slice, model_path):
+                 prompt_slice, model_path, cotangent_scale=1.0):
     """Run jlens.fit and write the lens + a meta sidecar. Split out of main() so
     scripts/jlens/gates.py --then-fit can reuse an already-loaded model."""
     devs = layer_devices(model)
@@ -142,8 +150,17 @@ def fit_and_save(lens_model, model, prompts, source_layers, target, *, dim_batch
     print(f"  checkpoint: {checkpoint} (every {checkpoint_every} prompts, "
           f"{len(effective) * 7168 ** 2 * 4 / 2**30:.1f} GiB/write)")
 
+    # safe_fit, NOT jlens.fit: the reference accumulates every per-prompt Jacobian
+    # without checking it is finite, and NaN is absorbing in a running sum. That
+    # cost the 2026-08-25 run all 48 of its prompts. Same estimator, same running
+    # mean; it only refuses to add a non-finite prompt and refuses to overwrite a
+    # good checkpoint with a poisoned one. See scripts/jlens/safe_fit.py.
+    health = checkpoint.with_name("fit_health.json")
+    print(f"  cotangent scale: {cotangent_scale:g}"
+          f"{'  [reference default]' if cotangent_scale == 1.0 else '  [rescaled: exact by linearity]'}")
+    print(f"  health file: {health}")
     t0 = time.perf_counter()
-    lens = jlens.fit(
+    lens = safe_fit(
         lens_model,
         prompts,
         source_layers=source_layers,
@@ -153,6 +170,8 @@ def fit_and_save(lens_model, model, prompts, source_layers, target, *, dim_batch
         checkpoint_path=str(checkpoint),
         checkpoint_every=checkpoint_every,
         resume=resume,
+        scale=cotangent_scale,
+        health_path=str(health),
     )
     elapsed = time.perf_counter() - t0
 
@@ -188,6 +207,9 @@ def fit_and_save(lens_model, model, prompts, source_layers, target, *, dim_batch
                              if source_layers is None else "explicit",
         "note_dim_batch": "memory/speed knob only; the estimator and total backward "
                           "FLOPs are independent of it",
+        "cotangent_scale": cotangent_scale,
+        "fit_loop": "scripts/jlens/safe_fit.safe_fit (guarded accumulation); "
+                    "estimator is jlens's, with the cotangent scaled",
         "wall_s": round(elapsed, 1),
         "s_per_prompt": round(elapsed / max(lens.n_prompts, 1), 1),
         "layer_convention": "L = output of block L (hook on model.layers[L]), "

@@ -78,32 +78,118 @@ def load_lens(path: Path) -> tuple[dict[int, np.ndarray], int]:
     return lens, n
 
 
-def split_half(ckpt_a: Path, ckpt_b: Path) -> tuple[dict, dict, int, int]:
-    """Two lenses over DISJOINT prompt sets, from two checkpoints of one run.
+def subtract_lens(baseline: Path, current: Path) -> tuple[dict, int, int, int]:
+    """The lens over only the prompts fitted AFTER `baseline`.
+
+    Same identity the split-half uses, applied to the live checkpoint:
+
+        mean(b+1..n) = (sum_n - sum_b) / (n - b)
+
+    Prompts 0-7 of this run were preserved verbatim from the superseded
+    prefix-sampled corpus and are eight paragraphs of ONE WikiText article
+    (`--preserve-prefix 8`, needed because jlens.fit resumes by prompt index).
+
+    Nothing about those eight Jacobians is wrong — each is a valid measurement.
+    The problem is that they are correlated draws, not independent ones, so an
+    unweighted mean over them is pseudo-replication: it estimates the Jacobian of
+    a narrower text distribution than the "generic text" the lens is meant to
+    average over. In effective-sample terms the lens at raw n covers roughly
+    (n - 8) + 1 distinct articles, so raw n=10 is ~3 articles, not 10.
+
+    Subtracting the n=10 checkpoint drops all eight (and two distinct-article
+    prompts with them, which is cheap) and leaves a lens fitted on one paragraph
+    per article — the corpus actually intended. It also makes a quality-vs-n curve
+    interpretable: uncorrected, early movement is the 8/n weight of that one
+    article falling away, which reads as convergence but is not.
+
+    Returns (J, n_effective, n_current, n_baseline).
+    """
+    sum_b, n_b = _load_ckpt(baseline)
+    sum_n, n_n = _load_ckpt(current)
+    if n_n <= n_b:
+        raise SystemExit(f"current n={n_n} is not past baseline n={n_b} yet")
+    layers = sorted(set(sum_b) & set(sum_n))
+    J = {l: ((sum_n[l] - sum_b[l]) / (n_n - n_b)).astype(np.float32) for l in layers}
+    return J, n_n - n_b, n_n, n_b
+
+
+def split_half(*ckpts: Path) -> tuple[dict, dict, int, int, str]:
+    """Two lenses over DISJOINT prompt sets, from checkpoints of one run.
 
     `fit` accumulates a running SUM over a deterministic prompt order and resumes
-    from `next_idx`, so a checkpoint at n=a covers prompts 1..a and one at n=b>a
-    covers 1..b. Then
+    from `next_idx`, so a checkpoint at n=a covers prompts 1..a. Differencing two
+    checkpoints therefore recovers the mean over the prompts BETWEEN them:
 
-        mean(1..a)   = sum_a / a
         mean(a+1..b) = (sum_b - sum_a) / (b - a)
 
-    are fitted on disjoint prompts. Their difference on a metric is that metric's
-    same-n reproducibility floor — the error bar an n -> n' step has to clear
-    before it counts as a real change rather than which prompts happened to land.
-    Costs no GPU: it is arithmetic on checkpoints the fit already writes.
+    The gap between two such disjoint means is the metric's same-n reproducibility
+    floor — the error bar an n -> n' step has to clear before it counts as a real
+    change rather than as which prompts happened to land. Costs no GPU: it is
+    arithmetic on checkpoints the fit already writes.
+
+    TWO checkpoints (a, b) give halves 1..a and a+1..b. THREE (a, b, c) give
+    a+1..b and b+1..c, skipping the prefix entirely — which is what this fit needs,
+    because prompts 0-7 were preserved verbatim from the superseded prefix-sampled
+    corpus and are eight paragraphs of ONE WikiText article, i.e. correlated draws
+    rather than eight independent ones. A half holding them is not exchangeable
+    with a half of distinct articles, so a two-checkpoint floor would fold that
+    difference in sampling breadth into what is meant to be prompt-sampling noise
+    alone, and come out too wide — making the lens look converged earlier than it is.
     """
-    sum_a, n_a = _load_ckpt(ckpt_a)
-    sum_b, n_b = _load_ckpt(ckpt_b)
-    if n_b <= n_a:
-        raise SystemExit(f"need n_b > n_a, got n_a={n_a} n_b={n_b}")
-    layers = sorted(set(sum_a) & set(sum_b))
-    first = {l: (sum_a[l] / n_a).astype(np.float32) for l in layers}
-    second = {l: ((sum_b[l] - sum_a[l]) / (n_b - n_a)).astype(np.float32) for l in layers}
-    return first, second, n_a, n_b - n_a
+    sums, ns = [], []
+    for c in ckpts:
+        s, n = _load_ckpt(c)
+        sums.append(s)
+        ns.append(n)
+    if any(ns[i] >= ns[i + 1] for i in range(len(ns) - 1)):
+        raise SystemExit(f"checkpoints must be strictly increasing in n, got {ns}")
+    layers = sorted(set.intersection(*(set(s) for s in sums)))
+
+    if len(ckpts) == 2:
+        (sa, sb), (na, nb) = sums, ns
+        first = {l: (sa[l] / na).astype(np.float32) for l in layers}
+        second = {l: ((sb[l] - sa[l]) / (nb - na)).astype(np.float32) for l in layers}
+        return first, second, na, nb - na, f"1..{na} vs {na + 1}..{nb}"
+    if len(ckpts) == 3:
+        (sa, sb, sc), (na, nb, nc) = sums, ns
+        first = {l: ((sb[l] - sa[l]) / (nb - na)).astype(np.float32) for l in layers}
+        second = {l: ((sc[l] - sb[l]) / (nc - nb)).astype(np.float32) for l in layers}
+        return first, second, nb - na, nc - nb, f"{na + 1}..{nb} vs {nb + 1}..{nc}"
+    raise SystemExit(f"--split-half takes 2 or 3 checkpoints, got {len(ckpts)}")
 
 
 # --------------------------------------------------------------- the metric
+
+def assert_finite_lens(lens: dict, label: str) -> None:
+    """Refuse to score a non-finite lens.
+
+    The 2026-08-25 run reported pass@10 = 1.000 and median_rank = 1 at every one of
+    14 curve points across 25 hours. That was not a good lens, it was NaN: with NaN
+    logits `(row > row[ids].max()).sum()` is all-False, so every intermediate scores
+    rank 1 and every pass@k is a perfect 1.0. A perfect score is the SIGNATURE of
+    this failure, not evidence against it. One isfinite check here would have caught
+    it 20 minutes after the first bad prompt instead of a day later.
+    """
+    bad = [l for l, J in sorted(lens.items()) if not np.isfinite(J).all()]
+    if bad:
+        raise SystemExit(
+            f"REFUSING TO SCORE {label}: non-finite entries in {len(bad)} of "
+            f"{len(lens)} layers (e.g. L{bad[0]}). A NaN lens scores a perfect "
+            f"1.000 rather than erroring, so this is a hard stop."
+        )
+
+
+def warn_if_degenerate(res: dict) -> None:
+    """A pass@1 of exactly 1.000 means something is wrong, not that the lens is perfect."""
+    for slug, arms in res.items():
+        for arm, v in arms.items():
+            if arm == "paired":
+                continue
+            if v.get("pass@1") == 1.0 and v.get("median_rank") == 1.0:
+                print(f"  !! {slug}/{arm}: pass@1=1.000 and median_rank=1 exactly — "
+                      f"that is the NaN signature, not a perfect lens. Check the input.",
+                      flush=True)
+
 
 def variant_token_ids(tokenizer, word: str) -> list[int]:
     """First token id of each surface variant of `word`.
@@ -237,9 +323,15 @@ def main():
     ap.add_argument("--lens", type=Path, default=None,
                     help="Lens file or fit checkpoint (a checkpoint's running sum "
                          "is divided by n_done, so a run in progress can be scored)")
-    ap.add_argument("--split-half", nargs=2, type=Path, default=None,
-                    metavar=("CKPT_A", "CKPT_B"),
-                    help="Same-n noise floor from two checkpoints of one run")
+    ap.add_argument("--subtract", type=Path, default=None,
+                    help="Baseline checkpoint to subtract from --lens, giving the "
+                         "lens over only the prompts fitted after it. Use the n=10 "
+                         "snapshot to drop the one-article prompt-0-7 prefix.")
+    ap.add_argument("--split-half", nargs="+", type=Path, default=None,
+                    metavar="CKPT",
+                    help="Same-n noise floor from checkpoints of one run. Two -> "
+                         "halves 1..a and a+1..b. THREE -> a+1..b and b+1..c, which "
+                         "skips the single-article prompt-0-7 prefix (see split_half)")
     ap.add_argument("--sets", default="multihop,order-ops")
     ap.add_argument("--ks", default="1,5,10,50,100")
     ap.add_argument("--threads", type=int, default=32,
@@ -275,10 +367,10 @@ def main():
     report = {"states": str(args.states), "sets": slugs, "ks": ks}
 
     if args.split_half:
-        a, b = args.split_half
-        first, second, n_first, n_second = split_half(a, b)
-        print(f"split-half: prompts 1..{n_first} (n={n_first}) vs "
-              f"{n_first + 1}..{n_first + n_second} (n={n_second}) — disjoint")
+        first, second, n_first, n_second, span = split_half(*args.split_half)
+        assert_finite_lens(first, 'half A'); assert_finite_lens(second, 'half B')
+        print(f"split-half: prompts {span} — disjoint, n={n_first} vs n={n_second}")
+        report["span"] = span
         print(" half A:")
         report["half_A"] = score_lens(states, first, tokenizer, rms_w, lm_w, ks, slugs)
         print(" half B:")
@@ -295,14 +387,25 @@ def main():
     else:
         if args.lens is None:
             raise SystemExit("need --lens or --split-half")
-        lens, n_done = load_lens(args.lens)
+        if args.subtract:
+            lens, n_done, n_cur, n_base = subtract_lens(args.subtract, args.lens)
+            assert_finite_lens(lens, f'{args.lens} minus {args.subtract}')
+            report["baseline"] = str(args.subtract)
+            report["baseline_n"] = n_base
+            report["n_raw"] = n_cur
+            print(f"lens: {args.lens} MINUS {args.subtract}  -> prompts "
+                  f"{n_base + 1}..{n_cur} (n={n_done}, prefix-free)")
+        else:
+            lens, n_done = load_lens(args.lens)
+            assert_finite_lens(lens, str(args.lens))
+            print(f"lens: {args.lens}  n_prompts={n_done}")
         layers = sorted(lens)
-        print(f"lens: {args.lens}  n_prompts={n_done}  "
-              f"{len(layers)} layers [{layers[0]}..{layers[-1]}]")
+        print(f"  {len(layers)} layers [{layers[0]}..{layers[-1]}]")
         report["lens"] = str(args.lens)
         report["n_prompts"] = n_done
         report["layers"] = [layers[0], layers[-1]]
         report["results"] = score_lens(states, lens, tokenizer, rms_w, lm_w, ks, slugs)
+        warn_if_degenerate(report["results"])
 
     report["elapsed_s"] = round(time.perf_counter() - t0, 1)
     print(f"\nscored in {report['elapsed_s'] / 60:.1f} min")

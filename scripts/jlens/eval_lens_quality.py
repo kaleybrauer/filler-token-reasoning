@@ -62,11 +62,23 @@ EVAL_DIR = Path("/workspace/jacobian-lens/data/evaluations")
 
 
 def variant_token_ids(tokenizer, word: str) -> list[int]:
-    """First token id of each surface variant of `word`."""
+    """Token id of each SINGLE-TOKEN surface variant of `word`.
+
+    `intermediates` are words, not ids; the paper picks them to be single-token
+    words and credits an intermediate at its best rank over surface variants
+    {w, " "+w, lower(w), " "+lower(w)}. Only variants that tokenize to ONE token
+    are credited. Taking the first token of a multi-token variant is wrong on
+    DeepSeek's tokenizer: " 5" -> [" ", "5"], so the bare space would be credited
+    for every numeric intermediate, and "squared" -> ["s", "quared"] would credit
+    "s". That inflated pass@1 for any lens whose readout is whitespace (found
+    2026-09-08: a giant-dominated lens scored 54 numeric rank-1 "hits" at layer 3
+    through the space token). Words with no single-token variant are skipped and
+    counted by the caller. Keep in sync with the twin in the other script.
+    """
     ids = []
     for surface in {word, " " + word, word.lower(), " " + word.lower()}:
         enc = tokenizer.encode(surface, add_special_tokens=False)
-        if enc:
+        if len(enc) == 1:
             ids.append(enc[0])
     return sorted(set(ids))
 

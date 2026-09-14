@@ -26,6 +26,9 @@ CHECK 2 — how local is the Jacobian to the current expert routing?
     actually change at each step size. If routing is stable at the step where the
     derivative check is clean, the locality concern is mild; if it flips often, J is
     only valid in a very small neighbourhood and that has to be said.
+    `routing` is slot-wise over all gates and positions; `routing_reachable_{plus,minus}`
+    compare expert sets over only the blocks and positions the perturbation can reach
+    (see compare_routing_reachable) and are the ones to quote.
 
 Forward passes only: no autograd patches, no fitting, no backward.
 Needs a per-prompt Jacobian on disk (outputs/jlens/per_prompt/J_p{idx:04d}.pt).
@@ -78,15 +81,21 @@ class Routing:
     """Capture top-k expert indices from every MoE gate in the model."""
 
     def __init__(self, model):
-        self.gates = [m for n, m in model.named_modules() if n.endswith("mlp.gate")]
+        named = [(n, m) for n, m in model.named_modules() if n.endswith("mlp.gate")]
+        self.gates = [m for _, m in named]
+        # Decoder-block index of each gate, from "model.layers.{i}.mlp.gate".
+        self.gate_block = [int(n.split(".")[-3]) for n, _ in named]
         self.idx, self.hs = {}, []
+        self.topk = {}   # block index -> [n_tokens, k] expert ids, rows unflattened
 
     def __enter__(self):
         for i, g in enumerate(self.gates):
             def hook(_m, _a, out, i=i):
                 t = out[0] if isinstance(out, tuple) else out
                 if torch.is_tensor(t):
-                    self.idx[i] = t.detach().flatten().cpu()
+                    c = t.detach().cpu()
+                    self.idx[i] = c.flatten()
+                    self.topk[self.gate_block[i]] = c
             self.hs.append(g.register_forward_hook(hook))
         return self
 
@@ -96,6 +105,45 @@ class Routing:
 
     def snapshot(self):
         return {k: v.clone() for k, v in self.idx.items()}
+
+    def snapshot_topk(self):
+        return {k: v.clone() for k, v in self.topk.items()}
+
+
+class FreezeRouting:
+    """Replay a fixed top-k expert selection through every MoE gate.
+
+    J is the straight-through derivative: selection held fixed, gradient through
+    the selected experts and through the gate weights. With free routing, a single
+    selection flip anywhere downstream is an O(1) jump that the central difference
+    divides by 2*eps, so the error GROWS as the step shrinks and says nothing about
+    the backward. This hook recomputes MoEGate.forward's weights from the current
+    scores but gathers them at the frozen indices, which is exactly the function J
+    differentiates. `frozen` maps block index -> [n_tokens, k] expert ids.
+    """
+
+    def __init__(self, model, frozen):
+        named = [(n, m) for n, m in model.named_modules() if n.endswith("mlp.gate")]
+        self.gates = [(int(n.split(".")[-3]), m) for n, m in named]
+        self.frozen, self.hs = frozen, []
+
+    def __enter__(self):
+        for block, g in self.gates:
+            def hook(gate, args, out, block=block):
+                h = args[0]
+                idx = self.frozen[block].to(h.device)
+                logits = torch.nn.functional.linear(
+                    h.reshape(-1, h.shape[-1]).float(), gate.weight.float(), None)
+                w = logits.sigmoid().gather(1, idx)
+                if gate.top_k > 1 and gate.norm_topk_prob:
+                    w = w / (w.sum(dim=-1, keepdim=True) + 1e-20)
+                return idx, w * gate.routed_scaling_factor
+            self.hs.append(g.register_forward_hook(hook))
+        return self
+
+    def __exit__(self, *a):
+        for h in self.hs:
+            h.remove()
 
 
 def compare_routing(a, b):
@@ -111,6 +159,50 @@ def compare_routing(a, b):
                 frac_changed=diff / tot if tot else float("nan"))
 
 
+def compare_routing_reachable(a, b, layer, first_pos):
+    """Set-based routing change over only the decisions a perturbation can reach.
+
+    `compare_routing` divides by every (gate, position, slot), but perturbing h_layer
+    at positions >= first_pos cannot move gates in blocks <= layer or tokens before
+    first_pos, so its fraction is diluted by up to ~66x at layer 59 (one downstream
+    MoE block). It also compares slot by slot, and the gate's topk(sorted=False) can
+    return the same expert set permuted, which leaves the MoE output unchanged.
+    Here a and b map block index -> [n_tokens, k] expert ids (batch size 1).
+    """
+    keys = sorted(k for k in set(a) & set(b) if k > layer)
+    if not keys:
+        return None
+    n_changed = n_tok = n_replaced = 0
+    per_block = {}
+    for k in keys:
+        x, y = a[k][first_pos:], b[k][first_pos:]
+        top_k = x.shape[-1]
+        kept = (x.unsqueeze(-1) == y.unsqueeze(-2)).any(-1).sum(-1)  # |A ∩ B| per token
+        replaced = top_k - kept
+        changed = int((replaced > 0).sum())
+        n_changed += changed; n_tok += x.shape[0]; n_replaced += int(replaced.sum())
+        per_block[k] = round(changed / x.shape[0], 4)
+    return dict(n_moe_layers=len(keys), n_tokens=n_tok, top_k=top_k,
+                frac_tokens_set_changed=n_changed / n_tok,
+                frac_experts_replaced=n_replaced / (n_tok * top_k),
+                per_block_frac_tokens_changed=per_block)
+
+
+def _reachable(a, b, layer, first_pos):
+    # Added metric only: a bug here must never cost the model load.
+    try:
+        return compare_routing_reachable(a, b, layer, first_pos)
+    except Exception as exc:
+        return {"error": f"{type(exc).__name__}: {exc}"}
+
+
+def _fmt_reachable(r):
+    if not r or "error" in r:
+        return "n/a"
+    return (f"{r['frac_tokens_set_changed']*100:5.2f}% tok "
+            f"{r['frac_experts_replaced']*100:5.2f}% exp")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model-path", default="/workspace/models/deepseek-v3-awq")
@@ -122,6 +214,8 @@ def main():
     ap.add_argument("--rel-eps", default="0.3,0.1,0.03,0.01",
                     help="step sizes as a fraction of the mean residual norm at that layer")
     ap.add_argument("--n-directions", type=int, default=2)
+    ap.add_argument("--no-frozen-routing", action="store_true",
+                    help="skip the routing-frozen central difference (see FreezeRouting)")
     ap.add_argument("--max-seq-len", type=int, default=128)
     ap.add_argument("--skip-first", type=int, default=16)
     ap.add_argument("--seed", type=int, default=0)
@@ -159,20 +253,21 @@ def main():
     from jlens.hooks import ActivationRecorder
 
     def run(layer, delta):
-        """(sum of h_target over valid positions, residual at `layer`, routing)."""
+        """(sum of h_target over valid positions, residual at `layer`, routing, top-k)."""
         with torch.no_grad(), ActivationRecorder(layers_mod, at=[layer, target]) as rec, \
              Routing(model) as rt, Perturb(layers_mod[layer], pos) as pt:
             pt.delta = delta
             lens_model.forward(ids)
             h_t = rec.activations[target][0][pos].float()
             h_l = rec.activations[layer][0][pos].float()
-            return h_t.sum(0).cpu(), h_l.cpu(), rt.snapshot()
+            return h_t.sum(0).cpu(), h_l.cpu(), rt.snapshot(), rt.snapshot_topk()
 
+    first_pos = int(pos.min())
     g = torch.Generator().manual_seed(args.seed)
     rows = []
     for L in [int(x) for x in args.layers.split(",")]:
         Jl = meta["J"][L].float()                       # [d, d]
-        _, h_l, route0 = run(L, None)
+        _, h_l, route0, topk0 = run(L, None)
         scale = float(h_l.norm(dim=-1).mean())
         print(f"\nlayer {L}: mean ||h_L|| over valid positions = {scale:.2f}", flush=True)
         for di in range(args.n_directions):
@@ -181,21 +276,51 @@ def main():
             for rel in [float(x) for x in args.rel_eps.split(",")]:
                 eps = rel * scale
                 t0 = time.time()
-                sp, _, rp = run(L, eps * v)
-                sm, _, rm = run(L, -eps * v)
+                sp, _, rp, tp = run(L, eps * v)
+                sm, _, rm, tm = run(L, -eps * v)
                 meas = (sp - sm) / (2 * eps * n_valid)  # -> J_L v in the linear limit
                 err = float((meas - pred_unit).norm() / (pred_unit.norm() + 1e-12))
                 cos = float(torch.nn.functional.cosine_similarity(
                     meas[None, :], pred_unit[None, :]).item())
                 ratio = float(meas.norm() / (pred_unit.norm() + 1e-12))
                 rt = compare_routing(route0, rp)
+                rr_p = _reachable(topk0, tp, L, first_pos)
+                rr_m = _reachable(topk0, tm, L, first_pos)
                 rows.append(dict(layer=L, direction=di, rel_eps=rel, eps=eps,
                                  rel_error=err, cosine=cos, norm_ratio=ratio,
-                                 routing=rt, secs=round(time.time() - t0, 1)))
+                                 routing=rt, routing_reachable_plus=rr_p,
+                                 routing_reachable_minus=rr_m,
+                                 secs=round(time.time() - t0, 1)))
                 print(f"  dir {di}  rel_eps {rel:<5} eps {eps:8.2f}  "
                       f"rel.err {err:8.4f}  cos {cos:7.4f}  |meas|/|pred| {ratio:6.3f}"
                       + (f"  routing changed {rt['frac_changed']*100:5.2f}%"
-                         if rt else "  routing n/a"), flush=True)
+                         if rt else "  routing n/a")
+                      + f"  | reachable +eps {_fmt_reachable(rr_p)}"
+                      f"  -eps {_fmt_reachable(rr_m)}", flush=True)
+                if not args.no_frozen_routing:
+                    t0 = time.time()
+                    try:
+                        with FreezeRouting(model, topk0):
+                            fp = run(L, eps * v)[0]
+                            fm = run(L, -eps * v)[0]
+                    except Exception as exc:   # added variant: never lose the rows above
+                        rows.append(dict(layer=L, direction=di, rel_eps=rel, eps=eps,
+                                         routing_frozen=True, rel_error=float("nan"),
+                                         error=f"{type(exc).__name__}: {exc}"))
+                        print(f"  [routing frozen] failed: {type(exc).__name__}: {exc}",
+                              flush=True)
+                        continue
+                    meas = (fp - fm) / (2 * eps * n_valid)
+                    err = float((meas - pred_unit).norm() / (pred_unit.norm() + 1e-12))
+                    cos = float(torch.nn.functional.cosine_similarity(
+                        meas[None, :], pred_unit[None, :]).item())
+                    ratio = float(meas.norm() / (pred_unit.norm() + 1e-12))
+                    rows.append(dict(layer=L, direction=di, rel_eps=rel, eps=eps,
+                                     routing_frozen=True, rel_error=err, cosine=cos,
+                                     norm_ratio=ratio, secs=round(time.time() - t0, 1)))
+                    print(f"  dir {di}  rel_eps {rel:<5} eps {eps:8.2f}  "
+                          f"rel.err {err:8.4f}  cos {cos:7.4f}  |meas|/|pred| {ratio:6.3f}"
+                          f"  [routing frozen]", flush=True)
         del Jl
 
     out = dict(prompt_index=args.prompt_index, per_prompt_file=str(jp),
@@ -203,9 +328,16 @@ def main():
                target_layer=target, d_model=d, results=rows)
     args.out.write_text(json.dumps(out, indent=1, default=str))
     print(f"\nwrote {args.out}")
-    best = min(rows, key=lambda r: r["rel_error"])
+    free = [r for r in rows if not r.get("routing_frozen")]
+    best = min(free, key=lambda r: r["rel_error"])
     print(f"BEST agreement: layer {best['layer']} rel_eps {best['rel_eps']} "
           f"-> relative error {best['rel_error']:.4f}, cosine {best['cosine']:.4f}")
+    frozen = [r for r in rows if r.get("routing_frozen") and "error" not in r]
+    if frozen:
+        best = min(frozen, key=lambda r: r["rel_error"])
+        print(f"BEST agreement, routing frozen: layer {best['layer']} rel_eps "
+              f"{best['rel_eps']} -> relative error {best['rel_error']:.4f}, "
+              f"cosine {best['cosine']:.4f}")
     print("Read it as: the error should fall as the step shrinks and then flatten at the "
           "fp16 floor. A flat-from-the-start curve, or a norm ratio far from 1, means the "
           "stored Jacobian is not the derivative of this forward computation.")

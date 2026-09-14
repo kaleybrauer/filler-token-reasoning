@@ -37,6 +37,7 @@ BAND_C = "#dfe6ee"
 TOPKS = (1, 2, 4, 8, 16, 32, 64, 128)
 KURT_PCTS = (1, 10, 25, 50, 75, 90, 99)
 VAR_SHARES = (0.9, 0.95, 0.98, 0.99, 0.995)
+OFFSETS = (1, 2, 4, 8, 16, 32)
 PAPER_BAND = (9 / 24 * 100, 22 / 24 * 100)      # band [9,22] of 25 reindexed layers
 
 
@@ -64,12 +65,16 @@ def draw(ax, x, series, labels, legend_title, pct=False):
     for y, c in zip(series, cols):
         ax.plot(x, np.array(y) * (100 if pct else 1), color=c, lw=1.9,
                 solid_capstyle="round", zorder=3)
-    # direct end-labels on the extremes of the ramp, legend title above them
-    for idx, va in ((0, "center"), (len(series) - 1, "center")):
-        y = np.array(series[idx]) * (100 if pct else 1)
-        ax.annotate(labels[idx], xy=(x[-1], y[-1]), xytext=(4, 0),
+    # direct end-labels on the extremes of the ramp; nudge apart where the curves converge
+    ends = [(i, float(np.array(series[i])[-1] * (100 if pct else 1))) for i in (0, len(series) - 1)]
+    lo_, hi_ = ax.get_ylim() if ax.get_ylim() != (0.0, 1.0) else (min(e[1] for e in ends), max(e[1] for e in ends))
+    span = max(hi_ - lo_, 1e-9)
+    gap = abs(ends[0][1] - ends[1][1]) / span
+    for n, (idx, yv) in enumerate(ends):
+        dy = 0 if gap > 0.06 else (6 if n == 1 else -6)
+        ax.annotate(labels[idx], xy=(x[-1], yv), xytext=(4, dy),
                     textcoords="offset points", fontsize=8, color=cols[idx],
-                    va=va, ha="left", annotation_clip=False)
+                    va="center", ha="left", annotation_clip=False)
     ax.text(1.005, 1.02, legend_title, transform=ax.transAxes, fontsize=7.8,
             color=MUTED, ha="left", va="bottom")
     if pct:
@@ -83,89 +88,97 @@ def band_between(ax, grids, pct=False):
                         color="#9aa7b4", alpha=0.20, lw=0, zorder=1)
 
 
-def halves_band(main_x, halves, key, pct):
+def ribbon(ax, halves, key, pct=False):
+    """Shade between the two half-corpus curves for one series, on a common depth grid."""
     if len(halves) != 2:
-        return []
-    xs = [(np.array([r["depth_0_100"] for r in sorted(h["per_layer"], key=lambda z: z["layer"])]),
-           np.array([r[key] for r in sorted(h["per_layer"], key=lambda z: z["layer"])], float))
-          for h in halves]
-    grid = np.union1d(xs[0][0], xs[1][0])
-    return [(grid, np.interp(grid, *xs[0]), np.interp(grid, *xs[1]))]
+        return
+    xs = []
+    for h in halves:
+        rows = sorted(h["per_layer"], key=lambda z: z["layer"])
+        xs.append((np.array([r["depth_0_100"] for r in rows], float),
+                   np.array([r[key] for r in rows], float)))
+    g = np.union1d(xs[0][0], xs[1][0])
+    y0, y1 = np.interp(g, *xs[0]), np.interp(g, *xs[1])
+    sc = 100 if pct else 1
+    ax.fill_between(g, np.minimum(y0, y1) * sc, np.maximum(y0, y1) * sc,
+                    color="#7d8b99", alpha=0.28, lw=0, zorder=2)
 
 
-def our_figure(m, halves, out):
-    rows = sorted(m["per_layer"], key=lambda z: z["layer"])
-    x = np.array([r["depth_0_100"] for r in rows])
-    get = lambda k: np.array([r[k] for r in rows], float)
+def our_figure(sig, rd, sig_halves, rd_halves, cka, out):
+    """sig: lens-only signatures (panel d). rd: WikiText readouts (panels a-c)."""
+    def series(src, keys):
+        rows = sorted(src["per_layer"], key=lambda z: z["layer"])
+        x = np.array([r["depth_0_100"] for r in rows], float)
+        return x, [np.array([r[k] for r in rows], float) for k in keys]
 
-    fig, axes = plt.subplots(2, 2, figsize=(11.2, 7.4))
+    band = tuple(cka["band_depth"]) if cka else PAPER_BAND
+    band_note = ("V3 workspace band from its own layer-CKA block structure "
+                 f"({band[0]:.0f}–{band[1]:.0f}%); dashed lines: Sonnet 4.5's band "
+                 "(37.5–91.7%)") if cka else \
+                "shaded band: the workspace layers reported for Sonnet 4.5 (37.5–91.7%), for comparison"
+
+    fig, axes = plt.subplots(2, 2, figsize=(11.2, 7.6))
     fig.patch.set_facecolor("white")
-    for a in axes.ravel():
-        a.set_facecolor("white")
+    for ax in axes.ravel():
+        ax.set_facecolor("white")
+
+    def frame(ax, title, ylabel):
+        style(ax, title, ylabel, band)
+        if cka:
+            for e in PAPER_BAND:
+                ax.axvline(e, color="#9aa7b4", lw=1, ls=(0, (4, 3)), zorder=1)
 
     ax = axes[0, 0]
-    style(ax, "(a)  J-lens next token prediction accuracy", "Top-k accuracy →", PAPER_BAND)
-    band_between(ax, halves_band(x, halves, "nexttok_top1", True), True)
-    draw(ax, x, [get(f"nexttok_top{k}") for k in TOPKS], [str(k) for k in TOPKS], "top-k", pct=True)
+    frame(ax, "(a)  J-lens next token prediction accuracy", "Top-k accuracy →")
+    x, ys = series(rd, [f"nexttok_top{k}" for k in TOPKS])
+    ribbon(ax, rd_halves, "nexttok_top8", pct=True)
+    draw(ax, x, ys, [str(k) for k in TOPKS], "top-k", pct=True)
     ax.set_ylim(-3, 103)
-    ax.annotate("transition to\nnext-token prediction", xy=(97, 55), xytext=(66, 72),
+    ax.annotate("transition to\nnext-token prediction", xy=(95, 60), xytext=(58, 78),
                 fontsize=8, color=INK, linespacing=1.4,
                 arrowprops=dict(arrowstyle="->", color=INK, lw=1))
 
     ax = axes[0, 1]
-    style(ax, "(b)  J-lens unembedding kurtosis", "Excess kurtosis →", PAPER_BAND)
-    ku = [get(f"kurtosis_p{q}") for q in KURT_PCTS]
-    band_between(ax, halves_band(x, halves, "kurtosis_p50", False))
-    draw(ax, x, ku, [str(q) for q in KURT_PCTS], "percentile")
-    hi = max(float(np.percentile(s, 97)) for s in ku)
-    ax.set_ylim(min(float(s.min()) for s in ku) - 0.3, hi * 1.35 + 0.3)
-    pk = max((float(s.max()), float(x[int(np.argmax(s))]), q) for s, q in zip(ku, KURT_PCTS))
-    if pk[0] > hi * 1.35:
-        ax.annotate(f"p{pk[2]} peaks at {pk[0]:.0f}\n(off scale, depth {pk[1]:.0f}%)",
-                    xy=(pk[1], ax.get_ylim()[1]), xytext=(pk[1] + 6, ax.get_ylim()[1] * 0.72),
-                    fontsize=7.6, color=MUTED, linespacing=1.4,
-                    arrowprops=dict(arrowstyle="->", color=MUTED, lw=0.9))
+    frame(ax, "(b)  J-lens unembedding kurtosis", "Excess kurtosis →")
+    x, ys = series(rd, [f"kurtosis_p{q}" for q in KURT_PCTS])
+    ribbon(ax, rd_halves, "kurtosis_p50")
+    draw(ax, x, ys, [str(q) for q in KURT_PCTS], "percentile")
     ax.axhline(0, color=AXIS, lw=0.9, zorder=2)
 
     ax = axes[1, 0]
-    style(ax, "(c)  J-lens top-1 autocorrelation", "Δlog p (vs null) →", PAPER_BAND)
-    ax.set_ylim(0, 1); ax.set_yticks([])
-    ax.text(50, 0.52, "not measured", ha="center", fontsize=9.5, color=INK)
-    ax.text(50, 0.36, "needs the top-1 readout at many positions of generic text.\n"
-                      "Our cached activations are one readout position per item, and our\n"
-                      "multi-position extractions are filler prompts, where repetition\n"
-                      "would inflate autocorrelation on its own.",
-            ha="center", va="top", fontsize=7.8, color=MUTED, linespacing=1.6)
+    frame(ax, "(c)  J-lens top-1 autocorrelation", "Δlog p (vs null) →")
+    x, ys = series(rd, [f"autocorr_d{o}" for o in OFFSETS])
+    ribbon(ax, rd_halves, "autocorr_d1")
+    draw(ax, x, ys, [str(o) for o in OFFSETS], "token offset")
+    ax.axhline(0, color=AXIS, lw=0.9, zorder=2)
 
     ax = axes[1, 1]
-    style(ax, "(d)  J-space dimensionality", "Fraction of dimensions →", PAPER_BAND)
-    band_between(ax, halves_band(x, halves, "eff_dim_900", True), True)
-    draw(ax, x, [get(f"eff_dim_{int(v*1000)}") for v in VAR_SHARES],
-         [f"{v:g}" for v in VAR_SHARES], "variance explained", pct=True)
+    frame(ax, "(d)  J-space dimensionality", "Fraction of dimensions →")
+    x, ys = series(sig, [f"eff_dim_{int(v*1000)}" for v in VAR_SHARES])
+    ribbon(ax, sig_halves, "eff_dim_900", pct=True)
+    draw(ax, x, ys, [f"{v:g}" for v in VAR_SHARES], "variance explained", pct=True)
     ax.set_ylim(-3, 103)
-    ax.annotate("J-space effective rank\ncollapses pre-workspace", xy=(14, 4),
-                xytext=(24, 42), fontsize=8, color=INK, linespacing=1.4,
-                arrowprops=dict(arrowstyle="->", color=INK, lw=1))
 
-    axes[0, 1].text(np.mean(PAPER_BAND), axes[0, 1].get_ylim()[1], "workspace layers",
-                    ha="center", va="bottom", fontsize=8, color=MUTED)
+    for ax_ in (axes[0, 1],):
+        y_top = ax_.get_ylim()[1]
+        ax_.text(np.mean(band), y_top - 0.03 * (y_top - ax_.get_ylim()[0]), "workspace layers",
+                 ha="center", va="top", fontsize=8, color=MUTED, zorder=4)
 
-    sub = (f"DeepSeek-V3-0324 (AWQ int4) · J-lens fitted on {m['n_prompts']} prompts · "
-           f"{m['n_layers_total']} layers, d={m['d_model']} · readout statistics over "
-           f"{m['n_eval_states']} cached activations")
-    if len(halves) == 2:
+    sub = (f"DeepSeek-V3-0324 (AWQ int4) · J-lens fitted on {sig['n_prompts']} prompts · "
+           f"{len(rd['layers'])} evenly spaced of {rd['n_layers_total']} layers · readouts on "
+           f"{rd['prompt_span'][1]-rd['prompt_span'][0]} held-out WikiText prompts x "
+           f"{rd['n_positions']} positions")
+    if len(rd_halves) == 2 or len(sig_halves) == 2:
         sub += " · grey ribbon: two disjoint 50-prompt half-fits"
     fig.suptitle("Quantitative signatures of the workspace's start and end — DeepSeek V3",
-                 fontsize=13.5, color=INK, x=0.008, ha="left", y=0.986)
-    fig.text(0.008, 0.940, sub, fontsize=8.4, color=MUTED, ha="left")
-    fig.text(0.008, 0.026, "Shaded band: the workspace layers reported for Claude Sonnet 4.5 "
-                           "(reindexed depth 37.5–91.7%), for comparison. Panels follow the series "
-                           "specification of Figure 28 of Anthropic,", fontsize=7.5, color=MUTED)
-    fig.text(0.008, 0.008, "'Verbalizable Representations Form a Global Workspace in Language "
-                           "Models'; the measures are our implementations of the published "
-                           "descriptions, since the reference repository ships no code for them.",
-             fontsize=7.5, color=MUTED)
-    fig.tight_layout(rect=[0, 0.045, 0.985, 0.928])
+                 fontsize=13.5, color=INK, x=0.008, ha="left", y=0.988)
+    fig.text(0.008, 0.945, sub, fontsize=8.1, color=MUTED, ha="left")
+    fig.text(0.008, 0.028, band_note + ". Ribbons shown on one series per panel (top-8, p50, "
+             "offset 1, 0.9).", fontsize=7.5, color=MUTED)
+    fig.text(0.008, 0.010, "Panel specification follows Figure 28 of Anthropic, 'Verbalizable "
+             "Representations Form a Global Workspace in Language Models'; the measures are our "
+             "implementations of the published descriptions.", fontsize=7.5, color=MUTED)
+    fig.tight_layout(rect=[0, 0.045, 0.985, 0.932])
     for ext in ("png", "pdf"):
         fig.savefig(out.with_suffix("." + ext), dpi=200, facecolor="white")
     plt.close(fig)
@@ -200,23 +213,22 @@ def reference_figure(spec, out):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--label", default="shipped100")
-    ap.add_argument("--halves", default="n50,n50b")
     ap.add_argument("--reference", type=Path, default=None)
     args = ap.parse_args()
     OUT.mkdir(parents=True, exist_ok=True)
 
-    def load(lbl):
-        p = REPO / f"outputs/jlens/workspace_signatures_{lbl}.json"
+    def load(name):
+        p = REPO / f"outputs/jlens/{name}.json"
         return json.load(open(p)) if p.exists() else None
 
-    m = load(args.label)
-    if m is None:
-        sys.exit(f"no workspace_signatures_{args.label}.json yet")
-    if "nexttok_top128" not in m["per_layer"][0]:
-        sys.exit("that run predates the full Figure-28 series — recompute first")
-    halves = [h for h in (load(l) for l in args.halves.split(",")) if h is not None]
-    our_figure(m, halves, OUT / "fig28_v3")
+    sig = load("workspace_signatures_shipped100")
+    rd = load("workspace_readouts_shipped100")
+    if sig is None or rd is None:
+        sys.exit("need workspace_signatures_shipped100.json and workspace_readouts_shipped100.json")
+    sig_h = [h for h in (load("workspace_signatures_n50"), load("workspace_signatures_n50b")) if h]
+    rd_h = [h for h in (load("workspace_readouts_n50"), load("workspace_readouts_n50b")) if h]
+    cka = load("cka_layers")
+    our_figure(sig, rd, sig_h, rd_h, cka, OUT / "fig28_v3")
     if args.reference and args.reference.exists():
         reference_figure(json.load(open(args.reference)), OUT / "fig28_sonnet45_reference")
 

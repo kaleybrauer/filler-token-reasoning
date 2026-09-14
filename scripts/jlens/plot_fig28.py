@@ -75,7 +75,7 @@ def draw(ax, x, series, labels, legend_title, pct=False):
         ax.annotate(labels[idx], xy=(x[-1], yv), xytext=(4, dy),
                     textcoords="offset points", fontsize=8, color=cols[idx],
                     va="center", ha="left", annotation_clip=False)
-    ax.text(1.005, 1.02, legend_title, transform=ax.transAxes, fontsize=7.8,
+    ax.text(1.005, 1.075, legend_title, transform=ax.transAxes, fontsize=7.8,
             color=MUTED, ha="left", va="bottom")
     if pct:
         ax.yaxis.set_major_formatter(lambda v, p: f"{v:.0f}%")
@@ -141,9 +141,18 @@ def our_figure(sig, rd, sig_halves, rd_halves, cka, out):
     ax = axes[0, 1]
     frame(ax, "(b)  J-lens unembedding kurtosis", "Excess kurtosis →")
     x, ys = series(rd, [f"kurtosis_p{q}" for q in KURT_PCTS])
+    # Clip to a range that keeps the workspace band legible -- close to the published panel's
+    # own scale (to ~18) -- and label every point that falls off it, rather than letting the
+    # early sensory-layer spikes and the final-layer output flatten the band region.
+    KTOP = 16.0
+    ax.set_ylim(-1.6, KTOP)
     ribbon(ax, rd_halves, "kurtosis_p50")
-    draw(ax, x, ys, [str(q) for q in KURT_PCTS], "percentile")
+    draw(ax, x, [np.minimum(y, KTOP) for y in ys], [str(q) for q in KURT_PCTS], "percentile")
     ax.axhline(0, color=AXIS, lw=0.9, zorder=2)
+    top = np.array(ys[-1])
+    for i in np.where(top > KTOP)[0]:
+        ax.annotate(f"{top[i]:.0f}", xy=(x[i], KTOP), xytext=(0, 3), textcoords="offset points",
+                    ha="center", va="bottom", fontsize=7.4, color=MUTED, annotation_clip=False)
 
     ax = axes[1, 0]
     frame(ax, "(c)  J-lens top-1 autocorrelation", "Δlog p (vs null) →")

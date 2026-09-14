@@ -46,17 +46,28 @@ from score_eval_states import WEIGHTS                    # noqa: E402
 from score_lazy import LazyLens                          # noqa: E402
 
 
-def eff_dims(M, d):
-    """Fraction of dimensions holding 50% / 90% of the spectrum, plus participation ratio."""
-    lam = np.linalg.eigvalsh(M.astype(np.float64))[::-1]
-    lam = np.clip(lam, 0, None)
+#: variance-explained thresholds of the paper's panel (d), plus 0.5 for continuity
+VAR_SHARES = (0.5, 0.9, 0.95, 0.98, 0.99, 0.995)
+#: top-k values of the paper's panel (a)
+TOPKS = (1, 2, 4, 8, 16, 32, 64, 128)
+#: kurtosis percentiles of the paper's panel (b)
+KURT_PCTS = (1, 10, 25, 50, 75, 90, 99)
+
+
+def eff_dims(M, d, shares=VAR_SHARES):
+    """Fraction of dimensions holding each share of the spectrum, plus participation ratio.
+
+    One eigendecomposition serves every threshold, so the full set of the paper's
+    variance-explained curves costs the same as one of them.
+    """
+    lam = np.clip(np.linalg.eigvalsh(M.astype(np.float64))[::-1], 0, None)
     tot = lam.sum()
     if tot <= 0:
-        return dict(eff_dim_50=float("nan"), eff_dim_90=float("nan"), part_ratio=float("nan"))
+        return {f"eff_dim_{int(v*1000)}": float("nan") for v in shares}
     c = np.cumsum(lam) / tot
-    return dict(eff_dim_50=float((np.searchsorted(c, 0.50) + 1) / d),
-                eff_dim_90=float((np.searchsorted(c, 0.90) + 1) / d),
-                part_ratio=float(tot ** 2 / (lam ** 2).sum() / d))
+    out = {f"eff_dim_{int(v*1000)}": float((np.searchsorted(c, v) + 1) / d) for v in shares}
+    out["part_ratio"] = float(tot ** 2 / (lam ** 2).sum() / d)
+    return out
 
 
 
@@ -102,36 +113,46 @@ def cosines_to_logit(U, J, ubar=None, chunk=16384):
     return raw / n, (cen / n if ubar is not None else float("nan"))
 
 
-def readout_stats(h, J, U, k, chunk=64):
-    """Per-layer readout statistics against the model's own final-layer prediction.
+def readout_stats(h, J, U, chunk=64):
+    """Panel (a) and (b) statistics against the model's own final-layer prediction.
 
-    h is [n_items, n_layers, d] fp16; the caller passes h[:, L] and h[:, -1].
+    (a) top-k accuracy for every k in TOPKS: one argpartition at max(TOPKS), sorted,
+        then each k is a prefix of it -- the whole ramp for the price of the largest k.
+    (b) excess kurtosis of each activation's logit vector over the vocabulary, reported
+        as percentiles across activations (the paper's panel shows the spread, not a
+        mean): "the excess kurtosis of the logit distribution for the readout of a
+        single (position, layer) across a large data set of activations".
+    Also keeps the logit-lens comparison used elsewhere in the report.
     """
     n = h[0].shape[0]
-    hits = agree = 0
-    kurt = []
-    kl = []
+    kmax = max(TOPKS)
+    hits = {k: 0 for k in TOPKS}
+    agree = 0
+    kurt, kl = [], []
     for s in range(0, n, chunk):
         hl = h[0][s:s + chunk].astype(np.float32)
         hf = h[1][s:s + chunk].astype(np.float32)
-        zj = (hl @ J.T) @ U.T                       # J-lens logits
-        zg = hl @ U.T                               # logit-lens logits at the same layer
-        zf = hf @ U.T                               # the model's own final-layer logits
-        model_top1 = zf.argmax(1)
-        topk = np.argpartition(-zj, k - 1, axis=1)[:, :k]
-        hits += int((topk == model_top1[:, None]).any(1).sum())
+        zj = (hl @ J.T) @ U.T
+        zg = hl @ U.T
+        model_top1 = (hf @ U.T).argmax(1)
+        part = np.argpartition(-zj, kmax - 1, axis=1)[:, :kmax]
+        order = np.take_along_axis(part, np.argsort(-np.take_along_axis(zj, part, 1), axis=1), 1)
+        for k in TOPKS:
+            hits[k] += int((order[:, :k] == model_top1[:, None]).any(1).sum())
         agree += int((zj.argmax(1) == zg.argmax(1)).sum())
         m = zj - zj.mean(1, keepdims=True)
-        sd = m.std(1, keepdims=True) + 1e-9
-        kurt.append((((m / sd) ** 4).mean(1) - 3.0))
+        kurt.append(((m / (m.std(1, keepdims=True) + 1e-9)) ** 4).mean(1) - 3.0)
         pj = np.exp(zj - zj.max(1, keepdims=True)); pj /= pj.sum(1, keepdims=True)
         pg = np.exp(zg - zg.max(1, keepdims=True)); pg /= pg.sum(1, keepdims=True)
         lj, lg = np.log(pj + 1e-12), np.log(pg + 1e-12)
-        kl.append(((pj * (lj - lg)).sum(1) + (pg * (lg - lj)).sum(1)))
-    return dict(**{f"nexttok_top{k}": hits / n},
-                top1_agree_logit=agree / n,
-                kurtosis=float(np.concatenate(kurt).mean()),
-                sym_kl_logit=float(np.concatenate(kl).mean()))
+        kl.append((pj * (lj - lg)).sum(1) + (pg * (lg - lj)).sum(1))
+    ku = np.concatenate(kurt)
+    out = {f"nexttok_top{k}": hits[k] / n for k in TOPKS}
+    out.update({f"kurtosis_p{q}": float(np.percentile(ku, q)) for q in KURT_PCTS})
+    out["kurtosis"] = float(ku.mean())
+    out["top1_agree_logit"] = agree / n
+    out["sym_kl_logit"] = float(np.concatenate(kl).mean())
+    return out
 
 
 def main():
@@ -147,7 +168,6 @@ def main():
     ap.add_argument("--n-layers-total", type=int, default=61,
                     help="For reindexing depth to [0,100] as the paper does")
     ap.add_argument("--layers", default=None, help="comma list; default every fitted layer")
-    ap.add_argument("--topk", type=int, default=10)
     ap.add_argument("--vocab-chunk", type=int, default=16384)
     ap.add_argument("--threads", type=int, default=4)
     ap.add_argument("--label", default=None)
@@ -187,8 +207,8 @@ def main():
     print(f"{H.shape[0]} eval states, final layer = {states['n_layers']-1}", flush=True)
 
     rows = []
-    print(f"{'L':>3} {'depth':>6} {'eff50':>7} {'eff90':>7} {'PR':>7} {'cos':>7} "
-          f"{'nextTop':>8} {'agree':>7} {'kurt':>9} {'symKL':>7}")
+    print(f"{'L':>3} {'depth':>6} {'eff90':>7} {'eff99':>7} {'cos':>7} "
+          f"{'top1':>6} {'top10':>6} {'kurtP50':>8} {'kurtP99':>8} {'symKL':>7}")
     for L in layers:
         t = time.time()
         J = lens[L]
@@ -198,16 +218,17 @@ def main():
         # mean over vocabulary of cos((U J)_t, U_t), in chunks
         r["cos_to_logit"], r["cos_to_logit_centred"] = cosines_to_logit(
             U, J, ubar, args.vocab_chunk)
-        r.update(readout_stats((H[:, L], H_final), J, U, args.topk))
+        r.update(readout_stats((H[:, L], H_final), J, U))
         r["secs"] = round(time.time() - t, 1)
         rows.append(r)
-        print(f"{L:3d} {r['depth_0_100']:6.1f} {r['eff_dim_50']:7.4f} {r['eff_dim_90']:7.4f} "
-              f"{r['part_ratio']:7.4f} {r['cos_to_logit']:7.4f} "
-              f"{r[f'nexttok_top{args.topk}']:8.3f} {r['top1_agree_logit']:7.3f} "
-              f"{r['kurtosis']:9.1f} {r['sym_kl_logit']:7.2f}", flush=True)
+        print(f"{L:3d} {r['depth_0_100']:6.1f} {r['eff_dim_900']:7.4f} {r['eff_dim_990']:7.4f} "
+              f"{r['cos_to_logit']:7.4f} {r['nexttok_top1']:6.3f} {r['nexttok_top8']:6.3f} "
+              f"{r['kurtosis_p50']:8.2f} {r['kurtosis_p99']:8.2f} {r['sym_kl_logit']:7.2f}",
+              flush=True)
 
     out = {"lens": str(args.lens), "label": label, "n_prompts": lens.n, "d_model": d,
-           "n_layers_total": args.n_layers_total, "topk": args.topk,
+           "n_layers_total": args.n_layers_total, "topks": list(TOPKS),
+           "var_shares": list(VAR_SHARES), "kurt_pcts": list(KURT_PCTS),
            "n_eval_states": int(H.shape[0]), "per_layer": rows}
     args.out.write_text(json.dumps(out, indent=1))
     print(f"\nwrote {args.out}")

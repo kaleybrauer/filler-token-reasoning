@@ -66,7 +66,7 @@ def load_readout(model_id: str, cache: Path, token=None):
         idx = {"weight_map": {}}
     if not idx["weight_map"]:                       # single-shard model
         f = hf_hub_download(model_id, "model.safetensors", cache_dir=cache, token=token)
-        with safe_open(f, framework="np") as h:
+        with safe_open(f, framework="pt") as h:
             names = list(h.keys())
             idx = {"weight_map": {n: "model.safetensors" for n in names}}
     hk, hf_ = pick(idx, HEAD_KEYS)
@@ -79,8 +79,9 @@ def load_readout(model_id: str, cache: Path, token=None):
         if key is None:
             continue
         p = hf_hub_download(model_id, shard, cache_dir=cache, token=token)
-        with safe_open(p, framework="np") as h:
-            out[key] = np.asarray(h.get_tensor(key)).astype(np.float32)
+        # framework="pt": NumPy has no bfloat16, and most current checkpoints ship in it
+        with safe_open(p, framework="pt") as h:
+            out[key] = h.get_tensor(key).float().numpy()
     W = out[hk]
     g = out.get(nk)
     tied = hk in ("model.embed_tokens.weight", "wte.weight", "transformer.wte.weight")
@@ -193,8 +194,8 @@ def main():
             U, J, ubar, args.vocab_chunk)
         r["secs"] = round(time.time() - t, 1)
         rows.append(r)
-        print(f"  L{L:3d} depth {r['depth_0_100']:5.1f}  eff50 {r['eff_dim_50']:.4f}  "
-              f"eff90 {r['eff_dim_90']:.4f}  PR {r['part_ratio']:.4f}  "
+        print(f"  L{L:3d} depth {r['depth_0_100']:5.1f}  eff90 {r['eff_dim_900']:.4f}  "
+              f"eff99 {r['eff_dim_990']:.4f}  PR {r['part_ratio']:.4f}  "
               f"cos {r['cos_to_logit']:.4f}", flush=True)
         del J; gc.collect()
 

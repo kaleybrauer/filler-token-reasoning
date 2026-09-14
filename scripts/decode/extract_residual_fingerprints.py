@@ -87,6 +87,14 @@ def main():
                          "the residual step.")
     ap.add_argument("--max-examples", type=int, default=None,
                     help="Cap number of examples (for fast iteration)")
+    ap.add_argument("--position-chunk", type=int, default=0,
+                    help="Process this many positions per pass instead of holding every "
+                         "example's states in RAM at once. The pkls are re-read once per "
+                         "pass (cheap: ~0.5 GB/s) and peak RAM drops in proportion, which "
+                         "is what makes the wide conditions (counting_50 needs ~33 GB "
+                         "unchunked) run on a small-memory host. Output is unaffected: "
+                         "every setting still sees all examples, and the chunks are "
+                         "consecutive slices of the same setting list. 0 = one pass.")
     ap.add_argument("--incorrect-only", action="store_true",
                     help="Filter to examples where the model got the final "
                          "answer WRONG (model_correct=False) instead of correct.")
@@ -138,26 +146,14 @@ def main():
     vocab = lm_head.shape[0]
 
     files = sorted(args.extraction_dir.glob("prob_*.pkl"))
-    all_data = []
     target_correct = not args.incorrect_only
-    for f in tqdm(files, desc="Loading"):
-        with open(f, "rb") as fp:
-            d = pickle.load(fp)
-        if d.get("model_correct", False) == target_correct:
-            all_data.append(d)
-        if args.max_examples and len(all_data) >= args.max_examples:
-            break
-    n = len(all_data)
     label = "incorrect" if args.incorrect_only else "correct"
-    print(f"{n} {label} examples")
-    if n == 0:
-        print(f"No {label} examples — exiting")
-        return
 
-    # Determine positions & layers from first example.
-    # Default range: (question_end, filler_end] — every token after the question
-    # ends, up to and including the last filler content token.
-    d0 = all_data[0]
+    # Fix the (position, layer) grid from ONE example before loading the rest, so the
+    # loader can drop the states this run will never read (layers < min-layer, and
+    # positions outside the filler window — together ~53% of a counting_50 pkl).
+    with open(files[0], "rb") as fp:
+        d0 = pickle.load(fp)
     bnd = d0.get("boundaries", {}) or {}
     q_end = bnd.get("question_end_offset")
     filler_end = bnd.get("filler_end_offset")
@@ -190,93 +186,155 @@ def main():
     settings = [(pos, l) for pos in all_positions for l in layers]
     print(f"{len(all_positions)} positions × {len(layers)} layers "
           f"= {len(settings)} candidate settings")
+    del d0
 
-    # Preallocate fingerprint arrays: (n_settings, n_examples, top_k)
-    fp_ids = np.zeros((len(settings), n, args.top_k), dtype=np.int32)
-    fp_vals = np.zeros((len(settings), n, args.top_k), dtype=np.float32)
+    keep_layers = set(layers)
+
+    def load_pass(keep_positions):
+        """Model-correct examples, states pruned to keep_positions × layers.
+
+        The file order is a sorted glob and the correctness filter is deterministic,
+        so every pass yields the same examples in the same order; the caller asserts
+        that rather than trusting it.
+        """
+        keep_pos = set(keep_positions)
+        out = []
+        for f in tqdm(files, desc="Loading"):
+            with open(f, "rb") as fp:
+                d = pickle.load(fp)
+            if d.get("model_correct", False) != target_correct:
+                continue
+            d["states"] = {p: {l: v for l, v in lv.items() if l in keep_layers}
+                           for p, lv in d["states"].items() if p in keep_pos}
+            out.append(d)
+            if args.max_examples and len(out) >= args.max_examples:
+                break
+        return out
+
+    chunk = args.position_chunk if args.position_chunk > 0 else len(all_positions)
+    pos_chunks = [all_positions[i:i + chunk]
+                  for i in range(0, len(all_positions), chunk)]
+    if len(pos_chunks) > 1:
+        print(f"Position chunking: {len(pos_chunks)} passes of ≤{chunk} positions "
+              f"(pkls re-read once per pass; peak RAM ≈ "
+              f"{chunk / len(all_positions):.0%} of a single-pass load)")
+
+    fp_ids = fp_vals = example_ids = truth = None
+    n = 0
     mean_topk_per_setting = []  # optional: top-20 tokens of the mean, for debug
 
-    # Stash problem ids and truth fields (handy downstream).
-    # Use object arrays for values that may be strings (e.g. letterpos `answer`,
-    # `element`) or mixed types across conditions.
-    example_ids = np.array([d.get("problem_idx", i) for i, d in enumerate(all_data)],
-                           dtype=np.int32)
-    def _get(field, default=None):
-        return np.array([d.get(field, default) for d in all_data], dtype=object)
-    truth = {
-        "fact_value_1": _get("fact_value_1", -1),
-        "fact_value_2": _get("fact_value_2", -1),
-        "fact_value":   _get("fact_value", -1),
-        "answer":       _get("answer", -1),
-        "element":      _get("element"),
-        "atomic_number": _get("atomic_number", -1),
-        "intermediate": _get("intermediate"),
-        # varbind: queried_value (=intermediate) and its question coefficient let
-        # downstream score the second hidden value c·V = coefficient × queried_value.
-        "coefficient":  _get("coefficient", -1),
-    }
+    for c_i, chunk_positions in enumerate(pos_chunks):
+        all_data = load_pass(chunk_positions)
+        if fp_ids is None:
+            n = len(all_data)
+            print(f"{n} {label} examples")
+            if n == 0:
+                print(f"No {label} examples — exiting")
+                return
+            # Preallocate fingerprint arrays: (n_settings, n_examples, top_k)
+            fp_ids = np.zeros((len(settings), n, args.top_k), dtype=np.int32)
+            fp_vals = np.zeros((len(settings), n, args.top_k), dtype=np.float32)
+            # Stash problem ids and truth fields (handy downstream).
+            # Use object arrays for values that may be strings (e.g. letterpos
+            # `answer`, `element`) or mixed types across conditions.
+            example_ids = np.array(
+                [d.get("problem_idx", i) for i, d in enumerate(all_data)],
+                dtype=np.int32)
 
-    for s_idx, (pos, layer) in enumerate(tqdm(settings, desc="Extracting fingerprints")):
-        # Stack example vectors → (n, d)
-        try:
-            vecs = np.stack([d["states"][pos][layer].astype(np.float32)
-                             for d in all_data])
-        except KeyError:
-            # Some examples may be missing this (pos, layer); skip
-            continue
-
-        if jlens_J is not None:
-            # J-lens transport into the final-layer basis, before the RMSNorm.
-            vecs = vecs @ jlens_J[int(layer)].T
-
-        if gpu is not None:
-            # Identical math, but lm_head stays resident on the device. The CPU path is
-            # memory-bandwidth bound streaming the 3.7 GB lm_head once per setting; on GPU
-            # it is streamed once per RUN. torch.topk already returns sorted-descending.
-            torch, lm_head_t, norm_w_t = gpu
-            x = torch.from_numpy(vecs).to(lm_head_t.device, non_blocking=True)
-            rms = torch.sqrt(x.pow(2).mean(-1, keepdim=True) + 1e-6)
-            H_t = (x / rms) * norm_w_t
-            probs_t = torch.softmax(H_t @ lm_head_t.T, dim=1)
-            mean_t = probs_t.mean(dim=0)
-            score_t = probs_t if args.no_residual else probs_t - mean_t.unsqueeze(0)
-            vals_t, ids_t = torch.topk(score_t, args.top_k, dim=1, sorted=True)
-            topk_ids = ids_t.cpu().numpy().astype(np.int64)
-            topk_vals = vals_t.float().cpu().numpy()
-            mean_p = mean_t.float().cpu().numpy()
+            def _get(field, default=None):
+                return np.array([d.get(field, default) for d in all_data], dtype=object)
+            truth = {
+                "fact_value_1": _get("fact_value_1", -1),
+                "fact_value_2": _get("fact_value_2", -1),
+                "fact_value":   _get("fact_value", -1),
+                "answer":       _get("answer", -1),
+                "element":      _get("element"),
+                "atomic_number": _get("atomic_number", -1),
+                "intermediate": _get("intermediate"),
+                # varbind: queried_value (=intermediate) and its question coefficient
+                # let downstream score the second hidden value c·V.
+                "coefficient":  _get("coefficient", -1),
+            }
         else:
-            H = rms_norm(vecs, norm_w)                    # (n, d)
-            logits = H @ lm_head.T                        # (n, vocab)
-            shifted = logits - logits.max(axis=1, keepdims=True)
-            probs = np.exp(shifted) / np.exp(shifted).sum(axis=1, keepdims=True)
-            # Cross-example mean (noise baseline) — also used for debug preview
-            mean_p = probs.mean(axis=0)                   # (vocab,)
+            ids = np.array([d.get("problem_idx", i) for i, d in enumerate(all_data)],
+                           dtype=np.int32)
+            if ids.shape != example_ids.shape or not np.array_equal(ids, example_ids):
+                raise SystemExit(
+                    f"pass {c_i + 1} loaded a different example set than pass 1 "
+                    f"({ids.shape} vs {example_ids.shape}) — refusing to mix them")
 
-            if args.no_residual:
-                # Ablation: rank by raw prob per example (no mean subtraction)
-                score = probs
+        # Global setting index: settings is position-major, so a consecutive block of
+        # positions is a consecutive block of settings.
+        base = all_positions.index(chunk_positions[0]) * len(layers)
+        chunk_settings = [(base + j * len(layers) + k, pos, layer)
+                          for j, pos in enumerate(chunk_positions)
+                          for k, layer in enumerate(layers)]
+        desc = ("Extracting fingerprints" if len(pos_chunks) == 1
+                else f"Fingerprints pass {c_i + 1}/{len(pos_chunks)}")
+        for s_idx, pos, layer in tqdm(chunk_settings, desc=desc):
+            # Stack example vectors → (n, d)
+            try:
+                vecs = np.stack([d["states"][pos][layer].astype(np.float32)
+                                 for d in all_data])
+            except KeyError:
+                # Some examples may be missing this (pos, layer); skip
+                continue
+
+            if jlens_J is not None:
+                # J-lens transport into the final-layer basis, before the RMSNorm.
+                vecs = vecs @ jlens_J[int(layer)].T
+
+            if gpu is not None:
+                # Identical math, but lm_head stays resident on the device. The CPU path is
+                # memory-bandwidth bound streaming the 3.7 GB lm_head once per setting; on GPU
+                # it is streamed once per RUN. torch.topk already returns sorted-descending.
+                torch, lm_head_t, norm_w_t = gpu
+                x = torch.from_numpy(vecs).to(lm_head_t.device, non_blocking=True)
+                rms = torch.sqrt(x.pow(2).mean(-1, keepdim=True) + 1e-6)
+                H_t = (x / rms) * norm_w_t
+                probs_t = torch.softmax(H_t @ lm_head_t.T, dim=1)
+                mean_t = probs_t.mean(dim=0)
+                score_t = probs_t if args.no_residual else probs_t - mean_t.unsqueeze(0)
+                vals_t, ids_t = torch.topk(score_t, args.top_k, dim=1, sorted=True)
+                topk_ids = ids_t.cpu().numpy().astype(np.int64)
+                topk_vals = vals_t.float().cpu().numpy()
+                mean_p = mean_t.float().cpu().numpy()
             else:
-                score = probs - mean_p[None, :]            # residual (n, vocab)
+                H = rms_norm(vecs, norm_w)                    # (n, d)
+                logits = H @ lm_head.T                        # (n, vocab)
+                shifted = logits - logits.max(axis=1, keepdims=True)
+                probs = np.exp(shifted) / np.exp(shifted).sum(axis=1, keepdims=True)
+                # Cross-example mean (noise baseline) — also used for debug preview
+                mean_p = probs.mean(axis=0)                   # (vocab,)
 
-            # Top-K by score per example
-            order = np.argpartition(-score, args.top_k - 1, axis=1)[:, :args.top_k]
-            # Sort those top-K descending by value
-            rows = np.arange(n)[:, None]
-            sort_in_topk = np.argsort(-score[rows, order], axis=1)
-            topk_ids = order[rows, sort_in_topk]
-            topk_vals = score[rows, topk_ids]
+                if args.no_residual:
+                    # Ablation: rank by raw prob per example (no mean subtraction)
+                    score = probs
+                else:
+                    score = probs - mean_p[None, :]            # residual (n, vocab)
 
-        fp_ids[s_idx] = topk_ids
-        fp_vals[s_idx] = topk_vals
+                # Top-K by score per example
+                order = np.argpartition(-score, args.top_k - 1, axis=1)[:, :args.top_k]
+                # Sort those top-K descending by value
+                rows = np.arange(n)[:, None]
+                sort_in_topk = np.argsort(-score[rows, order], axis=1)
+                topk_ids = order[rows, sort_in_topk]
+                topk_vals = score[rows, topk_ids]
 
-        # Debug: record top-20 of mean distribution per setting
-        mean_top = np.argsort(-mean_p)[:20]
-        mean_topk_per_setting.append({
-            "position": pos, "layer": int(layer),
-            "mean_top": [{"id": int(t), "prob": float(mean_p[t]),
-                          "str": tokenizer.decode([int(t)])}
-                         for t in mean_top]
-        })
+            fp_ids[s_idx] = topk_ids
+            fp_vals[s_idx] = topk_vals
+
+            # Debug: record top-20 of mean distribution per setting
+            mean_top = np.argsort(-mean_p)[:20]
+            mean_topk_per_setting.append({
+                "position": pos, "layer": int(layer),
+                "mean_top": [{"id": int(t), "prob": float(mean_p[t]),
+                              "str": tokenizer.decode([int(t)])}
+                             for t in mean_top]
+            })
+
+
+        del all_data
 
     # Save
     args.output.parent.mkdir(parents=True, exist_ok=True)

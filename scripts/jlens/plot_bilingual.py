@@ -128,10 +128,10 @@ def main():
                    alpha=0.45)
     g.plot([], [], color=MUTED, lw=1.6, marker="o", ms=3.5, label="J-lens")
     g.plot([], [], color=MUTED, lw=1.6, ls=dashed, marker="s", ms=3.5, label="logit lens")
-    g.plot([], [], color=MUTED, lw=0.9, alpha=0.6, label="null: another prompt's Han list")
+    g.plot([], [], color=MUTED, lw=0.9, alpha=0.6, label="null (other prompt)")
     g.set_ylim(0, 100)
     g.yaxis.set_major_formatter(lambda v, p: f"{v:.0f}%")
-    g.legend(fontsize=7.5, frameon=False, loc="lower right", bbox_to_anchor=(0.9, 0.08))
+    g.legend(fontsize=7.5, frameon=False, loc="upper left")
     handles = [plt.Line2D([], [], color=col, lw=2.2) for _, col, _, _ in CORPORA.values()]
     fig.legend(handles, [lab for lab, *_ in CORPORA.values()], loc="lower center", ncol=3,
                frameon=False, fontsize=8.5, bbox_to_anchor=(0.4, 0.0))

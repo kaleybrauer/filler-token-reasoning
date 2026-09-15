@@ -64,6 +64,17 @@ def three_blocks(C):
     return best
 
 
+def decay_only(C):
+    """The matrix with C's mean CKA at each layer distance and no other structure. Smooth decay alone gives
+    three_blocks a positive score, so block structure is the observed score in excess of this matrix's."""
+    n = C.shape[0]
+    D = np.empty_like(C)
+    for k in range(n):
+        idx = np.arange(n - k)
+        D[idx, idx + k] = D[idx + k, idx] = np.diagonal(C, k).mean()
+    return D
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--lens", type=Path, default=REPO / "outputs/jlens/lens_v3_filtered40.pt")

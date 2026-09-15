@@ -456,6 +456,8 @@ def cmd_depth(args):
     target = S["n_layers"] - 1
     T, d = H.shape[1], H.shape[3]
     layers = args.layers or sorted({int(round(x)) for x in np.linspace(0, target, 25)})
+    # top-k lists are kept at the same fractions of depth in every model: V3's 0, 15, 25, 35, 45, 55, 60
+    store_layers = args.store_layers or [int(round(target * k / 24)) for k in (0, 6, 10, 14, 18, 22, 24)]
     pos = np.unique(np.round(np.linspace(0, T - 1, args.positions_per_prompt)).astype(int))
     sel = keep[:, pos].reshape(-1)
     print(f"{len(pos)} positions per prompt -> {int(sel.sum())} activations per layer; layers {layers}",
@@ -472,7 +474,7 @@ def cmd_depth(args):
             t0 = time.time()
             X = H[:P][:, pos, L].reshape(-1, d)[torch.from_numpy(sel)].float()
             r = readout_stats(torch, transport(torch, X, lens, L, target), emb, rand_sets,
-                              k_full=100, class_k=100 if L in args.store_layers else 0)
+                              k_full=100, class_k=100 if L in store_layers else 0)
             row = {"layer": int(L), "depth_0_100": round(100 * L / target, 2),
                    "n_activations": int(sel.sum()),
                    "kurtosis": {v: pcts(r["kurt"][v]) for v in KURT_VARIANTS},
@@ -484,7 +486,7 @@ def cmd_depth(args):
                     row["topk_scripts"][f"{src}@{K}"] = summarize_script(script_stats(r[src], cls, K))
             row["secs"] = round(time.time() - t0, 1)
             rows.append(row)
-            if L in args.store_layers:
+            if L in store_layers:
                 for key in ("top_ids", "offset_removed_top_ids", "latin_top_ids", "han_top_ids"):
                     store[f"L{L}_{key}"] = r[key].astype(np.int32)
             kk = row["kurtosis"]
@@ -519,8 +521,8 @@ def main():
         p.add_argument("--states", type=Path, default=None, help="default: the model's WikiText states")
         p.add_argument("--out-dir", type=Path, default=None, help="default: outputs/jlens (V3), outputs/jlens_qwen35/<model>/analysis")
     sub.choices["depth"].add_argument("--positions-per-prompt", type=int, default=24)
-    sub.choices["depth"].add_argument("--store-layers", nargs="+", type=int,
-                                      default=[0, 15, 25, 35, 45, 55, 60])
+    sub.choices["depth"].add_argument("--store-layers", nargs="+", type=int, default=None,
+                                      help="layers whose top-k lists are saved; default 0, 25, 42, 58, 75, 92, 100%% of depth")
     args = ap.parse_args()
     {"spikes": cmd_spikes, "depth": cmd_depth}[args.cmd](args)
 

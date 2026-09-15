@@ -161,6 +161,9 @@ GPU session 3 — V3 (3x H200, ~40 min): sets A and B only (everything else is c
    Sessions 1-3 are independent; order by availability. Session 3 can share a box with 1.
 
 CPU after each session: run items 1-4 of section 1 and tests 1-4 of section 2 for that model.
+When the outputs land in `outputs/jlens_qwen35/<tag>/`:
+`python scripts/jlens/run_qwen35_analysis.py qwen35_122b qwen35_397b_fp8` runs
+`check_qwen35_transfer.py` (hard gate) and then every analysis above with `--model`, resumably.
 
 ---
 
@@ -173,5 +176,9 @@ CPU after each session: run items 1-4 of section 1 and tests 1-4 of section 2 fo
 - Vocabulary-level statistics (full-vocab kurtosis, script shares) are not comparable across
   tokenizers; use within-script, offset-removed, and pair-rank measures.
 - Forward regime differs from fit regime for every model (batch, kernels, FP8 path).
+- "Held-out" is exact only for V3. Our WikiText 200-299 are middle paragraphs from the same
+  WikiText-103 train split as the dallinmj passages (article openings, 500 of ~28k articles):
+  expected article overlap is about 2 of 100, not verified. The praxagent card names WikiText-103
+  (seed 0) but not the split.
 - Depth normalisation hides architecture: Qwen's hybrid attention may itself shift the band.
 - Hypothesis tests 1-4 are descriptive (lens/geometry). Only test 5 is causal.

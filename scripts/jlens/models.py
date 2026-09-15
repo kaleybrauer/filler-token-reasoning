@@ -8,12 +8,13 @@ fallback before the transfer.
 """
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 J = REPO / "outputs/jlens"
 Q = J / "qwen35"
-QS = REPO / "outputs/jlens_qwen35"
+QS = Path(os.environ.get("JLENS_QWEN35_DIR") or REPO / "outputs/jlens_qwen35")   # override for dry runs only
 
 
 def _qwen(tag, label, lens, n_layers, d_model, alt_lenses=None):

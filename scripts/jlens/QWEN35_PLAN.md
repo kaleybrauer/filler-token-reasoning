@@ -7,7 +7,7 @@ unusual?** Compare V3 with Qwen3.5-397B-A17B (same scale class, multilingual MoE
 different architecture and training lineage) and with Qwen3.5-122B-A10B (same lineage, same
 tokenizer, same 500 fit passages, smaller) which separates lineage from scale.
 
-**Q2. Does the workspace have a language, and what sets it?** For a fixed semantic state, is the
+**Q2. Is the mid-depth representation language-neutral, and what sets the lexical language of its readout?** (Open question; nothing so far constrains the geometry — see the confound below.) For a fixed semantic state, is the
 mid-depth geometry language-neutral, language-conditioned, or hybrid (shared meaning component +
 language component)? And what determines which lexical language the readout shows?
 

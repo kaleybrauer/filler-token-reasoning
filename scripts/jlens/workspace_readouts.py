@@ -41,13 +41,12 @@ import numpy as np
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "scripts"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from score_eval_states import WEIGHTS          # noqa: E402
 from score_lazy import LazyLens                # noqa: E402
+import models                                  # noqa: E402
 
 TOPKS = (1, 2, 4, 8, 16, 32, 64, 128)
 KURT_PCTS = (1, 10, 25, 50, 75, 90, 99)
 OFFSETS = (1, 2, 4, 8, 16, 32)
-SATURATED = [(215, 69)]          # (corpus prompt index, stored position), layer-60 fp16 limit
 
 
 def logits_of(x, U, eps):
@@ -63,8 +62,9 @@ def log_softmax(z):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--states", type=Path, default=REPO / "outputs/jlens/wikitext_states.pt")
-    ap.add_argument("--lens", type=Path, default=REPO / "outputs/jlens/lens_v3_filtered40.pt")
+    ap.add_argument("--model", default="v3", help="models.MODELS key: v3, qwen35_122b, qwen35_397b_fp8")
+    ap.add_argument("--states", type=Path, default=None, help="default: the model's WikiText states")
+    ap.add_argument("--lens", type=Path, default=None, help="default: the model's lens")
     ap.add_argument("--subset", default=None, help="build the lens from a named half/subset")
     ap.add_argument("--n-layers-shown", type=int, default=25,
                     help="evenly spaced layers, as the paper's figure shows")
@@ -78,10 +78,17 @@ def main():
         os.environ[v] = str(args.threads)
     import torch
 
-    label = args.label or (args.subset or "shipped100")
-    out_path = args.out or REPO / f"outputs/jlens/workspace_readouts_{label}.json"
+    m = models.get(args.model)
+    args.states = args.states or m["states"]["wikitext"]
+    args.lens = args.lens or m["lens"]
+    label = args.label or (args.subset or ("shipped100" if args.model == "v3" else "shipped"))
+    out_path = args.out or (REPO / f"outputs/jlens/workspace_readouts_{label}.json" if args.model == "v3"
+                            else models.QS / args.model / "analysis" / f"workspace_readouts_{label}.json")
+    out_path.parent.mkdir(parents=True, exist_ok=True)
 
     if args.subset:
+        if args.model != "v3":
+            raise SystemExit("--subset builds V3 half/subset lenses only")
         from clean_floor import build_subset
         lens = build_subset(REPO / "outputs/jlens", REPO / "outputs/jlens/per_prompt", 40.0, args.subset)
     else:
@@ -102,14 +109,19 @@ def main():
     layers = sorted({int(round(x)) for x in np.linspace(0, target, args.n_layers_shown)})
     print(f"states {tuple(H.shape)}; prompts {lo}..{lo+P-1}; layers {layers}", flush=True)
 
+    # Exclude any position whose residual reaches the fp16 limit at a layer read here (V3: prompt 215,
+    # stored position 69 at layer 60, clipped inside the model's own forward; Qwen3.5: values the
+    # extraction clamped), at every layer.
     keep = np.ones((P, T), bool)
-    for pi, pos in SATURATED:
-        if lo <= pi < lo + P:
-            keep[pi - lo, pos] = False
-    print(f"excluded {int((~keep).sum())} saturated state(s)", flush=True)
+    for L in sorted(set(layers) | {target}):
+        keep &= ~(H[:P, :, L].float().abs() >= 65504).any(-1).numpy()
+    excluded = [(int(p) + lo, int(t)) for p, t in np.argwhere(~keep)]
+    print(f"excluded {len(excluded)} saturated state(s): {excluded[:10]}", flush=True)
+    if args.model == "v3" and args.states == m["states"]["wikitext"] and P == H.shape[0] and excluded != m["saturated"]:
+        raise SystemExit(f"saturation scan found {excluded}, expected {m['saturated']}")
 
-    U = (np.load(WEIGHTS / "lm_head_weight.npy").astype(np.float32)
-         * np.load(WEIGHTS / "rms_norm_weight.npy").astype(np.float32)[None, :])
+    U = (np.load(m["unembed_dir"] / "lm_head_weight.npy").astype(np.float32)
+         * np.load(m["unembed_dir"] / "rms_norm_weight.npy").astype(np.float32)[None, :])
 
     # The model's own next-token prediction at every position: its final-layer readout.
     t0 = time.time()
@@ -175,7 +187,7 @@ def main():
 
     out = {"label": label, "lens": str(args.lens) if not args.subset else None, "subset": args.subset,
            "n_prompts_lens": lens.n, "states": str(args.states), "prompt_span": [lo, lo + P],
-           "n_positions": T, "n_layers_total": n_total, "layers": layers, "excluded": SATURATED,
+           "n_positions": T, "n_layers_total": n_total, "layers": layers, "excluded": excluded, "model": args.model,
            "topks": list(TOPKS), "kurt_pcts": list(KURT_PCTS), "offsets": list(OFFSETS),
            "per_layer": rows}
     out_path.write_text(json.dumps(out, indent=1))

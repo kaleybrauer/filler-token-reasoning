@@ -50,7 +50,7 @@ def curve(rows, key):
 
 def main():
     fig = plt.figure(figsize=(18, 10))
-    gs = fig.add_gridspec(2, 3, left=0.05, right=0.97, top=0.92, bottom=0.13, wspace=0.28, hspace=0.42)
+    gs = fig.add_gridspec(2, 3, left=0.05, right=0.97, top=0.92, bottom=0.15, wspace=0.28, hspace=0.42)
     a, b, c = (fig.add_subplot(gs[0, i]) for i in range(3))
     d = fig.add_subplot(gs[1, 0])
     style(a, "A  J-space dimensionality", "Fraction of dimensions at 90% variance →", NO_BAND)
@@ -77,6 +77,12 @@ def main():
         g = np.union1d(xs[0][0], xs[1][0])
         y0, y1 = np.interp(g, *xs[0]), np.interp(g, *xs[1])
         a.fill_between(g, 100 * np.minimum(y0, y1), 100 * np.maximum(y0, y1), color=BLUE, alpha=0.2, lw=0)
+    v3_n25 = load(J / "workspace_signatures_n25.json")
+    if v3_n25:
+        x, y = curve(v3_n25["per_layer"], "eff_dim_900")
+        a.plot(x, 100 * y, color=BLUE, lw=1, ls=(0, (2, 2)), label="DeepSeek-V3 (25 prompts)")
+        x, y = curve(v3_n25["per_layer"], "cos_to_logit")
+        b.plot(x, y, color=BLUE, lw=1, ls=(0, (2, 2)), label="DeepSeek-V3 (25 prompts)")
     n24 = load(Q / "survey_qwen35_397b_n24.json")
     if n24:
         x, y = curve(n24["per_layer"], "eff_dim_900")
@@ -135,9 +141,10 @@ def main():
     if im is not None:
         fig.colorbar(im, ax=heat, shrink=0.7, label="linear CKA")
     fig.suptitle("The J-lens itself across models: DeepSeek-V3 vs Qwen3.5", fontsize=13, color=INK, x=0.05, ha="left")
-    fig.text(0.05, 0.015, "Depth = layer / (blocks - 1). Lens-only measures: no activations. Qwen3.5 lenses: dallinmj (500 WikiText "
-             "passages; 397B on FP8 weights with bf16 compute) and praxagent (24 WikiText prompts of up to 128 tokens, bf16 weights). "
-             "V3: shipped T=40 lens; ribbon in A = the two 50-prompt half-fits.\n"
+    fig.text(0.05, 0.01, "Depth = layer / (blocks - 1). Lens-only measures: no activations. V3: shipped T=40 lens; ribbon in A = the two "
+             "50-prompt half-fits; dashed in A and B = smaller fits (V3's 25-prompt subset, Qwen3.5-397B's praxagent lens).\n"
+             "Qwen3.5 lenses: dallinmj (500 WikiText passages; 397B on FP8 weights with bf16 compute) and praxagent (24 WikiText prompts "
+             "of up to 128 tokens, bf16 weights).\n"
              "D: the two Qwen3.5-397B lenses differ in prompt count, passage selection and weight precision, while V3's halves "
              "differ only in prompts, so the curves are not a matched comparison.\n"
              "E: dashed lines = the 3-block segmentation maximising mean within-block minus between-block CKA (its block score); "

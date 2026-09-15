@@ -111,11 +111,18 @@ def our_figure(sig, rd, sig_halves, rd_halves, cka, out):
         x = np.array([r["depth_0_100"] for r in rows], float)
         return x, [np.array([r[k] for r in rows], float) for k in keys]
 
-    band = tuple(cka["band_depth"]) if cka else PAPER_BAND
+    # V3's layer CKA is near-uniform (>=0.95 between all layers up to ~67% depth), so its block segmentation
+    # defines no band (separation score ~0.12, boundaries only where the late decline starts). Use it only
+    # when the blocks actually separate.
+    cka_ok = bool(cka) and cka.get("separation_score", 0) >= 0.3
+    if cka and not cka_ok:
+        cka = None
+    band = tuple(cka["band_depth"]) if cka_ok else PAPER_BAND
     band_note = ("V3 workspace band from its own layer-CKA block structure "
                  f"({band[0]:.0f}–{band[1]:.0f}%); dashed lines: Sonnet 4.5's band "
-                 "(37.5–91.7%)") if cka else \
-                "shaded band: the workspace layers reported for Sonnet 4.5 (37.5–91.7%), for comparison"
+                 "(37.5–91.7%)") if cka_ok else \
+                ("shaded band: the workspace layers reported for Sonnet 4.5 (37.5–91.7%), for comparison; "
+                 "V3's own layer CKA is near-uniform (>=0.95 among layers 0–40) and defines no band")
 
     fig, axes = plt.subplots(2, 2, figsize=(11.2, 7.6))
     fig.patch.set_facecolor("white")
@@ -151,8 +158,8 @@ def our_figure(sig, rd, sig_halves, rd_halves, cka, out):
     ax.axhline(0, color=AXIS, lw=0.9, zorder=2)
     top = np.array(ys[-1])
     for i in np.where(top > KTOP)[0]:
-        ax.annotate(f"{top[i]:.0f}", xy=(x[i], KTOP), xytext=(0, 3), textcoords="offset points",
-                    ha="center", va="bottom", fontsize=7.4, color=MUTED, annotation_clip=False)
+        ax.annotate(f"{top[i]:.0f}", xy=(x[i], KTOP), xytext=(5, -3), textcoords="offset points",
+                    ha="left", va="top", fontsize=7.4, color=MUTED, annotation_clip=False)
 
     ax = axes[1, 0]
     frame(ax, "(c)  J-lens top-1 autocorrelation", "Δlog p (vs null) →")
@@ -182,8 +189,8 @@ def our_figure(sig, rd, sig_halves, rd_halves, cka, out):
     fig.suptitle("Quantitative signatures of the workspace's start and end — DeepSeek V3",
                  fontsize=13.5, color=INK, x=0.008, ha="left", y=0.988)
     fig.text(0.008, 0.945, sub, fontsize=8.1, color=MUTED, ha="left")
-    fig.text(0.008, 0.028, band_note + ". Ribbons shown on one series per panel (top-8, p50, "
-             "offset 1, 0.9).", fontsize=7.5, color=MUTED)
+    fig.text(0.008, 0.028, band_note + ".\nRibbons shown on one series per panel (top-8, p50, "
+             "offset 1, 0.9).", fontsize=7.5, color=MUTED, va="bottom")
     fig.text(0.008, 0.010, "Panel specification follows Figure 28 of Anthropic, 'Verbalizable "
              "Representations Form a Global Workspace in Language Models'; the measures are our "
              "implementations of the published descriptions.", fontsize=7.5, color=MUTED)

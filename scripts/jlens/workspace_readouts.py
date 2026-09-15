@@ -16,6 +16,11 @@ applies a J-lens at each selected layer:
       its log-probability at position t+delta, minus the same quantity at a position drawn
       from a within-prompt shuffle -- "Delta log p (vs null)". Log-probabilities depend on
       the logit scale, so the readout applies the full RMSNorm, not just its weight.
+      The paper says only "position-shuffled null". --null cross (or both) adds a null drawn
+      from a random position of a DIFFERENT prompt, which keeps document-level topic
+      persistence in the statistic instead of subtracting it (autocorr_xprompt_d*). Each
+      prompt's partner is the prompt processed just before it in a random cyclic order, so
+      only one extra readout is held in memory; the within-prompt null is unchanged.
 
 Default layers are 25 evenly spaced across the 61, the subsampling the paper's figure uses
 (its own text notes subsampling sharpens transitions, so matching it matters for a direct
@@ -70,6 +75,8 @@ def main():
                     help="evenly spaced layers, as the paper's figure shows")
     ap.add_argument("--max-prompts", type=int, default=None)
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--null", choices=("within", "cross", "both"), default="within",
+                    help="panel (c) null: a shuffled position in the same prompt, in another prompt, or both")
     ap.add_argument("--threads", type=int, default=4)
     ap.add_argument("--label", default=None)
     ap.add_argument("--out", type=Path, default=None)
@@ -132,10 +139,21 @@ def main():
 
     rng = np.random.default_rng(args.seed)
     perms = [rng.permutation(T) for _ in range(P)]
+    within, cross = args.null in ("within", "both"), args.null in ("cross", "both")
+    if cross:
+        if P < 2:
+            raise SystemExit("--null cross needs at least two prompts")
+        rng_x = np.random.default_rng(args.seed + 1)   # own stream: the within-prompt perms are unchanged
+        proc = rng_x.permutation(P)                     # processing order; partner = previous prompt, cyclic
+        upos = rng_x.integers(0, T, size=(P, T))        # position in the partner prompt, per (prompt, t)
+        partner = np.empty(P, np.int64)
+        partner[proc] = np.roll(proc, 1)
+    else:
+        proc = np.arange(P)
     kmax = max(TOPKS)
     rows = []
     print(f"{'L':>3} {'depth':>6} {'top1':>6} {'top8':>6} {'top128':>7} {'kurt p50':>9} "
-          f"{'kurt p99':>9} {'ac d1':>7} {'ac d32':>7}", flush=True)
+          f"{'kurt p99':>9} {'ac d1':>7} {'ac d32':>7}" + (f" {'acx d1':>7} {'acx d32':>7}" if cross else ""), flush=True)
     for L in layers:
         tl = time.time()
         J = None if L >= target else lens[L]
@@ -145,7 +163,11 @@ def main():
         ac_num = {dlt: 0.0 for dlt in OFFSETS}
         ac_null = {dlt: 0.0 for dlt in OFFSETS}
         ac_n = {dlt: 0 for dlt in OFFSETS}
-        for p in range(P):
+        acx_num = {dlt: 0.0 for dlt in OFFSETS}
+        acx_null = {dlt: 0.0 for dlt in OFFSETS}
+        acx_n = {dlt: 0 for dlt in OFFSETS}
+        lp_prev, stash = None, None
+        for i, p in enumerate(proc):
             h = H[p, :, L].float().numpy()
             if J is not None:
                 h = h @ J.T
@@ -164,31 +186,57 @@ def main():
             # (c)
             lp = log_softmax(z)
             top1 = order[:, 0]
-            perm = perms[p]
-            for dlt in OFFSETS:
-                t = np.arange(T - dlt)
-                ok = m[t] & m[t + dlt] & m[perm[t]]
-                if not ok.any():
-                    continue
-                tt = t[ok]
-                ac_num[dlt] += float(lp[tt + dlt, top1[tt]].sum())
-                ac_null[dlt] += float(lp[perm[tt], top1[tt]].sum())
-                ac_n[dlt] += int(ok.sum())
+            if within:
+                perm = perms[p]
+                for dlt in OFFSETS:
+                    t = np.arange(T - dlt)
+                    ok = m[t] & m[t + dlt] & m[perm[t]]
+                    if not ok.any():
+                        continue
+                    tt = t[ok]
+                    ac_num[dlt] += float(lp[tt + dlt, top1[tt]].sum())
+                    ac_null[dlt] += float(lp[perm[tt], top1[tt]].sum())
+                    ac_n[dlt] += int(ok.sum())
+            if cross:
+                q, u = partner[p], upos[p]
+                pending = []
+                for dlt in OFFSETS:
+                    t = np.arange(T - dlt)
+                    ok = m[t] & m[t + dlt] & keep[q][u[t]]
+                    if not ok.any():
+                        continue
+                    tt = t[ok]
+                    acx_num[dlt] += float(lp[tt + dlt, top1[tt]].sum())
+                    acx_n[dlt] += int(ok.sum())
+                    if i == 0:                                     # partner is the last prompt processed
+                        pending.append((dlt, u[tt], top1[tt]))
+                    else:
+                        acx_null[dlt] += float(lp_prev[u[tt], top1[tt]].sum())
+                if i == 0:
+                    stash = pending
+                lp_prev = lp
+        if cross:
+            for dlt, uu, tok in stash:
+                acx_null[dlt] += float(lp_prev[uu, tok].sum())
         ku = np.concatenate(kurt_all)
         r = {"layer": int(L), "depth_0_100": round(100 * L / target, 2),
              **{f"nexttok_top{k}": hits[k] / n_used for k in TOPKS},
              **{f"kurtosis_p{q}": float(np.percentile(ku, q)) for q in KURT_PCTS},
-             **{f"autocorr_d{dlt}": (ac_num[dlt] - ac_null[dlt]) / max(ac_n[dlt], 1) for dlt in OFFSETS},
+             **({f"autocorr_d{dlt}": (ac_num[dlt] - ac_null[dlt]) / max(ac_n[dlt], 1) for dlt in OFFSETS} if within else {}),
+             **({f"autocorr_xprompt_d{dlt}": (acx_num[dlt] - acx_null[dlt]) / max(acx_n[dlt], 1) for dlt in OFFSETS}
+                if cross else {}),
              "n_activations": n_used, "secs": round(time.time() - tl, 1)}
         rows.append(r)
+        fmt = lambda key: f"{r[key]:7.3f}" if key in r else f"{'-':>7}"
         print(f"{L:3d} {r['depth_0_100']:6.1f} {r['nexttok_top1']:6.3f} {r['nexttok_top8']:6.3f} "
               f"{r['nexttok_top128']:7.3f} {r['kurtosis_p50']:9.3f} {r['kurtosis_p99']:9.2f} "
-              f"{r['autocorr_d1']:7.3f} {r['autocorr_d32']:7.3f}   ({r['secs']}s)", flush=True)
+              f"{fmt('autocorr_d1')} {fmt('autocorr_d32')}" + (f" {fmt('autocorr_xprompt_d1')} {fmt('autocorr_xprompt_d32')}" if cross else "")
+              + f"   ({r['secs']}s)", flush=True)
 
     out = {"label": label, "lens": str(args.lens) if not args.subset else None, "subset": args.subset,
            "n_prompts_lens": lens.n, "states": str(args.states), "prompt_span": [lo, lo + P],
            "n_positions": T, "n_layers_total": n_total, "layers": layers, "excluded": excluded, "model": args.model,
-           "topks": list(TOPKS), "kurt_pcts": list(KURT_PCTS), "offsets": list(OFFSETS),
+           "topks": list(TOPKS), "kurt_pcts": list(KURT_PCTS), "offsets": list(OFFSETS), "null": args.null,
            "per_layer": rows}
     out_path.write_text(json.dumps(out, indent=1))
     print(f"wrote {out_path}")

@@ -20,16 +20,31 @@ os.environ.setdefault("OMP_NUM_THREADS", "2")
 from score_lazy import LazyLens
 from extract.extract_hidden_states import load_tokenizer
 
-W = np.load(REPO / "data/model_weights/deepseek_v3/lm_head_weight.npy", mmap_mode="r")
-g = np.load(REPO / "data/model_weights/deepseek_v3/rms_norm_weight.npy").astype(np.float32)
+import argparse
+ap = argparse.ArgumentParser()
+ap.add_argument("--lens", type=Path, default=REPO / "outputs/jlens/lens_v3_filtered40.pt")
+ap.add_argument("--unembed-dir", type=Path, default=REPO / "data/model_weights/deepseek_v3",
+                help="lm_head_weight.npy + rms_norm_weight.npy (effective multiplier)")
+ap.add_argument("--tokenizer", default="/workspace/models/deepseek-v3-awq",
+                help="V3's tokenizer.json path (loaded with load_tokenizer) or a hub id (AutoTokenizer)")
+ap.add_argument("--layers", nargs="+", type=int, default=[0, 15, 30, 45, 59])
+ap.add_argument("--out", type=Path, default=REPO / "outputs/jlens/script_axis.json")
+args = ap.parse_args()
+W = np.load(args.unembed_dir / "lm_head_weight.npy", mmap_mode="r")
+g = np.load(args.unembed_dir / "rms_norm_weight.npy").astype(np.float32)
 V, d = W.shape
-tok = load_tokenizer("/workspace/models/deepseek-v3-awq")
+if Path(args.tokenizer).exists():
+    tok = load_tokenizer(args.tokenizer)
+else:
+    from transformers import AutoTokenizer
+    tok = AutoTokenizer.from_pretrained(args.tokenizer)
+n_tok = len(tok)
 
 def script(s):
-    if any("一" <= c <= "鿿" or "㐀" <= c <= "䶿" for c in s): return "cjk"
+    if any("\u4e00" <= c <= "\u9fff" or "\u3400" <= c <= "\u4dbf" for c in s): return "cjk"
     if any(("a" <= c <= "z") or ("A" <= c <= "Z") for c in s): return "latin"
     return "other"
-cls = np.array([script(tok.decode([i])) for i in range(V)])
+cls = np.array([script(tok.decode([i])) if i < n_tok else "other" for i in range(V)])
 cnt = {k: int((cls == k).sum()) for k in ("cjk", "latin", "other")}
 print("vocabulary by script:", cnt, {k: round(v / V, 3) for k, v in cnt.items()}, flush=True)
 
@@ -71,9 +86,9 @@ rng = np.random.default_rng(0)
 report("random direction (control)", (lambda r: r / np.linalg.norm(r))(rng.standard_normal(d).astype(np.float32)))
 
 print("\n[2] the lens's dominant output direction u1, by layer")
-lens = LazyLens(REPO / "outputs/jlens/lens_v3_filtered40.pt")
+lens = LazyLens(args.lens)
 out = {"vocab_by_script": cnt, "pc_variance_share": (ev[:5] / ev.sum()).tolist(), "layers": {}}
-for L in (0, 15, 30, 45, 59):
+for L in args.layers:
     J = lens[L]
     v = rng.standard_normal(d).astype(np.float32)
     for _ in range(40): v = J.T @ (J @ v); v /= np.linalg.norm(v)
@@ -84,4 +99,4 @@ for L in (0, 15, 30, 45, 59):
     print(f"      |cos(u1, PC1)| {cos_pc1:.3f}   most aligned unembedding PC: PC{best+1} "
           f"(|cos| {abs(float(u1 @ pcs[best])):.3f})", flush=True)
     out["layers"][L] = {"script_separation": sep, "cos_pc1": cos_pc1, "best_pc": best + 1}
-(REPO / "outputs/jlens/script_axis.json").write_text(json.dumps(out, indent=1))
+args.out.write_text(json.dumps(out, indent=1))

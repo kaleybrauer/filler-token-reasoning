@@ -147,6 +147,13 @@ def main():
     ap.add_argument("--vocab-chunk", type=int, default=16384)
     ap.add_argument("--threads", type=int, default=4)
     ap.add_argument("--outdir", type=Path, default=REPO_ROOT / "outputs/jlens_survey")
+    ap.add_argument("--lens-path", type=Path, default=None,
+                    help="a local lens file instead of the Neuronpedia repo")
+    ap.add_argument("--unembed-dir", type=Path, default=None,
+                    help="lm_head_weight.npy + rms_norm_weight.npy (the norm's EFFECTIVE multiplier, e.g. 1+w "
+                         "for Qwen3.5) instead of pulling shards; required for models whose norm is not x*w")
+    ap.add_argument("--n-layers-total", type=int, default=None,
+                    help="decoder blocks incl. the target; depth = layer / (n - 1), as for V3")
     args = ap.parse_args()
     for v in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS"):
         os.environ[v] = str(args.threads)
@@ -156,16 +163,19 @@ def main():
     from huggingface_hub import hf_hub_download, list_repo_files
 
     lens_file = args.lens_file
-    if lens_file is None:
-        files = [f for f in list_repo_files(LENS_REPO, revision=args.revision)
-                 if f.startswith(args.family + "/") and f.endswith(".pt")]
-        if not files:
-            raise SystemExit(f"no lens under {args.family}/ in {LENS_REPO}")
-        lens_file = sorted(files, key=lambda f: ("n1000" not in f, f))[0]
+    if args.lens_path is not None:
+        lp = lens_file = str(args.lens_path)
+    else:
+        if lens_file is None:
+            files = [f for f in list_repo_files(LENS_REPO, revision=args.revision)
+                     if f.startswith(args.family + "/") and f.endswith(".pt")]
+            if not files:
+                raise SystemExit(f"no lens under {args.family}/ in {LENS_REPO}")
+            lens_file = sorted(files, key=lambda f: ("n1000" not in f, f))[0]
+        lp = hf_hub_download(LENS_REPO, lens_file, revision=args.revision,
+                             cache_dir=args.cache, token=token)
     print(f"lens  {lens_file}", flush=True)
-    lp = hf_hub_download(LENS_REPO, lens_file, revision=args.revision,
-                         cache_dir=args.cache, token=token)
-    ck = torch.load(lp, map_location="cpu", weights_only=True)
+    ck = torch.load(lp, map_location="cpu", weights_only=True, mmap=True)
     Js = ck["J"]
     layers = sorted(int(x) for x in Js)
     d = int(ck.get("d_model") or Js[layers[0]].shape[0])
@@ -173,7 +183,13 @@ def main():
     print(f"  {len(layers)} layers [{layers[0]}..{layers[-1]}], d={d}, n_prompts={n_prompts}",
           flush=True)
 
-    U, meta = load_readout(args.model, args.cache, token)
+    if args.unembed_dir is not None:
+        U = (np.load(args.unembed_dir / "lm_head_weight.npy").astype(np.float32)
+             * np.load(args.unembed_dir / "rms_norm_weight.npy").astype(np.float32)[None, :])
+        meta = dict(unembed_key=str(args.unembed_dir / "lm_head_weight.npy"),
+                    norm_key=str(args.unembed_dir / "rms_norm_weight.npy"), tied_embeddings=False, has_norm=True)
+    else:
+        U, meta = load_readout(args.model, args.cache, token)
     print(f"  readout {U.shape} via {meta['unembed_key']}"
           f"{' (tied)' if meta['tied_embeddings'] else ''}"
           f"{'' if meta['has_norm'] else '  [NO FINAL NORM FOUND]'}", flush=True)
@@ -183,7 +199,7 @@ def main():
     print(f"  centred Gram in {time.time()-t0:.0f}s", flush=True)
 
     sel = [L for i, L in enumerate(layers) if i % args.every == 0]
-    depth_den = max(layers) if max(layers) > 0 else 1
+    depth_den = (args.n_layers_total - 1) if args.n_layers_total else (max(layers) if max(layers) > 0 else 1)
     rows = []
     for L in sel:
         t = time.time()

@@ -18,7 +18,12 @@ tokenise to a prefix of the full prompt. Concepts failing this in any prompt are
 Dictionaries (downloaded once to data/dictionaries/): CC-CEDICT (CC BY-SA 4.0), JMdict_e (EDRDG,
 CC BY-SA 4.0).
 
-    python scripts/jlens/build_concept_prompts.py
+The committed concept_prompts.json (extracted 2026-09-15) is v1: build it with --allow-shared-words. There
+9 Japanese words serve 19 concepts (月 month/moon), so 336 prompt texts repeat, not the 294 intended;
+language_geometry.py drops those concepts. Default builds give each Chinese or Japanese word one concept.
+
+    python scripts/jlens/build_concept_prompts.py                         # one concept per word
+    python scripts/jlens/build_concept_prompts.py --allow-shared-words    # v1, as extracted
 """
 from __future__ import annotations
 
@@ -90,6 +95,9 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model-path", default="/workspace/models/deepseek-v3-awq")
     ap.add_argument("--max-concepts", type=int, default=600)
+    ap.add_argument("--allow-shared-words", action="store_true",
+                    help="reproduce v1 (the set extracted 2026-09-15), where one Chinese or Japanese word could "
+                         "serve several concepts (月 month/moon); default: each word belongs to one concept")
     ap.add_argument("--out", type=Path, default=REPO / "scripts/jlens/concept_prompts.json")
     args = ap.parse_args()
     from extract.extract_hidden_states import load_tokenizer
@@ -123,7 +131,12 @@ def main():
 
     # in-context tokenisation check, then cap
     concepts, prompts = [], []
+    taken = set()                       # every zh and ja string of an accepted concept
+    n_shared_skipped = 0
     for c in cands:
+        if not args.allow_shared_words and (c["zh"] in taken or c["ja"] in taken):
+            n_shared_skipped += 1        # would give two concepts an identical state or bare prompt
+            continue
         ok = True
         cp = []
         for lang in ("en", "zh", "ja"):
@@ -140,13 +153,17 @@ def main():
                 break
         if ok:
             concepts.append(c); prompts.extend(cp)
+            taken.update((c["zh"], c["ja"]))
         if len(concepts) >= args.max_concepts:
             break
     same = sum(c["same_ja_zh"] for c in concepts)
     args.out.write_text(json.dumps({"model_path": args.model_path, "templates": TEMPLATES,
                                     "template_0_is_bare": True, "concepts": concepts, "prompts": prompts},
                                    indent=1, ensure_ascii=False))
-    print(f"wrote {args.out}: {len(concepts)} concepts ({same} with identical ja/zh strings), {len(prompts)} prompts")
+    n_dup = len(prompts) - len({q["text"] for q in prompts})
+    print(f"wrote {args.out}: {len(concepts)} concepts ({same} with identical ja/zh strings), {len(prompts)} prompts, "
+          f"{n_dup} duplicate prompt texts (expected: {same}, the bare zh/ja pairs); "
+          f"{n_shared_skipped} candidates skipped for a word already taken")
     import random
     for c in random.Random(0).sample(concepts, 40):
         print(f"   {c['en']:14s} {c['zh']:4s} {c['ja']:4s}{'  (same string)' if c['same_ja_zh'] else ''}")

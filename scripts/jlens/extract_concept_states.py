@@ -9,8 +9,10 @@ Prompts whose token sequences are identical (bare zh and ja prompts with the sam
 once and mapped.
 
 Same conventions as extract_wikitext_states.py (jlens encode with force_bos, ActivationRecorder on
-model.layers storing output[0]); every prompt is asserted to end on the expected concept token;
-G-UNEMBED gates the file. 5,400 prompts x 61 layers x 7168 fp16 ~ 4.7 GB.
+model.layers storing output[0]); every prompt is asserted to end on the expected concept token.
+G-UNEMBED is recorded in the file. A failed check still saves the states (so the forwards can be
+inspected rather than rerun) but exits non-zero, and language_geometry.py refuses such a file.
+5,400 prompts x 61 layers x 7168 fp16 ~ 4.7 GB.
 
     setsid nohup bash logs/extract_concepts.sh >/dev/null 2>&1 </dev/null &
 """
@@ -107,6 +109,8 @@ def main():
     args.out.parent.mkdir(parents=True, exist_ok=True)
     tmp = args.out.with_suffix(".tmp"); torch.save(out, tmp); tmp.replace(args.out)
     print(f"wrote {args.out} ({args.out.stat().st_size/2**30:.2f} GiB) in {(time.perf_counter()-t0)/60:.1f} min")
+    if not out["unembed_check"]["passed"]:
+        raise SystemExit("G-UNEMBED FAILED: states saved for inspection only; the analysis will refuse them")
 
 
 if __name__ == "__main__":

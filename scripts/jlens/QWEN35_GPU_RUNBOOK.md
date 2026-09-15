@@ -22,7 +22,7 @@ local disk (611 GiB of weights, ~35 GB of outputs, the environment). FP8 needs H
 ```bash
 export WORK=/path/to/local/disk            # e.g. /nvme or /root/work
 git clone https://github.com/kaleybrauer/filler-token-reasoning.git $WORK/filler-token-reasoning
-cd $WORK/filler-token-reasoning && git checkout COMMIT_SHA
+cd $WORK/filler-token-reasoning && git checkout c2df06b   # the commit with the extraction script, inputs and this runbook
 command -v uv || { curl -LsSf https://astral.sh/uv/install.sh | sh; source $HOME/.local/bin/env; }
 uv venv $WORK/venv --python 3.11 && source $WORK/venv/bin/activate
 uv pip install torch==2.14.0

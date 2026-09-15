@@ -71,6 +71,10 @@ def main():
     ap.add_argument("--rms-norm", type=Path, default=WEIGHTS / "rms_norm_weight.npy")
     ap.add_argument("--n-layers-total", type=int, default=61)
     ap.add_argument("--threads", type=int, default=4)
+    ap.add_argument("--every", type=int, default=1, help="use every Nth lens layer")
+    ap.add_argument("--remove-top-output-dirs", type=int, default=0,
+                    help="DIAGNOSTIC, not a lens: project each layer's top-K output singular directions out of its "
+                         "Jacobian before comparing layers (tests whether one shared direction drives the similarity)")
     ap.add_argument("--out", type=Path, default=REPO / "outputs/jlens/cka_layers.json")
     args = ap.parse_args()
     for v in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS"):
@@ -87,12 +91,25 @@ def main():
     print(f"centred Gram {G.shape} in {time.time()-t0:.0f}s", flush=True)
 
     lens = LazyLens(args.lens)
-    layers = lens.layers
+    layers = lens.layers[::args.every]
     n = len(layers)
     print(f"loading {n} layers fp16 ({n * d * d * 2 / 1e9:.1f} GB)", flush=True)
     J = np.empty((n, d, d), dtype=np.float16)
+    removed_share = []
     for i, L in enumerate(layers):
-        J[i] = lens[L].astype(np.float16)
+        Ji = lens[L].astype(np.float32)
+        if args.remove_top_output_dirs:
+            k = args.remove_top_output_dirs
+            Qk = np.linalg.qr(np.random.default_rng(L).standard_normal((d, k)).astype(np.float32))[0]
+            for _ in range(30):
+                Qk = np.linalg.qr(Ji @ (Ji.T @ Qk))[0]
+            before = float(np.linalg.norm(Ji)) ** 2
+            Ji = Ji - Qk @ (Qk.T @ Ji)
+            removed_share.append(1 - float(np.linalg.norm(Ji)) ** 2 / before)
+        J[i] = Ji.astype(np.float16)
+    if removed_share:
+        print(f"removed top-{args.remove_top_output_dirs} output directions: share of |J|_F^2 removed per layer "
+              f"{np.round(removed_share, 3).tolist()}", flush=True)
 
     C = np.zeros((n, n), dtype=np.float64)
     diag = np.zeros(n)
@@ -123,7 +140,8 @@ def main():
         {"lens": str(args.lens), "layers": layers, "n_layers_total": args.n_layers_total,
          "cka": C.round(5).tolist(), "boundaries_layer": [int(layers[b1]), int(layers[b2])],
          "band_depth": list(band), "separation_score": float(score),
-         "paper_band_depth": [37.5, 91.7]}, indent=1))
+         "paper_band_depth": [37.5, 91.7], "every": args.every,
+         "removed_top_output_dirs": args.remove_top_output_dirs, "removed_share": removed_share}, indent=1))
     print(f"wrote {args.out}")
 
 

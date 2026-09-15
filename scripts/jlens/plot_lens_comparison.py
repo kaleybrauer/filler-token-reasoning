@@ -29,10 +29,10 @@ from plot_fig28 import AXIS, INK, MUTED, OUT, style
 REPO = Path(__file__).resolve().parents[2]
 J, Q = REPO / "outputs/jlens", REPO / "outputs/jlens/qwen35"
 BLUE, ORANGE, AQUA, GRAY = "#2a78d6", "#eb6834", "#1baf7a", "#a3acb5"
-MODELS = [  # label, colour, per-layer dimensionality/cosine JSON, script-axis JSON, CKA JSON
-    ("DeepSeek-V3 (100 prompts)", BLUE, J / "workspace_signatures_shipped100.json", J / "script_axis.json", J / "cka_layers.json"),
-    ("Qwen3.5-397B (500 prompts)", ORANGE, Q / "survey_qwen35_397b_fp8.json", Q / "script_axis_qwen35_397b.json", Q / "cka_qwen35_397b.json"),
-    ("Qwen3.5-122B (500 prompts)", AQUA, Q / "survey_qwen35_122b.json", Q / "script_axis_qwen35_122b.json", Q / "cka_qwen35_122b.json"),
+MODELS = [  # label, colour, decoder blocks, per-layer dimensionality/cosine JSON, script-axis JSON, CKA JSON
+    ("DeepSeek-V3 (100 prompts)", BLUE, 61, J / "workspace_signatures_shipped100.json", J / "script_axis.json", J / "cka_layers.json"),
+    ("Qwen3.5-397B (500 prompts)", ORANGE, 60, Q / "survey_qwen35_397b_fp8.json", Q / "script_axis_qwen35_397b.json", Q / "cka_qwen35_397b.json"),
+    ("Qwen3.5-122B (500 prompts)", AQUA, 48, Q / "survey_qwen35_122b.json", Q / "script_axis_qwen35_122b.json", Q / "cka_qwen35_122b.json"),
 ]
 NO_BAND = (0, 0)
 
@@ -55,7 +55,7 @@ def main():
     style(b, "B  J-lens vs logit-lens readout directions", "Mean cosine over the vocabulary →", NO_BAND)
     style(c, "C  Is the lens's dominant direction a script axis?", "Han-vs-Latin separation (AUC) →", NO_BAND)
     style(d, "D  Agreement of two independent fits", "Mean per-token readout cosine →", NO_BAND)
-    for label, col, sig_p, axis_p, _ in MODELS:
+    for label, col, n_total, sig_p, axis_p, _ in MODELS:
         sig = load(sig_p)
         if sig:
             x, y = curve(sig["per_layer"], "eff_dim_900")
@@ -64,7 +64,6 @@ def main():
             b.plot(x, y, color=col, lw=2, label=label)
         ax_js = load(axis_p)
         if ax_js:
-            n_total = (sig or {}).get("n_layers_total") or (sig or {}).get("n_layers", 0) + 1
             Ls = sorted(int(k) for k in ax_js["layers"])
             c.plot([100 * L / (n_total - 1) for L in Ls], [ax_js["layers"][str(L)]["script_separation"] for L in Ls],
                    color=col, lw=2, marker="o", ms=6, label=label)
@@ -95,14 +94,16 @@ def main():
             x, y = curve(ag["per_layer"], "readout_cos_mean")
             d.plot(x, y, color=col, lw=2, label=label)
     d.set_ylim(0.4, 1.02)
-    for ax_ in (a, b, c, d):
-        ax_.legend(fontsize=7.5, frameon=False, loc="lower right" if ax_ is not c else "center right")
+    for ax_ in (a, b, d):
+        ax_.legend(fontsize=7.5, frameon=False, loc="lower right")
+    c.legend(fontsize=7.5, frameon=False, loc="upper center", bbox_to_anchor=(0.5, 0.95), ncol=2)
 
     sub = gs[1, 1:].subgridspec(1, 3, wspace=0.25)
-    for i, (label, col, sig_p, _, cka_p) in enumerate(MODELS):
+    for i, (label, col, _, sig_p, _, cka_p) in enumerate(MODELS):
         e = fig.add_subplot(sub[0, i])
         ck = load(cka_p)
-        e.set_title(("E  Layer-by-layer CKA\n" if i == 0 else "\n") + label, fontsize=9.5, color=INK, loc="left")
+        sep = f" · separation {ck['separation_score']:.2f}" if ck and "separation_score" in ck else ""
+        e.set_title(("E  Layer-by-layer CKA\n" if i == 0 else "\n") + label + sep, fontsize=9.5, color=INK, loc="left")
         if not ck:
             e.text(0.5, 0.5, "pending", ha="center", va="center", color=MUTED, transform=e.transAxes)
             e.axis("off")
@@ -113,7 +114,6 @@ def main():
         e.tick_params(labelsize=7.5, colors=MUTED)
         if i == 0:
             e.set_ylabel("depth →", fontsize=8.5, color=MUTED)
-        e.text(2, 4, f"separation {ck.get('separation_score', float('nan')):.2f}", fontsize=7.5, color=INK)
     fig.colorbar(im if 'im' in locals() else None, ax=fig.axes[-3:], shrink=0.7, label="linear CKA") if 'im' in locals() else None
     fig.suptitle("The J-lens itself across models: DeepSeek-V3 vs Qwen3.5", fontsize=13, color=INK, x=0.05, ha="left")
     fig.text(0.05, 0.03, "Depth = layer / (blocks - 1). Lens-only measures: no activations. Qwen3.5 lenses: dallinmj (500 WikiText "

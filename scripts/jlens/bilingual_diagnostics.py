@@ -368,7 +368,9 @@ def cmd_spikes(args):
         p_of, t_of = np.divmod(np.arange(len(valid)), T)
 
         lay = {"depth_0_100": round(100 * L / target, 2), "n_activations": int(valid.sum()),
-               "kurtosis_pcts": {n: pcts(r["kurt"]["full"][valid]) for n, r in res.items()}}
+               "kurtosis_pcts": {n: pcts(r["kurt"]["full"][valid]) for n, r in res.items()},
+               "spike_flat_indices": sp_idx.tolist(),      # into [prompt x position], main lens
+               "n_positions": int(T)}
         if L in ref and args.lenses[0] == "shipped" and P == H.shape[0]:
             lay["check_vs_workspace_readouts"] = {f"p{q}": [lay["kurtosis_pcts"]["shipped"][f"p{q}"],
                                                              ref[L][f"kurtosis_p{q}"]] for q in KURT_PCTS}

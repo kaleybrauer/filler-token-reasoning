@@ -63,10 +63,7 @@ _PREFIX = (("CJK", "Han"), ("HIRAGANA", "Kana"), ("KATAKANA", "Kana"),
            ("SINHALA", "Indic"), ("THAI", "Thai"))
 KURT_PCTS = (1, 10, 25, 50, 75, 90, 99)
 KURT_VARIANTS = ("full", "offset_removed", "latin", "rand_latin_size", "han", "rand_han_size")
-SATURATED = [(215, 69)]          # as workspace_readouts.py: layer-60 fp16 saturation
-STATES = REPO / "outputs/jlens/wikitext_states.pt"
-SHIPPED = REPO / "outputs/jlens/lens_v3_filtered40.pt"
-MODEL = "/workspace/models/deepseek-v3-awq"
+import models                    # noqa: E402  per-model paths (V3 by default, Qwen3.5 for the comparison)
 
 
 # ---------------------------------------------------------------- vocabulary scripts
@@ -90,14 +87,13 @@ def token_class(piece):
     return "space" if not piece.strip() else "punct"
 
 
-def load_vocab(V):
-    cache = REPO / "outputs/jlens/vocab_scripts.json"
+def load_vocab(V, model="v3"):
+    cache = models.get(model)["vocab_cache"]
     if cache.exists():
         v = json.loads(cache.read_text())
         if v["classes"] == list(CLASSES) and len(v["cls"]) == V:
             return np.array(v["cls"], np.int64), v["pieces"]
-    from extract.extract_hidden_states import load_tokenizer
-    tok = load_tokenizer(MODEL)
+    tok = models.load_tokenizer_for(model)
     special = set(tok.all_special_ids) | set(getattr(tok, "added_tokens_decoder", None) or {})
     n_tok = len(tok)
     pieces, cls = [], []
@@ -124,11 +120,10 @@ class Unembed:
     """lm_head in float32 chunks from its fp16 file. The RMSNorm weight is applied on the
     residual side, (x*g) @ W.T == x @ (W*g).T, so the matrix is never copied whole."""
 
-    def __init__(self, torch, cls, chunk=16384):
-        from score_eval_states import WEIGHTS
+    def __init__(self, torch, cls, unembed_dir, chunk=16384):
         self.torch = torch
-        self.W = np.load(WEIGHTS / "lm_head_weight.npy", mmap_mode="r")
-        self.g = torch.from_numpy(np.load(WEIGHTS / "rms_norm_weight.npy").astype(np.float32))
+        self.W = np.load(unembed_dir / "lm_head_weight.npy", mmap_mode="r")
+        self.g = torch.from_numpy(np.load(unembed_dir / "rms_norm_weight.npy").astype(np.float32))
         self.V, self.d = self.W.shape
         self.chunk = chunk
         self.cls = cls
@@ -278,6 +273,12 @@ def setup(args):
         os.environ[v] = str(args.threads)
     import torch
     torch.set_num_threads(args.threads)
+    m = models.get(args.model)
+    if args.states is None:
+        args.states = m["states"]["wikitext"]
+    if args.out_dir is None:
+        args.out_dir = REPO / "outputs/jlens" if args.model == "v3" else models.QS / args.model / "analysis"
+    args.out_dir.mkdir(parents=True, exist_ok=True)
     S = torch.load(args.states, map_location="cpu", weights_only=False, mmap=True)
     if not S["unembed_check"]["passed"]:
         raise SystemExit(f"{args.states} failed G-UNEMBED")
@@ -290,13 +291,12 @@ def setup(args):
     keep = ~sat
     found = [(int(p) + lo, int(t)) for p, t in np.argwhere(sat)]
     print(f"excluded saturated (prompt, position): {found}", flush=True)
-    if args.states == STATES and P == H.shape[0] and found != SATURATED:
-        raise SystemExit(f"saturation scan found {found}, workspace_readouts.py excludes {SATURATED}")
-    from score_eval_states import WEIGHTS
-    V = np.load(WEIGHTS / "lm_head_weight.npy", mmap_mode="r").shape[0]
-    cls, pieces = load_vocab(V)
+    if args.model == "v3" and args.states == m["states"]["wikitext"] and P == H.shape[0] and found != m["saturated"]:
+        raise SystemExit(f"saturation scan found {found}, workspace_readouts.py excludes {m['saturated']}")
+    V = np.load(m["unembed_dir"] / "lm_head_weight.npy", mmap_mode="r").shape[0]
+    cls, pieces = load_vocab(V, args.model)
     t0 = time.time()
-    emb = Unembed(torch, cls)
+    emb = Unembed(torch, cls, m["unembed_dir"])
     rng = np.random.default_rng(args.seed)
     rand_sets = []
     for n in (emb.counts[LATIN], emb.counts[HAN]):
@@ -306,16 +306,6 @@ def setup(args):
     print(f"states {tuple(H.shape)} prompts {lo}..{lo+P-1}; vocabulary {vocab_summary(cls)['shares']}"
           f"  (class means {time.time()-t0:.0f}s)", flush=True)
     return torch, S, H, P, lo, keep, cls, pieces, emb, rand_sets
-
-
-def open_lens(name):
-    if name == "logit":
-        return None
-    if name == "shipped":
-        from score_lazy import LazyLens
-        return LazyLens(SHIPPED)
-    from clean_floor import build_subset
-    return build_subset(REPO / "outputs/jlens", REPO / "outputs/jlens/per_prompt", 40.0, name)
 
 
 def transport(torch, Xraw, lens, L, target):
@@ -345,10 +335,9 @@ def cmd_spikes(args):
     valid = keep.reshape(-1)
     ref_path = REPO / "outputs/jlens/workspace_readouts_shipped100.json"
     ref = ({r["layer"]: r for r in json.loads(ref_path.read_text())["per_layer"]}
-           if ref_path.exists() and args.states == STATES else {})
-    lenses = {name: open_lens(name) for name in args.lenses}
-    from extract.extract_hidden_states import load_tokenizer
-    tok = load_tokenizer(MODEL)
+           if ref_path.exists() and args.model == "v3" and args.states == models.get("v3")["states"]["wikitext"] else {})
+    lenses = {name: models.open_lens(args.model, name) for name in args.lenses}
+    tok = models.load_tokenizer_for(args.model)
     report = {"vocab": vocab_summary(cls), "layers": {}}
     for L in args.layers:
         Xraw = H[:P, :, L].reshape(-1, d).float()
@@ -472,7 +461,7 @@ def cmd_depth(args):
     print(f"{len(pos)} positions per prompt -> {int(sel.sum())} activations per layer; layers {layers}",
           flush=True)
     for name in args.lenses:
-        lens = open_lens(name)
+        lens = models.open_lens(args.model, name)
         rows, store = [], {}
         heads = {"full": "full", "offset_removed": "offset-rm", "latin": "latin",
                  "rand_latin_size": "rand-L", "han": "han", "rand_han_size": "rand-H"}
@@ -526,8 +515,9 @@ def main():
         p.add_argument("--threads", type=int, default=4)
         p.add_argument("--seed", type=int, default=0)
         p.add_argument("--tag", default="")
-        p.add_argument("--states", type=Path, default=STATES)
-        p.add_argument("--out-dir", type=Path, default=REPO / "outputs/jlens")
+        p.add_argument("--model", default="v3", help="models.MODELS key: v3, qwen35_122b, qwen35_397b_fp8")
+        p.add_argument("--states", type=Path, default=None, help="default: the model's WikiText states")
+        p.add_argument("--out-dir", type=Path, default=None, help="default: outputs/jlens (V3), outputs/jlens_qwen35/<model>/analysis")
     sub.choices["depth"].add_argument("--positions-per-prompt", type=int, default=24)
     sub.choices["depth"].add_argument("--store-layers", nargs="+", type=int,
                                       default=[0, 15, 25, 35, 45, 55, 60])

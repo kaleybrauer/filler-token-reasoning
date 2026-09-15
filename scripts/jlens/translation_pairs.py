@@ -92,12 +92,15 @@ def score(latin_rows, han_rows, en2zh, pieces, k):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("npz", nargs="+", type=Path)
+    ap.add_argument("--model", default="v3", help="models.MODELS key, for the vocabulary pieces and output path")
     ap.add_argument("--k", type=int, default=10)
     ap.add_argument("--n-perm", type=int, default=5)
     ap.add_argument("--seed", type=int, default=0)
     args = ap.parse_args()
     en2zh = load_cedict()
-    v = json.loads((REPO / "outputs/jlens/vocab_scripts.json").read_text())
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import models
+    v = json.loads(models.get(args.model)["vocab_cache"].read_text())
     pieces = v["pieces"]
     print(f"CC-CEDICT: {len(en2zh)} English words -> Chinese headwords")
     report = {}
@@ -128,7 +131,9 @@ def main():
                   f"{r['hit_rate'] / max(r['null_hit_rate'], 1e-9):6.1f} | "
                   f"{r['han_precision']:13.1%} {r['null_han_precision']:6.1%}", flush=True)
         report[path.name] = rows
-    out = REPO / "outputs/jlens/translation_pairs.json"
+    out = (REPO / "outputs/jlens/translation_pairs.json" if args.model == "v3"
+           else models.QS / args.model / "analysis" / "translation_pairs.json")
+    out.parent.mkdir(parents=True, exist_ok=True)
     prev = json.loads(out.read_text()) if out.exists() else {}
     prev.update(report)
     out.write_text(json.dumps(prev, indent=1))

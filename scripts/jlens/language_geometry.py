@@ -172,14 +172,15 @@ def synthetic(regime, N=300, d=128, noise=0.9, seed=0):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--states", type=Path, default=REPO / "outputs/jlens/concept_states.pt")
-    ap.add_argument("--lenses", nargs="+", default=["raw", "shipped", "n50", "n50b"])
+    ap.add_argument("--model", default="v3", help="models.MODELS key: v3, qwen35_122b, qwen35_397b_fp8")
+    ap.add_argument("--states", type=Path, default=None, help="default: the model's concept states")
+    ap.add_argument("--lenses", nargs="+", default=None,
+                    help="raw, shipped, and V3 subsets or alt-lens keys; default raw shipped (+ the V3 halves)")
     ap.add_argument("--layers", nargs="+", type=int, default=None)
-    ap.add_argument("--wiki", nargs=2, type=Path, default=[REPO / "outputs/jlens/wiki_zh_states.pt",
-                                                           REPO / "outputs/jlens/wiki_en_states.pt"])
+    ap.add_argument("--wiki", nargs=2, type=Path, default=None, help="zh and en Wikipedia states; default the model's")
     ap.add_argument("--synthetic", action="store_true")
     ap.add_argument("--threads", type=int, default=4)
-    ap.add_argument("--out", type=Path, default=REPO / "outputs/jlens/language_geometry.json")
+    ap.add_argument("--out", type=Path, default=None)
     args = ap.parse_args()
     rng = np.random.default_rng(0)
 
@@ -198,6 +199,14 @@ def main():
     for v in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS"):
         os.environ[v] = str(args.threads)
     import torch
+    import models
+    mdl = models.get(args.model)
+    args.states = args.states or mdl["states"]["concept"]
+    args.wiki = args.wiki or [mdl["states"]["wiki_zh"], mdl["states"]["wiki_en"]]
+    args.lenses = args.lenses or (["raw", "shipped", "n50", "n50b"] if args.model == "v3" else ["raw", "shipped"])
+    args.out = args.out or (REPO / "outputs/jlens/language_geometry.json" if args.model == "v3"
+                            else models.QS / args.model / "analysis" / "language_geometry.json")
+    args.out.parent.mkdir(parents=True, exist_ok=True)
     S = torch.load(args.states, map_location="cpu", mmap=True, weights_only=False)
     if not S["unembed_check"]["passed"]:
         raise SystemExit(f"{args.states} failed G-UNEMBED: {S['unembed_check']}")
@@ -233,16 +242,7 @@ def main():
             wiki[L] = unit(W[0][:, pos, L].float().numpy().reshape(-1, W[0].shape[-1])).mean(0) \
                       - unit(W[1][:, pos, L].float().numpy().reshape(-1, W[1].shape[-1])).mean(0)
 
-    lenses = {}
-    for name in args.lenses:
-        if name == "raw":
-            lenses[name] = None
-        elif name == "shipped":
-            from score_lazy import LazyLens
-            lenses[name] = LazyLens(REPO / "outputs/jlens/lens_v3_filtered40.pt")
-        else:
-            from clean_floor import build_subset
-            lenses[name] = build_subset(REPO / "outputs/jlens", REPO / "outputs/jlens/per_prompt", 40.0, name)
+    lenses = {name: models.open_lens(args.model, "logit" if name == "raw" else name) for name in args.lenses}
 
     report = {"states": str(args.states), "n_concepts": N, "dropped_shared_word": [concepts[ci]["en"] for ci in shared],
               "subset_sizes": {k: int(m.sum()) for k, m in masks.items()}, "layers": layers, "per_lens": {}}

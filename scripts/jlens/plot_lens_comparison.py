@@ -81,6 +81,8 @@ def main():
     if n24:
         x, y = curve(n24["per_layer"], "eff_dim_900")
         a.plot(x, 100 * y, color=ORANGE, lw=1, ls=(0, (2, 2)), label="Qwen3.5-397B (24 prompts)")
+        x, y = curve(n24["per_layer"], "cos_to_logit")
+        b.plot(x, y, color=ORANGE, lw=1, ls=(0, (2, 2)), label="Qwen3.5-397B (24 prompts)")
     n24_axis = load(Q / "script_axis_qwen35_397b_n24.json")
     if n24_axis:
         Ls = sorted(int(k) for k in n24_axis["layers"])

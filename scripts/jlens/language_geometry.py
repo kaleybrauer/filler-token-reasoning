@@ -9,7 +9,7 @@ places translations near each other (nearest-Han-row retrieval from W_U alone is
 52% top-1), so every test here is in residual space, on unit-normalised states, per layer, for the
 raw residual h and the J-transported J_L h (shipped lens, and halves A and B as a noise floor).
 
-  anova       x[lang, concept, template] = mu + a_lang + b_concept + (ab)_lang,concept + e.
+  anova       x[lang, concept, template] = mu + a_lang + b_concept + t_lang,template + (ab)_lang,concept + e.
               Shares of total sum of squares; interaction vs replicate noise (F, per-dimension
               degrees of freedom); how many principal directions carry the interaction. Separately
               for concepts whose Japanese and Chinese strings are identical and those that differ, and for
@@ -17,6 +17,10 @@ raw residual h and the J-transported J_L h (shipped lens, and halves A and B as 
               word with another concept (e.g. 月 for month and moon) are dropped: their states coincide.
                 neutral:      a ~ 0, b large
                 hybrid:       a clearly > 0, b large, (ab) ~ replicate noise (F ~ 1)
+              Pairwise cells separate word identity from language: zh-ja for concepts whose strings are
+              identical (same token, different language context) vs different tokens vs en-zh.
+  context     the same-token control: for pairs of contexts, the concept-specific difference against how
+              different the contexts' own states are, within vs across languages.
                 conditioned:  (ab) well above noise (F >> 1)
   retrieval   nearest cross-language neighbour of each concept (top-1, chance 1/N): raw; per-language
               centred; after projecting out the k leading interaction directions (fit on half the
@@ -47,22 +51,39 @@ def unit(X):
 
 
 def anova(X):
-    """X [n_lang, n_concept, n_template, d] (unit rows). Sums of squares over vectors."""
+    """X [n_lang, n_concept, n_template, d] (unit rows). Sums of squares over vectors.
+    x = mu + a_lang + b_concept + t_lang,template + (ab)_lang,concept + e: the template's own offset
+    (the same for every concept) is a separate term, so the replicate is concept-specific template
+    variation within a language, the right noise for the language x concept interaction."""
     nl, nc, nt, d = X.shape
-    mu = X.mean((0, 1, 2))
-    m_lc = X.mean(2)
-    a = X.mean((1, 2)) - mu
+    mu = X.mean((0, 1, 2)); m_l = X.mean((1, 2)); m_lc = X.mean(2); m_lt = X.mean(1)
+    a = m_l - mu
     b = X.mean((0, 2)) - mu
+    tau = m_lt - m_l[:, None]
     ab = m_lc - mu - a[:, None] - b[None, :]
-    e = X - m_lc[:, :, None]
-    ss = {"lang": nc * nt * (a ** 2).sum(), "concept": nl * nt * (b ** 2).sum(),
+    e = X - m_lc[:, :, None] - tau[:, None, :]
+    ss = {"lang": nc * nt * (a ** 2).sum(), "concept": nl * nt * (b ** 2).sum(), "template": nc * (tau ** 2).sum(),
           "interaction": nt * (ab ** 2).sum(), "replicate": (e ** 2).sum()}
     tot = ((X - mu) ** 2).sum()
-    df_inter, df_err = (nl - 1) * (nc - 1), nl * nc * (nt - 1)
+    df_inter, df_err = (nl - 1) * (nc - 1), nl * (nc - 1) * (nt - 1)
     F = (ss["interaction"] / df_inter) / (ss["replicate"] / df_err) if nt > 1 else float("nan")
     s = np.linalg.svd(ab.reshape(-1, d), compute_uv=False) ** 2
     return {"share": {k: float(v / tot) for k, v in ss.items()}, "F_interaction_vs_replicate": float(F),
             "interaction_top_k_share": {k: float(s[:k].sum() / s.sum()) for k in (1, 4, 16, 64)}}, ab
+
+
+def context_distance(Xs, T):
+    """Same-token control. Xs: context -> [N, d] unit states of the same concepts; T: context -> unit
+    state of the context's last token. For every pair of contexts: how different the contexts are
+    (1 - cos of T) and the concept-specific difference D = mean_c |(x_k(c) - mean_k) - (x_k'(c) - mean_k')|^2.
+    A language effect shows as larger D across languages than within at equal context distance."""
+    import itertools
+    Xc = {k: v - v.mean(0) for k, v in Xs.items()}
+    rows = []
+    for a, b in itertools.combinations(sorted(Xs), 2):
+        rows.append({"pair": f"{a}-{b}", "cross_language": a.split(":")[0] != b.split(":")[0],
+                     "context_distance": float(1 - T[a] @ T[b]), "D": float(((Xc[a] - Xc[b]) ** 2).sum(1).mean())})
+    return rows
 
 
 def ranks(A, B):
@@ -180,7 +201,7 @@ def main():
     S = torch.load(args.states, map_location="cpu", mmap=True, weights_only=False)
     if not S["unembed_check"]["passed"]:
         raise SystemExit(f"{args.states} failed G-UNEMBED: {S['unembed_check']}")
-    spec, H = S["spec"], S["H"]
+    spec, H, TS = S["spec"], S["H"], S["template_states"]
     concepts, prompts = spec["concepts"], spec["prompts"]
     # A word used for more than one concept (polysemous single kanji: 月 month/moon) gives different
     # concepts identical states in that language: drop every concept involved.
@@ -227,7 +248,7 @@ def main():
               "subset_sizes": {k: int(m.sum()) for k, m in masks.items()}, "layers": layers, "per_lens": {}}
     for name, lens in lenses.items():
         rows = {}
-        print(f"\n--- {name} ---\n{'L':>3} {'lang':>6} {'concept':>8} {'inter':>6} {'repl':>6} {'F':>6} | en-zh top1 raw/centred "
+        print(f"\n--- {name} ---\n{'L':>3} {'lang':>6} {'concept':>8} {'inter':>6} {'repl':>6} {'F':>6} {'F same-tok':>10} | en-zh top1 raw/centred "
               f"| zh-ja centred same/diff | zh-en AUC cos(t1,t2) cos(wiki) | ceiling en", flush=True)
         for L in layers:
             t0 = time.time()
@@ -245,12 +266,22 @@ def main():
                     vecs = Jd.T @ (Jd @ vecs); vecs /= np.linalg.norm(vecs)
                 extra["lens_top_output_direction"] = (Jd @ vecs)[:, 0]
             o = analyse_layer(X, masks, np.random.default_rng(L), extra)
+            # the same-token test: zh and ja prompts for concepts whose strings are identical differ only
+            # in the language of the context; the different-token and en-zh cells add word identity
+            o["pairwise_anova"] = {"zh-ja same token": anova(X[1:, same])[0], "zh-ja different tokens": anova(X[1:, ~same])[0],
+                                   "zh-ja same token multichar": anova(X[1:, same & multi])[0],
+                                   "en-zh": anova(X[:2])[0], "en-ja": anova(X[[0, 2]])[0]}
+            Xs = {f"{LANGS[li]}:{t + 1}": X[li, same, t] for li in (1, 2) for t in (0, 1)}
+            T = {k: unit((TS[k]["H"][L].float().numpy().astype(np.float64)) if J is None
+                         else (TS[k]["H"][L].float().numpy() @ J.T).astype(np.float64)) for k in Xs}
+            o["context_distance_same_token"] = context_distance(Xs, T)
             o["secs"] = round(time.time() - t0, 1)
             rows[L] = o
             a, r, dz = o["anova"], o["retrieval"], o["language_directions"]["zh-en"]
             zj = r["zh-ja"]
             print(f"{L:3d} {a['share']['lang']:6.3f} {a['share']['concept']:8.3f} {a['share']['interaction']:6.3f} "
-                  f"{a['share']['replicate']:6.3f} {a['F_interaction_vs_replicate']:6.2f} | "
+                  f"{a['share']['replicate']:6.3f} {a['F_interaction_vs_replicate']:6.2f} "
+                  f"{o['pairwise_anova']['zh-ja same token']['F_interaction_vs_replicate']:10.2f} | "
                   f"{r['en-zh']['raw']['top1']:.2f}/{r['en-zh']['centred']['top1']:.2f} | "
                   f"{zj.get('centred_same_ja_zh_string', {}).get('top1', float('nan')):.2f}/{zj.get('centred_different_ja_zh_string', {}).get('top1', float('nan')):.2f} | "
                   f"{dz['auc_cross_validated']:.2f} {dz['cos_template1_template2']:.2f} {dz.get('abs_cos_wiki_zh_minus_en', float('nan')):.2f} | "

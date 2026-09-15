@@ -83,6 +83,7 @@ def main():
     ap.add_argument("--n-layers-total", type=int, default=61)
     ap.add_argument("--threads", type=int, default=4)
     ap.add_argument("--every", type=int, default=1, help="use every Nth lens layer")
+    ap.add_argument("--subset", default=None, help="V3 only: build the lens from a named prompt subset (n25, n50, n50b, ...)")
     ap.add_argument("--remove-top-output-dirs", type=int, default=0,
                     help="DIAGNOSTIC, not a lens: project each layer's top-K output singular directions out of its "
                          "Jacobian before comparing layers (tests whether one shared direction drives the similarity)")
@@ -101,7 +102,11 @@ def main():
     del U
     print(f"centred Gram {G.shape} in {time.time()-t0:.0f}s", flush=True)
 
-    lens = LazyLens(args.lens)
+    if args.subset:
+        from clean_floor import build_subset
+        lens = build_subset(REPO / "outputs/jlens", REPO / "outputs/jlens/per_prompt", 40.0, args.subset)
+    else:
+        lens = LazyLens(args.lens)
     layers = lens.layers[::args.every]
     n = len(layers)
     print(f"loading {n} layers fp16 ({n * d * d * 2 / 1e9:.1f} GB)", flush=True)
@@ -148,7 +153,7 @@ def main():
           f"(Sonnet 4.5 reported 37.5-91.7%)")
 
     args.out.write_text(json.dumps(
-        {"lens": str(args.lens), "layers": layers, "n_layers_total": args.n_layers_total,
+        {"lens": str(args.lens) if not args.subset else None, "subset": args.subset, "layers": layers, "n_layers_total": args.n_layers_total,
          "cka": C.round(5).tolist(), "boundaries_layer": [int(layers[b1]), int(layers[b2])],
          "band_depth": list(band), "separation_score": float(score),
          "paper_band_depth": [37.5, 91.7], "every": args.every,

@@ -147,8 +147,14 @@ def main():
         d = out / "unembed"
         if r.require((d / "check.json").exists() and (d / "lm_head_weight.npy").exists(), "unembedding export present"):
             chk = json.loads((d / "check.json").read_text())
-            r.require(chk["passed"], f"G-UNEMBED passed on the model (top-1 {chk['top1_agreement']}, corr {chk['logit_corr']}, "
-                                     f"norm convention {chk['norm_convention']})")
+            # the GPU box's runbook patch also compares the offline readout with an fp32 recomputation through the
+            # model's own norm and lm_head, because bf16 logits can tie a near-tied top-2 and flip top-1
+            fp32 = chk.get("fp32_reference")
+            extra = (f"; fp32 reference top-1 {fp32['top1_agreement']}, corr {fp32['logit_corr']}, "
+                     f"max |diff| {fp32['max_abs_diff']}") if fp32 else ""
+            r.require(chk["passed"], f"G-UNEMBED passed via {chk.get('passed_via', 'bf16')} (bf16 top-1 "
+                                     f"{chk['top1_agreement']}, corr {chk['logit_corr']}, norm convention "
+                                     f"{chk['norm_convention']}{extra})")
             r.require(np.load(d / "lm_head_weight.npy", mmap_mode="r").shape[0] == VOCAB, f"vocabulary {VOCAB}")
             r.notes["g_unembed"] = chk
             hub = None if args.hub_dir == "none" else Path(args.hub_dir) if args.hub_dir else models.Q / tag / "unembed_hub"

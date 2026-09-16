@@ -28,11 +28,27 @@ uv venv $WORK/venv --python 3.11 && source $WORK/venv/bin/activate
 uv pip install torch==2.14.0
 uv pip install transformers==5.16.1 accelerate safetensors numpy "huggingface_hub[hf_transfer]"
 uv pip install --no-deps "git+https://github.com/anthropics/jacobian-lens@581d398613e5602a5af361e1c34d3a92ea82ba8e"
-uv pip install kernels || echo "optional hub kernels unavailable: the torch fallback for the linear-attention layers is used"
+uv pip install "kernels==0.16.2" "kernels-data==0.16.2" || echo "hub kernels unavailable: fine for bf16, but the FP8 model needs them when it spans several GPUs"
+# transformers 5.16.1 bug, hit by every Qwen3-family FP8 load: quantizer_finegrained_fp8.update_tp_plan does
+# FP8Experts._impl_tp_layer_overrides.get(impl), which is None for every impl but deepgemm_megamoe ->
+# AttributeError. Append `or {}` to that line (the TP plan is unused in a single-process device_map load).
+python - <<'PATCH'
+import transformers.quantizers.quantizer_finegrained_fp8 as q
+p = q.__file__; s = open(p).read()
+old = "layer_overrides = FP8Experts._impl_tp_layer_overrides.get(impl)\n"
+if old in s:
+    open(p, "w").write(s.replace(old, "layer_overrides = FP8Experts._impl_tp_layer_overrides.get(impl) or {}\n"))
+    print("patched", p)
+else:
+    print("already patched or changed upstream:", p)
+PATCH
 python -c "import torch, transformers, jlens; print(torch.__version__, torch.cuda.is_available(), torch.cuda.device_count(), transformers.__version__, jlens.__file__)"
 ```
 Expect `2.14.0 True 4 5.16.1 .../site-packages/jlens/__init__.py`. transformers must be 5.16.1 (the version the
 inputs were built and dry-run with). jlens must import from site-packages, NOT from the repo's `scripts/jlens`.
+`kernels` must be <0.17: 5.16.1 needs the kernels-community/finegrained-fp8 Triton kernel for the multi-GPU FP8
+path, and 0.17.0 makes every FP8 forward raise ImportError. Both of these, and the device fix now folded into
+`extract_qwen35_states.py`, were found on the 2026-09-15 run: `QWEN35_GPU_RUN_NOTES.diff` is that run's record.
 
 ## 2. Weights to local disk (20-60 min, can run while you do step 1)
 ```bash

@@ -202,13 +202,25 @@ def step_unembed(lm, out, prov):
     offline = (h / torch.sqrt(h.pow(2).mean(-1, keepdim=True) + eps) * torch.from_numpy(g)) @ torch.from_numpy(W).float().T
     with torch.no_grad():
         online = lm.unembed(h).float().cpu()
-    top1 = float((offline.argmax(-1) == online.argmax(-1)).float().mean())
-    corr = float(np.mean([np.corrcoef(offline[i].numpy(), online[i].numpy())[0, 1] for i in range(len(h))]))
-    max_abs = float((offline - online).abs().max())
+        # and the same readout in fp32 through the model's own final norm and lm_head: bf16 logits are rounded to
+        # 2^-7 relative steps, which can tie a near-tied top-2 and flip top-1 with no error in the readout itself
+        head_w = lm._lm_head.weight
+        normed = lm._final_norm(h.to(lm._final_norm.weight.device)).float()
+        online_fp32 = F.linear(normed.to(head_w.device), head_w.float()).cpu()
+
+    def agreement(ref):
+        top1 = float((offline.argmax(-1) == ref.argmax(-1)).float().mean())
+        corr = float(np.mean([np.corrcoef(offline[i].numpy(), ref[i].numpy())[0, 1] for i in range(len(h))]))
+        max_abs = float((offline - ref).abs().max())
+        return {"top1_agreement": top1, "logit_corr": round(corr, 6), "max_abs_diff": round(max_abs, 4),
+                "max_abs_diff_relative": round(max_abs / float(ref.abs().max()), 6),
+                "passed": top1 == 1.0 and corr > 0.999}
+
+    bf16, fp32 = agreement(online), agreement(online_fp32)
     chk = {"n_checked": len(h), "norm_convention": convention, "norm_probe_rel_err": errs, "rms_norm_eps": eps,
-           "top1_agreement": top1, "logit_corr": round(corr, 6), "max_abs_diff": round(max_abs, 4),
-           "max_abs_diff_relative": round(max_abs / float(online.abs().max()), 6),
-           "passed": top1 == 1.0 and corr > 0.999, "provenance": prov}
+           **{k: v for k, v in bf16.items() if k != "passed"}, "bf16_passed": bf16["passed"], "fp32_reference": fp32,
+           "passed": bf16["passed"] or fp32["passed"],
+           "passed_via": "bf16" if bf16["passed"] else "fp32_reference" if fp32["passed"] else None, "provenance": prov}
     (d / "check.json").write_text(json.dumps(chk, indent=1, default=str))
     print(f"G-UNEMBED: {chk}", flush=True)
     if not chk["passed"]:
@@ -318,7 +330,8 @@ def step_concepts(lm, out, spec, max_concepts, chk, prov):
     t0 = time.perf_counter()
     for k, i in enumerate(run):
         acts = record(lm, lm.encode(prompts[i]["text"]), layers)
-        H[i] = to_fp16(torch.stack([acts[L][-1] for L in layers]), clamped, {"prompt": i})
+        # device_map="auto" leaves each layer's state on its own GPU; torch.stack needs one device
+        H[i] = to_fp16(torch.stack([acts[L][-1].to(acts[layers[0]].device) for L in layers]), clamped, {"prompt": i})
         if (k + 1) % 200 == 0:
             el = time.perf_counter() - t0
             print(f"  concepts {k + 1}/{len(run)}  {el / (k + 1):.2f}s/prompt  eta {(len(run) - k - 1) * el / (k + 1) / 60:.1f} min", flush=True)
@@ -329,7 +342,8 @@ def step_concepts(lm, out, spec, max_concepts, chk, prov):
     for lang, tpls in spec["templates"].items():
         for ti, tpl in enumerate(tpls, start=1):
             acts = record(lm, lm.encode(tpl), layers)
-            template_states[f"{lang}:{ti}"] = {"text": tpl, "H": to_fp16(torch.stack([acts[L][-1] for L in layers]), clamped, {"template": f"{lang}:{ti}"})}
+            template_states[f"{lang}:{ti}"] = {"text": tpl, "H": to_fp16(
+                torch.stack([acts[L][-1].to(acts[layers[0]].device) for L in layers]), clamped, {"template": f"{lang}:{ti}"})}
     sub = {**spec, "prompts": prompts}
     if max_concepts:
         sub["concepts"] = spec["concepts"][:max_concepts]

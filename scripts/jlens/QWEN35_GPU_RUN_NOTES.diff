@@ -1,0 +1,87 @@
+# Local modifications used to produce these outputs (standalone GPU box, 4x H200, 2026-09-15). Not committed anywhere.
+# Repo kaleybrauer/filler-token-reasoning @ c2df06b; environment per QWEN35_GPU_RUNBOOK.md step 1 except item 4.
+#
+# 1. extract_qwen35_states.py step_concepts (concepts + templates): torch.stack over layers that live on different GPUs
+#    (device_map="auto") raised "Expected all tensors to be on the same device". Each layer's state is now moved to one
+#    GPU before stacking; the fp16 conversion still happens on GPU, values unchanged. Applied before 122B concepts
+#    (122B unembed + paragraphs were produced by the unmodified script) and for all of 397B.
+# 2. extract_qwen35_states.py step_unembed: G-UNEMBED additionally compares the offline readout with an fp32
+#    recomputation through the model's own final norm and lm_head ("fp32_reference" in check.json). Pass if either
+#    the bf16 comparison (original keys, "bf16_passed") or the fp32 one has top-1 1.0 and corr > 0.999 ("passed_via").
+#    397B: bf16 top-1 0.875 (probe 207: fp32 top-2 ' no' 16.328 vs ' the' 16.311, both 16.375 in bf16, argmax tie),
+#    fp32_reference top-1 1.0, corr 1.0, max_abs 3e-5 -> passed via fp32_reference. 122B check.json predates this
+#    change (passed on bf16). Approved by Kaley before the 397B rerun.
+# 3. transformers 5.16.1 quantizers/quantizer_finegrained_fp8.py update_tp_plan: FP8Experts._impl_tp_layer_overrides
+#    .get(impl) returns None for any impl but deepgemm_megamoe, so every Qwen3-family FP8 load raised
+#    AttributeError: 'NoneType' object has no attribute 'get'. Fixed with "or {}" (identity; the TP plan is unused
+#    in a single-process device_map load).
+# 4. kernels: the unpinned "uv pip install kernels" gave 0.17.0, but transformers 5.16.1 accepts >=0.16.0,<0.17.0 and
+#    needs it for the kernels-community/finegrained-fp8 Triton kernel (the only FP8 path when the model spans several
+#    GPUs); with 0.17.0 every FP8 forward raises ImportError. Pinned kernels==0.16.2 (+ kernels-data==0.16.2) after
+#    the 122B run. No effect on bf16 compute: hub layer kernels apply only with use_kernels=True; fla/causal_conv1d
+#    are not installed, so the linear-attention layers ran the torch path in both models.
+#
+diff --git a/scripts/jlens/extract_qwen35_states.py b/scripts/jlens/extract_qwen35_states.py
+index 0fb025a..aabd0cb 100644
+--- a/scripts/jlens/extract_qwen35_states.py
++++ b/scripts/jlens/extract_qwen35_states.py
+@@ -202,13 +202,24 @@ def step_unembed(lm, out, prov):
+     offline = (h / torch.sqrt(h.pow(2).mean(-1, keepdim=True) + eps) * torch.from_numpy(g)) @ torch.from_numpy(W).float().T
+     with torch.no_grad():
+         online = lm.unembed(h).float().cpu()
+-    top1 = float((offline.argmax(-1) == online.argmax(-1)).float().mean())
+-    corr = float(np.mean([np.corrcoef(offline[i].numpy(), online[i].numpy())[0, 1] for i in range(len(h))]))
+-    max_abs = float((offline - online).abs().max())
++        # the same readout in fp32 through the model's own final norm and lm_head: bf16 logits are rounded to 2^-7
++        # relative steps, which can tie a near-tied top-2 and flip top-1 without any readout error
++        head_w = lm._lm_head.weight
++        normed = lm._final_norm(h.to(lm._final_norm.weight.device)).float()
++        online_fp32 = F.linear(normed.to(head_w.device), head_w.float()).cpu()
++
++    def agreement(ref):
++        top1 = float((offline.argmax(-1) == ref.argmax(-1)).float().mean())
++        corr = float(np.mean([np.corrcoef(offline[i].numpy(), ref[i].numpy())[0, 1] for i in range(len(h))]))
++        max_abs = float((offline - ref).abs().max())
++        return {"top1_agreement": top1, "logit_corr": round(corr, 6), "max_abs_diff": round(max_abs, 4),
++                "max_abs_diff_relative": round(max_abs / float(ref.abs().max()), 6), "passed": top1 == 1.0 and corr > 0.999}
++
++    bf16, fp32 = agreement(online), agreement(online_fp32)
+     chk = {"n_checked": len(h), "norm_convention": convention, "norm_probe_rel_err": errs, "rms_norm_eps": eps,
+-           "top1_agreement": top1, "logit_corr": round(corr, 6), "max_abs_diff": round(max_abs, 4),
+-           "max_abs_diff_relative": round(max_abs / float(online.abs().max()), 6),
+-           "passed": top1 == 1.0 and corr > 0.999, "provenance": prov}
++           **{k: v for k, v in bf16.items() if k != "passed"}, "bf16_passed": bf16["passed"], "fp32_reference": fp32,
++           "passed": bf16["passed"] or fp32["passed"],
++           "passed_via": "bf16" if bf16["passed"] else "fp32_reference" if fp32["passed"] else None, "provenance": prov}
+     (d / "check.json").write_text(json.dumps(chk, indent=1, default=str))
+     print(f"G-UNEMBED: {chk}", flush=True)
+     if not chk["passed"]:
+@@ -318,7 +329,7 @@ def step_concepts(lm, out, spec, max_concepts, chk, prov):
+     t0 = time.perf_counter()
+     for k, i in enumerate(run):
+         acts = record(lm, lm.encode(prompts[i]["text"]), layers)
+-        H[i] = to_fp16(torch.stack([acts[L][-1] for L in layers]), clamped, {"prompt": i})
++        H[i] = to_fp16(torch.stack([acts[L][-1].to(acts[layers[0]].device) for L in layers]), clamped, {"prompt": i})
+         if (k + 1) % 200 == 0:
+             el = time.perf_counter() - t0
+             print(f"  concepts {k + 1}/{len(run)}  {el / (k + 1):.2f}s/prompt  eta {(len(run) - k - 1) * el / (k + 1) / 60:.1f} min", flush=True)
+@@ -329,7 +340,7 @@ def step_concepts(lm, out, spec, max_concepts, chk, prov):
+     for lang, tpls in spec["templates"].items():
+         for ti, tpl in enumerate(tpls, start=1):
+             acts = record(lm, lm.encode(tpl), layers)
+-            template_states[f"{lang}:{ti}"] = {"text": tpl, "H": to_fp16(torch.stack([acts[L][-1] for L in layers]), clamped, {"template": f"{lang}:{ti}"})}
++            template_states[f"{lang}:{ti}"] = {"text": tpl, "H": to_fp16(torch.stack([acts[L][-1].to(acts[layers[0]].device) for L in layers]), clamped, {"template": f"{lang}:{ti}"})}
+     sub = {**spec, "prompts": prompts}
+     if max_concepts:
+         sub["concepts"] = spec["concepts"][:max_concepts]
+--- a/transformers/quantizers/quantizer_finegrained_fp8.py (5.16.1)
++++ b/transformers/quantizers/quantizer_finegrained_fp8.py
+@@ -185,7 +185,7 @@
+         from ..integrations.finegrained_fp8 import FP8Experts
+ 
+         impl = getattr(config, "_experts_implementation", None)
+-        layer_overrides = FP8Experts._impl_tp_layer_overrides.get(impl)
++        layer_overrides = FP8Experts._impl_tp_layer_overrides.get(impl) or {}
+         for plan_attr in ("base_model_tp_plan", "base_model_ep_plan"):
+             base_plan = getattr(config, plan_attr, None) or {}
+             # Per-impl rewrite of the experts parallel-layer kind. Applied LAST so it composes

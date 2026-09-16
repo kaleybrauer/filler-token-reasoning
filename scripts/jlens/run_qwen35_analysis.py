@@ -47,6 +47,8 @@ def main():
     ap.add_argument("--logs", type=Path, default=REPO / "logs")
     ap.add_argument("--check-args", default="", help="extra check_qwen35_transfer.py arguments (dry runs only)")
     ap.add_argument("--no-wait", action="store_true", help="do not wait for other jlens jobs to finish")
+    ap.add_argument("--skip-alt", action="store_true", help="leave the alternative-lens runs (the 397B's 24-prompt lens) "
+                                                            "for a later pass, so the main results land first")
     args = ap.parse_args()
     py = shlex.split(args.python)
     args.logs.mkdir(parents=True, exist_ok=True)
@@ -71,7 +73,7 @@ def main():
         if not run(f"check_{M}", None, [S + "check_qwen35_transfer.py", M] + shlex.split(args.check_args)):
             print(f"nothing run for {M}: see {args.logs / f'qwen35_check_{M}.log'}", flush=True)
             continue
-        alt = sorted(m["alt_lenses"])                       # the 397B's 24-prompt lens
+        alt = [] if args.skip_alt else sorted(m["alt_lenses"])      # the 397B's 24-prompt lens
         run(f"readouts_{M}_shipped", A / "workspace_readouts_shipped.json",
             [S + "workspace_readouts.py", "--model", M, "--label", "shipped"])
         for key in alt:
@@ -92,7 +94,10 @@ def main():
             run(f"pairs_{M}", A / "translation_pairs.json", [S + "translation_pairs.py", "--model", M] + topk,
                 env={"OMP_NUM_THREADS": "1"})
         run(f"geometry_{M}", A / "language_geometry.json",
-            [S + "language_geometry.py", "--model", M, "--lenses", "raw", "shipped"] + alt)
+            [S + "language_geometry.py", "--model", M, "--lenses", "raw", "shipped"])
+        for key in alt:      # its own file, so the two passes stay idempotent
+            run(f"geometry_{M}_{key}", A / f"language_geometry_{key}.json",
+                [S + "language_geometry.py", "--model", M, "--lenses", key, "--out", str(A / f"language_geometry_{key}.json")])
     print("QWEN35_ANALYSIS_DONE", flush=True)
 
 

@@ -44,6 +44,23 @@ Usage (3x H200, model load ~13 min, then ~38 min/prompt):
     python scripts/jlens/refit_prompts.py --indices 76,24,56,16,21,11,57,15,40,29,7,52 \
         --range 100:115 --outdir outputs/jlens/per_prompt
     (one model load; idx < 100 saved fp32 for exact subtraction, idx >= 100 fp16)
+
+OTHER TARGET LAYERS (PENULT_RUNBOOK.md). --target-layer 59 fits d h_59 / d h_l for source
+layers 0..58: the paper's own Sonnet lens targets the penultimate layer. Such files are not
+terms of the n=100 sum, so the run needs --allow-setting-drift and its OWN --outdir: the
+script refuses the target-60 directory, and refuses any directory whose existing files were
+fitted to a different target (they would be skipped as "already on disk"). --keep-order fits
+the indices in the order given instead of sorted, so an optional prompt can go last.
+    python scripts/jlens/refit_prompts.py --target-layer 59 --allow-setting-drift \
+        --indices 100,101,102,103,104 --dtype fp16 --outdir outputs/jlens/per_prompt_target59 \
+        --stack-check 100
+
+STACK CHECK (--stack-check IDX). On a new box, before any long fit: recompute prompt IDX's
+Jacobian at two source layers (default 50 and 59) at the settings and target of its stored
+per-prompt file, and stop unless both match to --stack-check-tol (relative Frobenius). The
+backward spans only target - min(layers) blocks, about a sixth of a prompt for 50,59. A missing
+patch (AWQ leaves not in train mode, moe_infer not rewritten, checkpointing off) changes J by
+far more than the tolerance; the fp16 rounding of a stored file is ~5e-4.
 """
 
 from __future__ import annotations
@@ -84,7 +101,51 @@ def parse_indices(args) -> list[int]:
         idx += list(range(a, b))
     if not idx:
         raise SystemExit("give --indices and/or --range")
+    if args.keep_order:
+        return list(dict.fromkeys(idx))
     return sorted(set(idx))
+
+
+def recorded_target(path: Path) -> int:
+    """The target layer a per-prompt file was fitted to (metadata only; tensors stay on disk)."""
+    ck = torch.load(path, map_location="cpu", weights_only=False, mmap=True)
+    return int(ck["settings"]["target_layer"])
+
+
+def stack_check(args, lens_model, prompts, settings):
+    """Recompute a stored per-prompt Jacobian at a few source layers; SystemExit unless it reproduces."""
+    i = args.stack_check
+    ref_path = args.stack_check_dir / f"J_p{i:04d}.pt"
+    ref = torch.load(ref_path, map_location="cpu", weights_only=False, mmap=True)
+    rs = ref["settings"]
+    keys = ("dim_batch", "gradient_checkpointing", "cotangent_scale", "max_seq_len", "skip_first")
+    differ = {k: (rs.get(k), settings[k]) for k in keys if rs.get(k) != settings[k]}
+    if differ:
+        raise SystemExit(f"STACK_CHECK_FAILED: {ref_path.name} was fitted with other settings {differ} "
+                         f"(stored, this run); it cannot be reproduced here")
+    if hashlib.sha1(prompts[i].encode()).hexdigest() != ref["prompt_sha1"]:
+        raise SystemExit(f"STACK_CHECK_FAILED: corpus prompt {i} is not the prompt {ref_path.name} was fitted on")
+    layers = sorted(int(x) for x in args.stack_check_layers.split(","))
+    target = int(rs["target_layer"])
+    print(f"  stack check: idx {i} at target {target}, layers {layers}, against {ref_path}", flush=True)
+    t0 = time.perf_counter()
+    J, _, _, _, n_retries = jacobian_for_prompt_scaled(
+        lens_model, prompts[i], layers, target_layer=target, dim_batch=settings["dim_batch"],
+        max_seq_len=settings["max_seq_len"], skip_first=settings["skip_first"],
+        scale=float(ref["scale_used"]))
+    rel = {}
+    for L in layers:
+        want = ref["J"][L].float()
+        rel[L] = float((J[L].float() - want).norm() / want.norm())
+    del ref
+    worst = max(rel.values())
+    print(f"  stack check {time.perf_counter() - t0:.0f}s: relative Frobenius difference "
+          + ", ".join(f"L{L} {r:.2e}" for L, r in rel.items())
+          + f" (tolerance {args.stack_check_tol:g}; retries {n_retries})", flush=True)
+    if not worst <= args.stack_check_tol:
+        raise SystemExit(f"STACK_CHECK_FAILED: the fitting stack does not reproduce {ref_path.name} "
+                         f"(worst {worst:.3e}). Check the patches line and the environment before fitting.")
+    print("STACK_CHECK_OK", flush=True)
 
 
 def _atomic_save(obj, path: Path):
@@ -114,6 +175,18 @@ def main():
     ap.add_argument("--max-seq-len", type=int, default=ORIGINAL["max_seq_len"])
     ap.add_argument("--device-map", default=ORIGINAL["device_map"])
     ap.add_argument("--max-memory-gib", default="130,122,108")
+    ap.add_argument("--target-layer", type=int, default=ORIGINAL["target_layer"],
+                    help="Layer whose residual is differentiated; source layers are 0..target-1. "
+                         "60 (default) is the n=100 fit's; 59 is the penultimate-layer lens "
+                         "(needs --allow-setting-drift and its own --outdir)")
+    ap.add_argument("--keep-order", action="store_true",
+                    help="Fit the indices in the order given (default: sorted)")
+    ap.add_argument("--stack-check", type=int, default=None, metavar="IDX",
+                    help="Before fitting, recompute IDX's J at --stack-check-layers and compare with "
+                         "its stored file in --stack-check-dir (at that file's settings); stop on mismatch")
+    ap.add_argument("--stack-check-dir", type=Path, default=REPO_ROOT / "outputs/jlens/per_prompt")
+    ap.add_argument("--stack-check-layers", default="50,59")
+    ap.add_argument("--stack-check-tol", type=float, default=1e-2)
     ap.add_argument("--allow-setting-drift", action="store_true",
                     help="Proceed even if settings differ from the original run's")
     args = ap.parse_args()
@@ -123,15 +196,26 @@ def main():
                     gradient_checkpointing=not args.no_gradient_checkpointing,
                     cotangent_scale=args.cotangent_scale, max_seq_len=args.max_seq_len,
                     skip_first=ORIGINAL["skip_first"], device_map=args.device_map,
-                    target_layer=ORIGINAL["target_layer"])
+                    target_layer=args.target_layer)
     drift = {k: (settings[k], ORIGINAL[k]) for k in ORIGINAL if settings[k] != ORIGINAL[k]}
     if drift and not args.allow_setting_drift:
         raise SystemExit(f"settings differ from the original fit {drift}; the refit would "
                          f"not reproduce the summed J_p. Pass --allow-setting-drift to override.")
+    default_outdir = (REPO_ROOT / "outputs/jlens/per_prompt").resolve()
+    if args.target_layer != ORIGINAL["target_layer"] and args.outdir.resolve() == default_outdir:
+        raise SystemExit(f"--target-layer {args.target_layer}: {default_outdir} holds the target-"
+                         f"{ORIGINAL['target_layer']} Jacobians the shipped lens was built from. "
+                         f"Give this run its own --outdir.")
 
     indices = parse_indices(args)
     corpus = json.loads(args.prompts.read_text())
     prompts = corpus["prompts"]
+    # Existing files are skipped below, so one fitted to another target would silently stand in.
+    other = {i: t for i in indices if (f := args.outdir / f"J_p{i:04d}.pt").exists()
+             and (t := recorded_target(f)) != args.target_layer}
+    if other:
+        raise SystemExit(f"{args.outdir} already holds files fitted to another target layer "
+                         f"{other} (idx: target); this run is --target-layer {args.target_layer}.")
     todo = [i for i in indices if not (args.outdir / f"J_p{i:04d}.pt").exists()]
     print(f"{len(indices)} requested, {len(indices) - len(todo)} already on disk, "
           f"{len(todo)} to fit: {todo}", flush=True)
@@ -148,7 +232,12 @@ def main():
         patches["blocks_checkpointed"] = enable_block_checkpointing(model)
     print(f"  patches: {patches}\n  {lens_model}", flush=True)
     target = settings["target_layer"]
+    if not 0 < target < lens_model.n_layers:
+        raise SystemExit(f"--target-layer {target} out of range for {lens_model.n_layers} layers")
     source_layers = list(range(target))
+    print(f"  target layer {target}, source layers 0..{target - 1}", flush=True)
+    if args.stack_check is not None:
+        stack_check(args, lens_model, prompts, settings)
     sqrt_d = math.sqrt(lens_model.d_model)
     def save_dtype_for(i):
         if args.dtype == "auto":

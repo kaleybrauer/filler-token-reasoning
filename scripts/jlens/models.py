@@ -30,7 +30,10 @@ def _qwen(tag, label, lens, n_layers, d_model, alt_lenses=None):
 MODELS = {
     "v3": dict(label="DeepSeek-V3-0324 (AWQ int4)", tokenizer="/workspace/models/deepseek-v3-awq", tokenizer_kind="v3",
                bos=True, unembed_dir=REPO / "data/model_weights/deepseek_v3", lens=J / "lens_v3_filtered40.pt",
-               alt_lenses={}, halves=("n50", "n50b"), n_layers=61, d_model=7168, vocab_cache=J / "vocab_scripts.json",
+               # PENULT_RUNBOOK.md: a few prompts fitted to target layer 59, and the same prompts' target-60 mean
+               alt_lenses={"target59": J / "lens_v3_target59.pt",
+                           "target60_same": J / "lens_v3_target60_same_prompts.pt"},
+               halves=("n50", "n50b"), n_layers=61, d_model=7168, vocab_cache=J / "vocab_scripts.json",
                states={"wikitext": J / "wikitext_states.pt", "wiki_zh": J / "wiki_zh_states.pt",
                        "wiki_en": J / "wiki_en_states.pt", "concept": J / "concept_states.pt"},
                saturated=[(215, 69)]),

@@ -464,6 +464,11 @@ def cmd_depth(args):
           flush=True)
     for name in args.lenses:
         lens = models.open_lens(args.model, name)
+        # stamp the lens's identity into the output: a few-prompt lens can be rebuilt from other prompts, and a
+        # consumer that loads readouts by lens NAME would otherwise pair a new lens with a stale run (see
+        # penult_compare.py).
+        lens_file = getattr(getattr(lens, "cur", None), "path", None)
+        lens_n = getattr(lens, "n", None)
         rows, store = [], {}
         heads = {"full": "full", "offset_removed": "offset-rm", "latin": "latin",
                  "rand_latin_size": "rand-L", "han": "han", "rand_han_size": "rand-H"}
@@ -497,7 +502,8 @@ def cmd_depth(args):
                   f"{f100['mixed_latin_han']:5.1%} | {o100['frac_han']:5.1%} {o100['entropy_mean']:.2f}"
                   f"   ({row['secs']}s)", flush=True)
         out = args.out_dir / f"bilingual_depth_{name}{args.tag}.json"
-        out.write_text(json.dumps({"lens": name, "states": str(args.states), "corpus": S.get("corpus"),
+        out.write_text(json.dumps({"lens": name, "lens_file": str(lens_file) if lens_file else None,
+                                   "lens_n_prompts": lens_n, "states": str(args.states), "corpus": S.get("corpus"),
                                    "positions": pos.tolist(), "vocab": vocab_summary(cls),
                                    "kurt_variants": KURT_VARIANTS, "per_layer": rows}, indent=1))
         np.savez_compressed(args.out_dir / f"bilingual_depth_{name}{args.tag}_topk.npz",

@@ -47,8 +47,22 @@ def top_pair(J, iters=80, seed=0):
     return s, u / s
 
 
-def depth_rows(path: Path) -> dict[int, dict]:
-    return {r["layer"]: r for r in json.loads(path.read_text())["per_layer"]}
+def depth_json(path: Path) -> dict:
+    return json.loads(path.read_text())
+
+
+def check_depth_matches_lens(path: Path, lens_path: Path, n_prompts: int, d: dict, rerun: str):
+    """The pairing check reads the lenses' sidecars, but readouts are loaded by lens NAME: a rebuilt lens with a
+    stale depth run would pass unnoticed. bilingual_diagnostics.py stamps the lens it read; older runs predate the
+    stamp, so fall back to file times."""
+    stamped_n, stamped_file = d.get("lens_n_prompts"), d.get("lens_file")
+    if stamped_n is not None and (stamped_n != n_prompts
+                                  or (stamped_file and Path(stamped_file).resolve() != lens_path.resolve())):
+        raise SystemExit(f"{path.name} was computed from {stamped_file} with n={stamped_n}, but the lens now on "
+                         f"disk is {lens_path} with n={n_prompts}. Rerun: {rerun}")
+    if stamped_n is None and path.stat().st_mtime < lens_path.stat().st_mtime:
+        raise SystemExit(f"{path.name} is older than {lens_path.name} and carries no lens stamp, so it may describe "
+                         f"a different lens. Rerun: {rerun}")
 
 
 def main():
@@ -86,8 +100,13 @@ def main():
 
     # readout statistics
     names = [args.a, args.b, "shipped", "logit"]
-    rows = {k: depth_rows(args.depth_dir / f"bilingual_depth_{k}{args.tag if k in (args.a, args.b) else ''}.json")
-            for k in names}
+    files = {k: args.depth_dir / f"bilingual_depth_{k}{args.tag if k in (args.a, args.b) else ''}.json" for k in names}
+    full = {k: depth_json(f) for k, f in files.items()}
+    rerun = (f"python scripts/jlens/bilingual_diagnostics.py depth --lenses {args.a} {args.b}"
+             + (f" --tag {args.tag}" if args.tag else ""))
+    for k in (args.a, args.b):
+        check_depth_matches_lens(files[k], paths[k], meta[k]["n_prompts"], full[k], rerun)
+    rows = {k: {r["layer"]: r for r in full[k]["per_layer"]} for k in names}
     layers = sorted(set.intersection(*(set(r) for r in rows.values())))
     target_a = meta[args.a]["target_layer"]
     print(f"\nmedians over held-out WikiText activations. At layers >= {target_a} the {args.a} lens is the identity "

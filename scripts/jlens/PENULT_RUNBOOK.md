@@ -6,9 +6,12 @@ Needs the same 3× H200 box and V3 AWQ autograd stack as the fit and the refit (
 
 ## 0. The question and the design
 
-The shipped lens differentiates the final residual (target layer 60). The paper's Sonnet 4.5 lens targets the
-**penultimate** layer, and its appendix says a final-layer target "can sometimes increase the number of noisy
-artifacts ... because the final block is heavily specialized for calibrating next token predictions". V3's
+The shipped lens differentiates the final residual (target layer 60). The paper's appendix says its Sonnet 4.5
+lens, "used throughout the paper", takes the gradient at the **penultimate** layer, i.e. "omitting the last
+transformer block from the backward pass", and that including the last layer "can sometimes increase the number of
+noisy artifacts ... because the final block is heavily specialized for calibrating next token predictions". (The
+paper is inconsistent: its Figure 4 caption and pseudocode say the final layer. That ambiguity is worth a question
+to the authors, but it does not change this test, which measures how much the choice moves V3.) V3's
 script gate is written almost entirely by that final block (logit-lens η² 0.012 at L59, 0.41 at L60), and every
 target-60 Jacobian carries it as its top output direction. If a target-59 lens loses the offset, the draft's
 "general property of Jacobian lenses" is a property of the final-layer target.

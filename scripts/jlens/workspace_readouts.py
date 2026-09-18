@@ -71,6 +71,8 @@ def main():
     ap.add_argument("--states", type=Path, default=None, help="default: the model's WikiText states")
     ap.add_argument("--lens", type=Path, default=None, help="default: the model's lens")
     ap.add_argument("--subset", default=None, help="build the lens from a named half/subset")
+    ap.add_argument("--logit", action="store_true",
+                    help="the logit lens (J = I at every layer): the control the J-lens panels are read against")
     ap.add_argument("--n-layers-shown", type=int, default=25,
                     help="evenly spaced layers, as the paper's figure shows")
     ap.add_argument("--max-prompts", type=int, default=None)
@@ -88,19 +90,21 @@ def main():
     m = models.get(args.model)
     args.states = args.states or m["states"]["wikitext"]
     args.lens = args.lens or m["lens"]
-    label = args.label or (args.subset or ("shipped100" if args.model == "v3" else "shipped"))
+    label = args.label or ("logit" if args.logit else args.subset or ("shipped100" if args.model == "v3" else "shipped"))
     out_path = args.out or (REPO / f"outputs/jlens/workspace_readouts_{label}.json" if args.model == "v3"
                             else models.QS / args.model / "analysis" / f"workspace_readouts_{label}.json")
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
-    if args.subset:
+    if args.logit:
+        lens = None
+    elif args.subset:
         if args.model != "v3":
             raise SystemExit("--subset builds V3 half/subset lenses only")
         from clean_floor import build_subset
         lens = build_subset(REPO / "outputs/jlens", REPO / "outputs/jlens/per_prompt", 40.0, args.subset)
     else:
         lens = LazyLens(args.lens)
-    print(f"lens: {label}  n={lens.n}", flush=True)
+    print(f"lens: {label}  n={lens.n if lens is not None else 'logit lens (identity)'}", flush=True)
 
     S = torch.load(args.states, map_location="cpu", weights_only=False, mmap=True)
     if not S["unembed_check"]["passed"]:
@@ -156,7 +160,7 @@ def main():
           f"{'kurt p99':>9} {'ac d1':>7} {'ac d32':>7}" + (f" {'acx d1':>7} {'acx d32':>7}" if cross else ""), flush=True)
     for L in layers:
         tl = time.time()
-        J = None if L >= target else lens[L]
+        J = None if (lens is None or L >= target or L not in lens.layers) else lens[L]
         hits = {k: 0 for k in TOPKS}
         n_used = 0
         kurt_all = []
@@ -233,8 +237,9 @@ def main():
               f"{fmt('autocorr_d1')} {fmt('autocorr_d32')}" + (f" {fmt('autocorr_xprompt_d1')} {fmt('autocorr_xprompt_d32')}" if cross else "")
               + f"   ({r['secs']}s)", flush=True)
 
-    out = {"label": label, "lens": str(args.lens) if not args.subset else None, "subset": args.subset,
-           "n_prompts_lens": lens.n, "states": str(args.states), "prompt_span": [lo, lo + P],
+    out = {"label": label, "lens": "logit lens (identity)" if lens is None else str(args.lens) if not args.subset else None,
+           "subset": args.subset, "n_prompts_lens": lens.n if lens is not None else 0,
+           "states": str(args.states), "prompt_span": [lo, lo + P],
            "n_positions": T, "n_layers_total": n_total, "layers": layers, "excluded": excluded, "model": args.model,
            "topks": list(TOPKS), "kurt_pcts": list(KURT_PCTS), "offsets": list(OFFSETS), "null": args.null,
            "per_layer": rows}

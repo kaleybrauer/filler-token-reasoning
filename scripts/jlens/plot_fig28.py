@@ -104,8 +104,23 @@ def ribbon(ax, halves, key, pct=False):
                     color="#7d8b99", alpha=0.28, lw=0, zorder=2)
 
 
-def our_figure(sig, rd, sig_halves, rd_halves, cka, out):
-    """sig: lens-only signatures (panel d). rd: WikiText readouts (panels a-c)."""
+def our_figure(sig, rd, sig_halves, rd_halves, cka, out, rd_logit=None):
+    """sig: lens-only signatures (panel d). rd: WikiText readouts (panels a-c). rd_logit: the same readouts with
+    J = I (workspace_readouts.py --logit), drawn dashed on panels (a)-(c): what the residual stream shows unaided."""
+    LOGIT_LS = (0, (3, 2))
+
+    def logit_arm(ax, key, pct=False):
+        if rd_logit is None:
+            return
+        rows = sorted(rd_logit["per_layer"], key=lambda z: z["layer"])
+        lx = [r["depth_0_100"] for r in rows if r["layer"] < rd_logit["n_layers_total"] - 1]
+        ly = [r[key] * (100 if pct else 1) for r in rows if r["layer"] < rd_logit["n_layers_total"] - 1]
+        ax.plot(lx, ly, color=INK, lw=1.3, ls=LOGIT_LS, zorder=4)
+
+    def logit_note(ax, text, xy):
+        # one note per panel, in a corner the curves leave empty (labels at the line ends collide with them)
+        if rd_logit is not None:
+            ax.text(*xy, text, transform=ax.transAxes, fontsize=7.8, color=INK, ha="left", va="top", linespacing=1.4)
     def series(src, keys):
         rows = sorted(src["per_layer"], key=lambda z: z["layer"])
         x = np.array([r["depth_0_100"] for r in rows], float)
@@ -140,6 +155,9 @@ def our_figure(sig, rd, sig_halves, rd_halves, cka, out):
     x, ys = series(rd, [f"nexttok_top{k}" for k in TOPKS])
     ribbon(ax, rd_halves, "nexttok_top8", pct=True)
     draw(ax, x, ys, [str(k) for k in TOPKS], "top-k", pct=True)
+    logit_arm(ax, "nexttok_top8", pct=True)
+    logit_arm(ax, "nexttok_top1", pct=True)
+    logit_note(ax, "dashed: logit lens\n(top-8 above, top-1 below)", (0.03, 0.62))
     ax.set_ylim(-3, 103)
     ax.annotate("transition to\nnext-token prediction", xy=(95, 60), xytext=(58, 78),
                 fontsize=8, color=INK, linespacing=1.4,
@@ -155,6 +173,8 @@ def our_figure(sig, rd, sig_halves, rd_halves, cka, out):
     ax.set_ylim(-1.6, KTOP)
     ribbon(ax, rd_halves, "kurtosis_p50")
     draw(ax, x, [np.minimum(y, KTOP) for y in ys], [str(q) for q in KURT_PCTS], "percentile")
+    logit_arm(ax, "kurtosis_p50")
+    logit_note(ax, "dashed: logit lens, median", (0.40, 0.42))
     ax.axhline(0, color=AXIS, lw=0.9, zorder=2)
     top = np.array(ys[-1])
     for i in np.where(top > KTOP)[0]:
@@ -166,6 +186,8 @@ def our_figure(sig, rd, sig_halves, rd_halves, cka, out):
     x, ys = series(rd, [f"autocorr_d{o}" for o in OFFSETS])
     ribbon(ax, rd_halves, "autocorr_d1")
     draw(ax, x, ys, [str(o) for o in OFFSETS], "token offset")
+    logit_arm(ax, "autocorr_d1")
+    logit_note(ax, "dashed: logit lens, offset 1", (0.03, 0.95))
     ax.axhline(0, color=AXIS, lw=0.9, zorder=2)
 
     ax = axes[1, 1]
@@ -184,17 +206,21 @@ def our_figure(sig, rd, sig_halves, rd_halves, cka, out):
            f"{len(rd['layers'])} evenly spaced of {rd['n_layers_total']} layers · readouts on "
            f"{rd['prompt_span'][1]-rd['prompt_span'][0]} held-out WikiText prompts x "
            f"{rd['n_positions']} positions")
+    sub2 = []
     if len(rd_halves) == 2 or len(sig_halves) == 2:
-        sub += " · grey ribbon: two disjoint 50-prompt half-fits"
+        sub2.append("grey ribbon: two disjoint 50-prompt half-fits")
+    if rd_logit is not None:
+        sub2.append("dashed: the logit lens (J = I) on the same activations")
+    sub += "\n" + " · ".join(sub2)
     fig.suptitle("Quantitative signatures of the workspace's start and end — DeepSeek V3",
                  fontsize=13.5, color=INK, x=0.008, ha="left", y=0.988)
-    fig.text(0.008, 0.945, sub, fontsize=8.1, color=MUTED, ha="left")
+    fig.text(0.008, 0.958, sub, fontsize=8.1, color=MUTED, ha="left", va="top", linespacing=1.45)
     fig.text(0.008, 0.028, band_note + ".\nRibbons shown on one series per panel (top-8, p50, "
              "offset 1, 0.9).", fontsize=7.5, color=MUTED, va="bottom")
     fig.text(0.008, 0.010, "Panel specification follows Figure 28 of Anthropic, 'Verbalizable "
              "Representations Form a Global Workspace in Language Models'; the measures are our "
              "implementations of the published descriptions.", fontsize=7.5, color=MUTED)
-    fig.tight_layout(rect=[0, 0.045, 0.985, 0.932])
+    fig.tight_layout(rect=[0, 0.045, 0.985, 0.918])
     for ext in ("png", "pdf"):
         fig.savefig(out.with_suffix("." + ext), dpi=200, facecolor="white")
     plt.close(fig)
@@ -244,7 +270,7 @@ def main():
     sig_h = [h for h in (load("workspace_signatures_n50"), load("workspace_signatures_n50b")) if h]
     rd_h = [h for h in (load("workspace_readouts_n50"), load("workspace_readouts_n50b")) if h]
     cka = load("cka_layers")
-    our_figure(sig, rd, sig_h, rd_h, cka, OUT / "fig28_v3")
+    our_figure(sig, rd, sig_h, rd_h, cka, OUT / "fig28_v3", rd_logit=load("workspace_readouts_logit"))
     if args.reference and args.reference.exists():
         reference_figure(json.load(open(args.reference)), OUT / "fig28_sonnet45_reference")
 

@@ -55,6 +55,10 @@ def main():
                     help="leave out prompts whose max||J||_F/sqrt(d) exceeds this (the shipped "
                          "lens's pre-filter); inf keeps everything")
     ap.add_argument("--dtype", choices=["fp16", "fp32"], default="fp16")
+    ap.add_argument("--layers", default=None,
+                    help="Comma list of source layers to build (default: all, which must be 0..target-1 in every "
+                         "file). With a list, each file must hold at least those layers; files fitted with "
+                         "refit_prompts.py --source-layers can be mixed with full ones.")
     args = ap.parse_args()
 
     readers, info, rejected = {}, {}, {}
@@ -80,14 +84,23 @@ def main():
         raise SystemExit(f"per-prompt files were fitted to different target layers: "
                          f"{ {i: m['settings']['target_layer'] for i, m in info.items()} }")
     target = targets.pop()
-    for i, r in readers.items():
-        if r.layers != layers or r.d != d:
-            raise SystemExit(f"idx {i}: layers/d differ from idx {next(iter(readers))}")
-    if layers != list(range(target)):
-        raise SystemExit(f"source layers {layers[0]}..{layers[-1]} are not 0..{target - 1}")
+    if args.layers:
+        layers = sorted({int(x) for x in args.layers.split(",")})
+        for i, r in readers.items():
+            missing = [L for L in layers if L not in r.layers]
+            if missing or r.d != d:
+                raise SystemExit(f"idx {i}: missing layers {missing} or d differs (file holds {r.layers})")
+    else:
+        for i, r in readers.items():
+            if r.layers != layers or r.d != d:
+                raise SystemExit(f"idx {i}: layers/d differ from idx {next(iter(readers))} "
+                                 f"(pass --layers to build a common subset)")
+        if layers != list(range(target)):
+            raise SystemExit(f"source layers {layers[0]}..{layers[-1]} are not 0..{target - 1}; pass --layers")
     n = len(readers)
-    print(f"{args.per_prompt_dir}: target layer {target}, source layers 0..{layers[-1]}, d={d}; "
-          f"n={n} {sorted(readers)}; left out above {args.max_norm:g}: {rejected or 'none'}", flush=True)
+    print(f"{args.per_prompt_dir}: target layer {target}, source layers "
+          + (f"0..{layers[-1]}" if layers == list(range(target)) else f"{layers} ({len(layers)} of {target})")
+          + f", d={d}; n={n} {sorted(readers)}; left out above {args.max_norm:g}: {rejected or 'none'}", flush=True)
 
     out_dtype = torch.float16 if args.dtype == "fp16" else torch.float32
     J_out, per_layer, t0 = {}, {}, time.time()
@@ -105,9 +118,9 @@ def main():
         print(f"  L{L:02d} ||J||_F {per_layer[L]['fro']:8.1f}   mean diag {per_layer[L]['mean_diag']:.3f}"
               f"   (I = {np.sqrt(d):.1f})", flush=True)
     last = per_layer[layers[-1]]
-    print(f"built in {(time.time() - t0) / 60:.1f} min. Sanity: the last source layer is one block from "
-          f"the target, so expect mean diag ~1 and ||J||_F a little above sqrt(d): "
-          f"{last['mean_diag']:.3f}, {last['fro']:.1f}", flush=True)
+    print(f"built in {(time.time() - t0) / 60:.1f} min. Sanity: the last source layer (L{layers[-1]}) is "
+          f"{target - layers[-1]} block(s) from the target, so expect mean diag ~1 and ||J||_F a little above "
+          f"sqrt(d): {last['mean_diag']:.3f}, {last['fro']:.1f}", flush=True)
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
     torch.save({"J": J_out, "n_prompts": n, "source_layers": layers, "d_model": d}, args.out)

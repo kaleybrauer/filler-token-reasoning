@@ -46,9 +46,11 @@ class LayerReader:
 
     torch checkpoints are zip files with each storage stored UNCOMPRESSED as
     data/<k>, k in pickling order — for {layer: tensor} dicts written in layer
-    order, k == layer. That is verified per file against a memory-mapped view
-    (then released), because on a cgroup-limited box holding 60 layers, or even
-    an mmap of them, gets the process killed.
+    order, k is the layer's rank among the stored layers (k == layer for a full
+    0..target-1 file; a refit_prompts.py --source-layers file holds a subset).
+    That is verified per file against a memory-mapped view (then released),
+    because on a cgroup-limited box holding 60 layers, or even an mmap of them,
+    gets the process killed.
     """
 
     def __init__(self, path: Path, key: str):
@@ -61,6 +63,7 @@ class LayerReader:
             raise ValueError(f"{path}: no key {key!r} (keys {sorted(ck)})")
         d = ck[key]
         self.layers = sorted(int(l) for l in d)
+        self.slot = {L: k for k, L in enumerate(self.layers)}      # storage index of each layer
         t0 = d[self.layers[0]]
         self.dtype = {torch.float32: np.float32, torch.float16: np.float16}[t0.dtype]
         self.d = int(t0.shape[0])
@@ -74,7 +77,7 @@ class LayerReader:
         del ck, d
 
     def read(self, L: int) -> np.ndarray:
-        with self.zf.open(f"{self.prefix}/data/{L}") as f:
+        with self.zf.open(f"{self.prefix}/data/{self.slot[L]}") as f:
             buf = f.read()
         fd = os.open(self.path, os.O_RDONLY)
         os.posix_fadvise(fd, 0, 0, os.POSIX_FADV_DONTNEED)

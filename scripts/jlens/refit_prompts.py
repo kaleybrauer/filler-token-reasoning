@@ -179,6 +179,10 @@ def main():
                     help="Layer whose residual is differentiated; source layers are 0..target-1. "
                          "60 (default) is the n=100 fit's; 59 is the penultimate-layer lens "
                          "(needs --allow-setting-drift and its own --outdir)")
+    ap.add_argument("--source-layers", default=None,
+                    help="Comma list of source layers to differentiate and store (default all 0..target-1). "
+                         "The backward pass costs the same; only the file shrinks (2.5 GB for the 24 layers of "
+                         "the Figure 28 grid instead of 6.1 GB). build_mean_lens.py --layers reads the subset.")
     ap.add_argument("--keep-order", action="store_true",
                     help="Fit the indices in the order given (default: sorted)")
     ap.add_argument("--stack-check", type=int, default=None, metavar="IDX",
@@ -235,7 +239,14 @@ def main():
     if not 0 < target < lens_model.n_layers:
         raise SystemExit(f"--target-layer {target} out of range for {lens_model.n_layers} layers")
     source_layers = list(range(target))
-    print(f"  target layer {target}, source layers 0..{target - 1}", flush=True)
+    if args.source_layers:
+        source_layers = sorted({int(x) for x in args.source_layers.split(",")})
+        bad = [l for l in source_layers if not 0 <= l < target]
+        if bad:
+            raise SystemExit(f"--source-layers {bad} not in 0..{target - 1}")
+    print(f"  target layer {target}, source layers "
+          + (f"0..{target - 1}" if source_layers == list(range(target)) else f"{source_layers} ({len(source_layers)} of {target})"),
+          flush=True)
     if args.stack_check is not None:
         stack_check(args, lens_model, prompts, settings)
     sqrt_d = math.sqrt(lens_model.d_model)

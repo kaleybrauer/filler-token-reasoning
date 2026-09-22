@@ -308,9 +308,23 @@ def setup(args):
     return torch, S, H, P, lo, keep, cls, pieces, emb, rand_sets
 
 
+def lens_target(lens, model_target):
+    """The layer a lens differentiates: its .meta.json (build_mean_lens.py) if present, else the model's output.
+    At and above it the lens is the identity."""
+    import json as _json
+    path = getattr(getattr(lens, "cur", None), "path", None)
+    if path is not None:
+        side = Path(path).with_suffix(".meta.json")
+        if side.exists():
+            return int(_json.loads(side.read_text()).get("target_layer", model_target))
+    return model_target
+
+
 def transport(torch, Xraw, lens, L, target):
-    if lens is None or L >= target:
+    if lens is None or L >= lens_target(lens, target):
         return Xraw
+    if L not in lens.layers:
+        raise SystemExit(f"lens holds no layer {L} (it has {lens.layers[:3]}...{lens.layers[-2:]}); pass --layers it holds")
     J = lens[L]
     J = J if isinstance(J, torch.Tensor) else torch.from_numpy(np.ascontiguousarray(J, np.float32))
     return Xraw @ J.float().T

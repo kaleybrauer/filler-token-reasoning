@@ -309,6 +309,40 @@ def step_paragraphs(lm, out, n_prompts, chk, prov):
         print(f"{name}: {len(clamped)} (prompt, layer) cells had values clamped to the fp16 range", flush=True)
 
 
+EVAL_DIR = Path("/workspace/jacobian-lens/data/evaluations")
+EVAL_SETS = ["multihop", "order-ops", "association", "multilingual", "typo"]
+
+
+def step_evals(lm, out, chk, prov, max_items=None):
+    """The paper's lens-eval sets, one residual per (item, layer) at the last prompt token, in the layout of
+    outputs/jlens/eval_states.pt (extract_eval_states.py) so score_evals_model.py reads either. No BOS on Qwen."""
+    path = out / "eval_states.pt"
+    if path.exists():
+        return
+    layers = list(range(lm.n_layers))
+    sets, clamped = {}, []
+    t0 = time.perf_counter()
+    for slug in EVAL_SETS:
+        items = json.loads((EVAL_DIR / f"lens-eval-{slug}.json").read_text())["items"][:max_items]
+        H = torch.empty(len(items), len(layers), lm.d_model, dtype=torch.float16)
+        seq_lens = []
+        for i, it in enumerate(items):
+            ids = lm.encode(it["prompt"], max_length=512)
+            seq_lens.append(int(ids.shape[-1]))
+            acts = record(lm, ids, layers)
+            for L in layers:
+                H[i, L] = to_fp16(acts[L][-1], clamped, {"set": slug, "item": i, "layer": L})
+        sets[slug] = {"names": [it["name"] for it in items], "prompts": [it["prompt"] for it in items],
+                      "intermediates": [it["intermediates"] for it in items], "targets": [it.get("target") for it in items],
+                      "seq_lens": seq_lens, "H": H}
+        print(f"  evals {slug}: {tuple(H.shape)} seq_len {min(seq_lens)}-{max(seq_lens)}  ({time.perf_counter() - t0:.0f}s)", flush=True)
+    save({"model_path": str(prov["model"]), "n_layers": lm.n_layers, "d_model": lm.d_model,
+          "rms_norm_eps": chk["rms_norm_eps"], "norm_convention": chk["norm_convention"], "max_seq_len": 512,
+          "readout_position": -1, "force_bos": False, "sets": sets, "fp16_clamped": clamped,
+          "unembed_check": {k: chk[k] for k in ("top1_agreement", "logit_corr", "passed")}, "provenance": prov}, path)
+    print(f"evals: {len(clamped)} cells clamped to the fp16 range", flush=True)
+
+
 def step_concepts(lm, out, spec, max_concepts, chk, prov):
     path = out / "concept_states.pt"
     if path.exists():
@@ -359,12 +393,13 @@ def main():
     ap.add_argument("--model", required=True, help="local checkpoint directory (or hub id)")
     ap.add_argument("--tag", required=True, help="e.g. qwen35_122b, qwen35_397b_fp8")
     ap.add_argument("--outdir", type=Path, required=True)
-    ap.add_argument("--steps", default="unembed,regime,paragraphs,concepts")
+    ap.add_argument("--steps", default="unembed,regime,paragraphs,concepts", help="comma list; also: evals")
     ap.add_argument("--concepts", type=Path, default=REPO / "scripts/jlens/concept_prompts_qwen35.json")
     ap.add_argument("--max-memory-gib", default=None, help="per-GPU cap(s); default 90%% of each card")
     ap.add_argument("--regime-prompts", type=int, default=32)
     ap.add_argument("--n-paragraphs", type=int, default=100)
     ap.add_argument("--max-concepts", type=int, default=None, help="dry runs only")
+    ap.add_argument("--max-items", type=int, default=None, help="evals step, dry runs only: items per set")
     args = ap.parse_args()
     steps = args.steps.split(",")
     out = args.outdir / args.tag
@@ -400,6 +435,8 @@ def main():
         step_paragraphs(lm, out, args.n_paragraphs, chk, prov)
     if "concepts" in steps:
         step_concepts(lm, out, spec, args.max_concepts, chk, prov)
+    if "evals" in steps:
+        step_evals(lm, out, chk, prov, args.max_items)
     (out / "run.json").write_text(json.dumps({"steps": steps, "provenance": prov, "finished": time.strftime("%Y-%m-%d %H:%M:%S")},
                                              indent=1, default=str))
     print("DONE", flush=True)

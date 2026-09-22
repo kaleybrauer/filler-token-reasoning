@@ -94,12 +94,8 @@ def main():
     c.set_yticks([1, 3, 10, 30])
     c.set_yticklabels(["1×", "3×", "10×", "30×"])
 
-    fig.suptitle("The script offset comes from the lens's target layer: it disappears when the last block is left out",
-                 fontsize=13, color=INK, x=0.01, ha="left", y=0.985)
-    fig.text(0.01, 0.925, "DeepSeek-V3, held-out WikiText, 24 positions × 100 paragraphs. Prompts 100–102 were fitted to both targets; "
-             "A and B stop at 97% depth for the J-lenses, where all of them meet the model's own logits.",
-             fontsize=8, color=MUTED)
-    fig.tight_layout(rect=[0, 0.0, 1, 0.91])
+    # no figure title: the post's caption carries it
+    fig.tight_layout(rect=[0, 0.0, 1, 0.99])
     OUT.mkdir(parents=True, exist_ok=True)
     for ext in ("png", "pdf"):
         fig.savefig(OUT / f"penult_target.{ext}", dpi=170, facecolor="white")

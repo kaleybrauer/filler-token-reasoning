@@ -8,8 +8,6 @@ gate, not a property of the residual states.
      on English and on Chinese prose
   C  share of each layer's |J|_F^2 in its top output direction (the direction that separates Han from Latin
      tokens with the AUC given in the legend)
-  D  the same prompts through the logit lens, output layer: V3 in int4 and FP8, and Kimi K2 / K2.5, which share
-     V3's architecture but not its training (grey ticks: the largest value below the output layer)
 
     python scripts/jlens/plot_script_gate.py
 """
@@ -41,12 +39,11 @@ def rows(p):
 
 
 def main():
-    fig, axes = plt.subplots(2, 2, figsize=(12.5, 9))
-    (a, b), (c, d) = axes
-    style(a, "A  Script-class share of readout variance (η²)", "median η² over activations →", NO_BAND)
+    fig, (a, b, c) = plt.subplots(1, 3, figsize=(18.5, 5.9))
+    style(a, "A  Three models, J-lens and logit lens", "Language share of readout variance", NO_BAND)
     style(c, "C  Share of ‖J‖² in the lens's top output direction", "share →", NO_BAND)
     for ax in (a, c):
-        ax.set_xlabel("Depth (% of blocks) →", fontsize=9, color=MUTED)
+        ax.set_xlabel("Depth (% of blocks) →", fontsize=13.5, color=MUTED)
     gate = {}
     for label, col, n_total, adir, share_p, axis_p in MODELS:
         for lens, ls in (("shipped", "-"), ("logit", (0, (3, 2)))):
@@ -58,48 +55,32 @@ def main():
         ax_js = json.loads(axis_p.read_text())["layers"]
         aucs = [ax_js[k]["script_separation"] for k in ax_js]
         c.plot([100 * L / (n_total - 1) for L in ck["layers"]], [100 * s for s in ck["removed_share"]], color=col, lw=2, marker="o", ms=3.5,
-               label=f"{label}: Han-vs-Latin AUC {min(aucs):.2f}–{max(aucs):.2f}")
+               label=f"{label}: Chinese-vs-Latin AUC {min(aucs):.2f}–{max(aucs):.2f}")
     a.set_ylim(0, 0.58)
-    a.legend(fontsize=7.5, frameon=False, loc="upper right", ncol=1)
+    a.legend(fontsize=10, frameon=False, loc="upper right", ncol=1)
     c.yaxis.set_major_formatter(lambda v, p: f"{v:.0f}%")
     c.set_ylim(0, 48)
-    c.legend(fontsize=7.5, frameon=False, loc="upper right")
+    c.legend(fontsize=11.5, frameon=False, loc="upper right")
 
-    style(b, "B  The output layer's own logits: Han minus Latin mean", "logit-vector sd →", NO_BAND)
+    style(b, "B  The output layer's own logits: Chinese minus Latin", "logit-vector sd →", NO_BAND)
     b.set_xlim(-0.6, 2.6)
     b.set_xticks([0, 1, 2])
-    b.set_xticklabels([m[0] for m in MODELS], fontsize=8.5, color=MUTED)
+    b.set_xticklabels([m[0] for m in MODELS], fontsize=13, color=MUTED)
     b.set_xlabel("")
     w = 0.34
     for i, (label, col, *_rest) in enumerate(MODELS):
         b.bar(i - w / 2, gate[label][""], w, color=col, label="English prose" if i == 0 else None)
         b.bar(i + w / 2, gate[label]["_wikizh"], w, color=col, alpha=0.45, hatch="//", edgecolor=col, lw=0, label="Chinese prose" if i == 0 else None)
         for x, v in ((i - w / 2, gate[label][""]), (i + w / 2, gate[label]["_wikizh"])):
-            b.text(x, v + (0.05 if v >= 0 else -0.05), f"{v:+.2f}", ha="center", va="bottom" if v >= 0 else "top", fontsize=7.5, color=INK)
+            b.text(x, v + (0.05 if v >= 0 else -0.05), f"{v:+.2f}", ha="center", va="bottom" if v >= 0 else "top", fontsize=12, color=INK)
     b.axhline(0, color=AXIS, lw=0.9)
     b.set_ylim(-1.9, 1.9)
-    b.legend(fontsize=7.5, frameon=False, loc="lower right")
+    b.legend(fontsize=12.5, frameon=False, loc="lower right")
 
-    so = json.loads((J / "script_offset_logit_lens_models.json").read_text())
-    names = list(so)
-    style(d, "D  Same prompts, logit lens, output-layer η²", "median η² →", NO_BAND)
-    d.set_xlim(-0.6, len(names) - 0.4)
-    d.set_xticks(range(len(names)))
-    d.set_xticklabels(names, fontsize=8.5, color=MUTED)
-    d.set_xlabel("")
-    for i, n in enumerate(names):
-        layers = sorted(so[n], key=int)
-        out = so[n][layers[-1]]["eta2_p50"]; mid = max(so[n][L]["eta2_p50"] for L in layers[:-1])
-        d.bar(i, out, 0.55, color=BLUE if n.startswith("V3") else GRAY)
-        d.plot([i - 0.28, i + 0.28], [mid, mid], color=INK, lw=1.2)
-        d.text(i, out + 0.004, f"{out:.3f}", ha="center", va="bottom", fontsize=7.5, color=INK)
-    d.set_ylim(0, 0.2)
-    d.text(0.98, 0.95, "bar: output layer\ntick: largest value below it", transform=d.transAxes, ha="right", va="top", fontsize=7.5, color=MUTED)
-
-    fig.suptitle("V3's script offset is the output layer's language gate, carried by the lens", fontsize=13, color=INK, x=0.01, ha="left", y=0.985)
-    fig.text(0.01, 0.945, "A, B: held-out WikiText / Wikipedia, 24 positions x 100 paragraphs. C: every 4th V3 layer, every 3rd Qwen layer; Qwen3.5-397B = the "
-             "500-passage lens.\nD: 200 two-fact questions x 4 question-end positions from the filler-token paper.", fontsize=8, color=MUTED)
-    fig.tight_layout(rect=[0, 0.01, 1, 0.925])
+    # no figure title: the post's caption carries it
+    for ax in (a, b, c):
+        ax._left_title.set_fontsize(15); ax.yaxis.label.set_size(13.5); ax.tick_params(labelsize=13)
+    fig.tight_layout(rect=[0, 0.01, 1, 0.99])
     OUT.mkdir(parents=True, exist_ok=True)
     for ext in ("png", "pdf"):
         fig.savefig(OUT / f"script_gate.{ext}", dpi=170, facecolor="white")

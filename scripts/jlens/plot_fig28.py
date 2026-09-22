@@ -212,15 +212,14 @@ def our_figure(sig, rd, sig_halves, rd_halves, cka, out, rd_logit=None):
     if rd_logit is not None:
         sub2.append("dashed: the logit lens (J = I) on the same activations")
     sub += "\n" + " · ".join(sub2)
-    fig.suptitle("Quantitative signatures of the workspace's start and end — DeepSeek V3",
-                 fontsize=13.5, color=INK, x=0.008, ha="left", y=0.988)
-    fig.text(0.008, 0.958, sub, fontsize=8.1, color=MUTED, ha="left", va="top", linespacing=1.45)
+    # no figure title: the post's caption carries it (the subtitle text is kept in the PDF metadata below)
+    fig.set_label(sub)
     fig.text(0.008, 0.028, band_note + ".\nRibbons shown on one series per panel (top-8, p50, "
              "offset 1, 0.9).", fontsize=7.5, color=MUTED, va="bottom")
     fig.text(0.008, 0.010, "Panel specification follows Figure 28 of Anthropic, 'Verbalizable "
              "Representations Form a Global Workspace in Language Models'; the measures are our "
              "implementations of the published descriptions.", fontsize=7.5, color=MUTED)
-    fig.tight_layout(rect=[0, 0.045, 0.985, 0.918])
+    fig.tight_layout(rect=[0, 0.045, 0.985, 0.99])
     for ext in ("png", "pdf"):
         fig.savefig(out.with_suffix("." + ext), dpi=200, facecolor="white")
     plt.close(fig)
@@ -240,9 +239,7 @@ def reference_figure(spec, out):
         pct = "accuracy" in p["ylabel"].lower() or "fraction" in p["ylabel"].lower()
         draw(ax, xs, [s["y"] for s in p["series"]], [s["label"] for s in p["series"]],
              p.get("legend_title", ""), pct=pct)
-    fig.suptitle("Quantitative signatures of the workspace's start and end — "
-                 "Claude Sonnet 4.5 (published)", fontsize=13.5, color=INK, x=0.008,
-                 ha="left", y=0.986)
+    # no figure title or subtitle: the post's caption carries them (rd_logit/halves are described there)
     fig.text(0.008, 0.940, "Figure 28 of Anthropic, 'Verbalizable Representations Form a "
                            "Global Workspace in Language Models', redrawn from the article's "
                            "own figure data for comparison.", fontsize=8.4, color=MUTED)

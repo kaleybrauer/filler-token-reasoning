@@ -1,0 +1,25 @@
+\begin{table*}[h]
+\centering
+\small
+\caption{Decoding accuracy on 1-fact addition (DeepSeek V3, neutral judge prompt). Each cell is the top-$K$ hit rate as a percentage of $n$. Direct match: target value $A$ in top-$K$ numeric tokens of the aggregated residuals. Haiku/Sonnet: judge's primary guess plus first $K{-}1$ backups contains the target.}
+\label{tab:decode_1fact}
+\begin{tabular}{l r r r r r r r r r r r r r r r r}
+\toprule
+& & \multicolumn{5}{c}{Direct match top-$K$ (\%)} & \multicolumn{5}{c}{Haiku judge top-$K$ (\%)} & \multicolumn{5}{c}{Sonnet judge top-$K$ (\%)} \\
+\cmidrule(lr){3-7} \cmidrule(lr){8-12} \cmidrule(lr){13-17}
+Group & $n$ & $K{=}1$ & $K{=}2$ & $K{=}3$ & $K{=}5$ & $K{=}10$ & $K{=}1$ & $K{=}2$ & $K{=}3$ & $K{=}5$ & $K{=}10$ & $K{=}1$ & $K{=}2$ & $K{=}3$ & $K{=}5$ & $K{=}10$ \\
+\midrule
+dots\_10 & 350 & 66.0 & 80.6 & 86.9 & 92.9 & 95.7 & 74.6 & 87.7 & 90.6 & 93.4 & 96.6 & 84.3 & 92.9 & 95.1 & 98.3 & 98.9 \\
+dots\_25 & 359 & 65.5 & 84.7 & 90.8 & 94.2 & 96.1 & 78.3 & 91.9 & 93.6 & 95.3 & 97.5 & 88.3 & 95.3 & 96.7 & 99.2 & 100.0 \\
+dots\_50 & 357 & 56.9 & 81.2 & 88.0 & 94.1 & 95.8 & 66.1 & 85.2 & 90.8 & 94.4 & 96.9 & 79.0 & 91.9 & 95.8 & 97.5 & 98.9 \\
+dots\_100 & 367 & 40.6 & 76.3 & 90.5 & 94.8 & 96.5 & 60.2 & 86.4 & 92.9 & 96.2 & 98.1 & 74.4 & 91.6 & 95.1 & 97.8 & 99.2 \\
+counting\_5 & 361 & 71.2 & 86.4 & 91.7 & 96.7 & 98.3 & 79.8 & 89.8 & 92.5 & 94.5 & 97.8 & 85.6 & 95.8 & 97.5 & 98.6 & 99.4 \\
+counting\_25 & 368 & 71.5 & 93.2 & 96.5 & 98.4 & 99.5 & 81.5 & 93.8 & 96.5 & 97.8 & 98.6 & 88.9 & 95.9 & 97.8 & 99.2 & 99.2 \\
+counting\_50 & 364 & 61.5 & 91.2 & 96.4 & 98.1 & 98.9 & 74.7 & 91.2 & 95.3 & 97.5 & 99.2 & 82.1 & 95.3 & 97.8 & 98.6 & 99.2 \\
+alphabet\_10 & 351 & 68.9 & 86.0 & 90.9 & 94.0 & 95.7 & 76.9 & 89.2 & 91.7 & 94.3 & 96.9 & 86.0 & 96.6 & 96.6 & 97.4 & 98.9 \\
+alphabet\_25 & 362 & 69.1 & 83.7 & 90.1 & 93.1 & 94.5 & 76.0 & 89.0 & 92.0 & 95.0 & 97.0 & 84.8 & 93.1 & 96.1 & 98.1 & 99.2 \\
+\addlinespace[2pt]
+\textbf{Pooled} & 3,239 & 63.4 & 84.8 & 91.3 & 95.2 & 96.8 & 74.2 & 89.3 & 92.9 & 95.4 & 97.6 & 83.7 & 94.3 & 96.5 & 98.3 & 99.2 \\
+\bottomrule
+\end{tabular}
+\end{table*}

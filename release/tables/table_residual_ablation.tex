@@ -1,0 +1,41 @@
+\begin{table*}[h]
+\centering
+\small
+\caption{Effect of residualization on decoding accuracy. The residual fingerprint (Section~XX) ranks tokens by $P_e(\text{token}|s) - \text{mean}_e P_e(\text{token}|s)$ per (layer, position) setting~$s$; the ablation removes the cross-example mean subtraction and ranks by raw $P_e(\text{token}|s)$ instead. Each cell is the LLM-judge top-$K$ hit rate (\%); pairs of rows compare the same (task, condition, judge, prompt) with the residual on top and the ablation below. The ablation is only available for DeepSeek V3.}
+\label{tab:residual_ablation}
+\begin{tabular}{l l l l l r r r r r r}
+\toprule
+Task & Cond. & Judge & Prompt & Method & $n$ & $K{=}1$ & $K{=}2$ & $K{=}3$ & $K{=}5$ & $K{=}10$ \\
+\midrule
+2-fact & dots\_10 & Haiku & neutral & residual    & 244 & -- & 56.1 & 70.5 & 76.6 & 79.5 \\
+  &     &     &     & no-resid    & 244 & -- & 55.3 & 73.0 & 77.5 & 81.6 \\
+\addlinespace[2pt]
+2-fact & dots\_10 & Sonnet & neutral & residual    & 244 & -- & 82.4 & 89.8 & 91.8 & 93.0 \\
+  &     &     &     & no-resid    & 244 & -- & 73.8 & 85.2 & 88.1 & 90.2 \\
+\addlinespace[2pt]
+2-fact & counting\_10 & Haiku & neutral & residual    & 235 & -- & 43.4 & 60.4 & 70.2 & 79.1 \\
+  &     &     &     & no-resid    & 235 & -- & 45.1 & 67.2 & 79.6 & 90.6 \\
+\addlinespace[2pt]
+2-fact & counting\_10 & Sonnet & neutral & residual    & 235 & -- & 78.3 & 89.8 & 93.2 & 96.2 \\
+  &     &     &     & no-resid    & 235 & -- & 68.1 & 83.0 & 88.9 & 94.0 \\
+\addlinespace[2pt]
+Letter-pos. & dots\_10 & Haiku & neutral & residual    & 236 & 81.4 & 91.1 & 91.9 & 94.1 & 95.3 \\
+  &     &     &     & no-resid    & 236 & 80.1 & 86.9 & 87.7 & 90.3 & 91.9 \\
+\addlinespace[2pt]
+Letter-pos. & dots\_10 & Sonnet & neutral & residual    & 236 & 86.4 & 96.2 & 97.9 & 99.6 & 100.0 \\
+  &     &     &     & no-resid    & 236 & 87.7 & 95.3 & 96.6 & 99.2 & 99.2 \\
+\addlinespace[2pt]
+Capital-pos. & dots\_10 & Haiku & neutral & residual    & 218 & 64.2 & 78.9 & 82.1 & 84.4 & 84.9 \\
+  &     &     &     & no-resid    & 218 & 69.7 & 76.6 & 81.2 & 82.6 & 84.9 \\
+\addlinespace[2pt]
+Capital-pos. & dots\_10 & Sonnet & neutral & residual    & 218 & 69.3 & 86.2 & 88.1 & 90.4 & 90.8 \\
+  &     &     &     & no-resid    & 218 & 79.8 & 88.5 & 89.0 & 90.8 & 92.7 \\
+\addlinespace[2pt]
+Capital-pos. & dots\_10 & Haiku & geography & residual    & 218 & 83.5 & 89.4 & 90.4 & 91.7 & 91.7 \\
+  &     &     &     & no-resid    & 218 & 81.7 & 86.2 & 88.5 & 89.4 & 89.4 \\
+\addlinespace[2pt]
+Capital-pos. & dots\_10 & Sonnet & geography & residual    & 218 & 87.6 & 92.7 & 93.1 & 94.0 & 95.0 \\
+  &     &     &     & no-resid    & 218 & 89.4 & 94.0 & 95.9 & 96.8 & 97.2 \\
+\bottomrule
+\end{tabular}
+\end{table*}

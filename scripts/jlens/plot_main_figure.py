@@ -105,9 +105,15 @@ def main():
     style(a, "(a) The target layer changes\nthe readouts' language", "Chinese characters in the top 20 tokens", "Share of readouts")
     xs = np.arange(A["k"] + 1)
     n = A["n_activations"]
-    for name, col, ls, lw in (("logit lens", GRAY, (0, (1.5, 1.5)), 1.8), ("J-lens, penultimate target", ORANGE, "-", SOLID_W),
-                              ("J-lens, final-layer target", BLUE, "-", SOLID_W)):
-        a.plot(xs, np.array(A["hist"][name]) / n, color=col, ls=ls, lw=lw, drawstyle="steps-mid", zorder=3)
+    series_a = [("logit lens", GRAY, (0, (1.5, 1.5)), 1.8, 1.0),
+                ("J-lens, final-layer target, same 10 prompts", BLUE, (0, (4, 2)), CTRL_W, 0.55),
+                ("J-lens, penultimate target", ORANGE, "-", SOLID_W, 1.0),
+                ("J-lens, final-layer target", BLUE, "-", SOLID_W, 1.0)]
+    for name, col, ls, lw, alpha in series_a:
+        if name not in A["hist"]:                     # older panel data has three series
+            continue
+        a.plot(xs, np.array(A["hist"][name]) / n, color=col, ls=ls, lw=lw, alpha=alpha, drawstyle="steps-mid",
+               zorder=2 if alpha < 1 else 3)
     base = A["vocab_han_share"] * A["k"]
     a.axvline(base, color=AXIS, lw=1.1, ls=(0, (3, 2)), zorder=1)
     a.text(base - 0.3, 0.395, "vocabulary baseline", fontsize=NOTE_A, color=MUTED, va="top", ha="right", rotation=90)
@@ -117,8 +123,12 @@ def main():
     fin, pen = s["J-lens, final-layer target"], s["J-lens, penultimate target"]
     all20 = A["hist"]["J-lens, final-layer target"][-1] / n
     a.text(18.8, all20 - 0.012, f"{all20:.0%} are all\nChinese", fontsize=NOTE_A, color=INK, ha="right", va="top")
-    a.text(11.0, 0.315, f"Mostly Chinese:\n{fin['frac_majority_han']:.0%} final target\n"
-           f"{pen['frac_majority_han']:.0%} penultimate", fontsize=NOTE_A, color=INK, va="top", linespacing=1.4)
+    ctrl = s.get("J-lens, final-layer target, same 10 prompts")
+    note = f"Mostly Chinese:\n{fin['frac_majority_han']:.0%} final target\n"
+    if ctrl is not None:
+        note += f"{ctrl['frac_majority_han']:.0%} final, 10 prompts\n"
+    note += f"{pen['frac_majority_han']:.0%} penultimate"
+    a.text(11.0, 0.315, note, fontsize=NOTE_A, color=INK, va="top", linespacing=1.4)
     a.set_xlim(-0.5, A["k"] + 0.5); a.set_ylim(0, 0.40)
     a.set_xticks([0, 5, 10, 15, 20])
     a.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:.0%}"))

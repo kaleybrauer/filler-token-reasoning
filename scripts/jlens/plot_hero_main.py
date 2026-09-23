@@ -117,13 +117,17 @@ def main():
     for p, t in m["saturated"]:
         keep[p - S["prompt_span"][0], t] = False
     released, penult = models.open_lens("v3", "shipped"), models.open_lens("v3", PENULT)
+    final10 = models.open_lens("v3", "target60_same")          # the paired control: the penult lens's own prompts, final target
     OUT.mkdir(parents=True, exist_ok=True)
     info = {"layer": L, "depth_pct": round(100 * L / 60, 1), "k": args.k, "panel_a": args.panel_a,
             "released_lens_n": getattr(released, "n", None), "penultimate_lens_n": getattr(penult, "n", None),
+            "final_target_10prompt_lens_n": getattr(final10, "n", None),
             "vocab_han_share": float((cls == HAN).mean())}
     if args.panel_a == "hist":
         counts = {name: han_counts(H, keep, U, eps, lz, L, pos, cls, args.k)
-                  for name, lz in (("logit lens", None), ("J-lens, final-layer target", released), ("J-lens, penultimate target", penult))}
+                  for name, lz in (("logit lens", None), ("J-lens, final-layer target", released),
+                                   ("J-lens, final-layer target, same 10 prompts", final10),
+                                   ("J-lens, penultimate target", penult))}
         info["n_activations"] = int(len(next(iter(counts.values()))))
         info["hist"] = {name: np.bincount(c, minlength=args.k + 1).tolist() for name, c in counts.items()}
         info["summary"] = {name: {"median": float(np.median(c)), "q25": float(np.percentile(c, 25)), "q75": float(np.percentile(c, 75)),

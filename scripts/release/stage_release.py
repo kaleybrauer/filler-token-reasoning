@@ -37,9 +37,11 @@ DIR_TO_MODEL_TASK = {
     "outputs/deepseek_1fact_aggregated":     ("deepseek_v3", "1fact"),
     "outputs/deepseek_letterpos_aggregated": ("deepseek_v3", "letterpos"),
     "outputs/deepseek_capitalpos_aggregated": ("deepseek_v3", "capitalpos"),
-    "outputs/kimi_k2_2fact_aggregated":      ("kimi_k2",    "2fact"),
-    "outputs/kimi_k2_letterpos_aggregated":  ("kimi_k2",    "letterpos"),
-    "outputs/kimi_k2_capitalpos_aggregated": ("kimi_k2",    "capitalpos"),
+    # Kimi K2: the _v2 dirs decode the residual stream. The un-suffixed dirs came from
+    # an extraction that saved per-layer MLP writes instead; do not stage them.
+    "outputs/kimi_k2_2fact_aggregated_v2":      ("kimi_k2", "2fact"),
+    "outputs/kimi_k2_letterpos_aggregated_v2":  ("kimi_k2", "letterpos"),
+    "outputs/kimi_k2_capitalpos_aggregated_v2": ("kimi_k2", "capitalpos"),
 }
 
 # llm_decode_<cond>_<judge>_<prompt>[_<task>].json
